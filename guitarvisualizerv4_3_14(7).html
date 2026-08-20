@@ -469,6 +469,7 @@ body.presentation #tab-player{padding:0;}
     <div class="tab" onclick="showTab('library')"><i class="ti ti-book"></i> Librería</div>
     <div class="tab" onclick="showTab('audio')"><i class="ti ti-music"></i> Audio &amp; XML</div>
     <div class="tab" onclick="showTab('player')"><i class="ti ti-player-play"></i> Visualizador</div>
+    <div class="tab" title="Genera el vídeo de la visualización automáticamente (mástil + audio), sin necesidad de grabar la pantalla a mano." onclick="showTab('video')"><i class="ti ti-video"></i> Vídeo</div>
     <div class="tab" onclick="showTab('settings')"><i class="ti ti-settings"></i> Configuración</div>
     <div class="tab" title="Genera tríadas (3 notas) por acorde: voice leading automático o figura fija (ruta de tríadas: mástil completo, sin zoom)." onclick="showTab('triads')"><i class="ti ti-triangle"></i> Tríadas</div>
     <div class="tab" title="Genera posiciones de arpegio, una por acorde (ruta de arpegios: zoom, preview, crossfade)." onclick="showTab('generate')"><i class="ti ti-wand"></i> Arpegios</div>
@@ -780,6 +781,68 @@ body.presentation #tab-player{padding:0;}
     <!-- Inline visibility panel (same toggles as Settings, editable while watching) -->
     <div id="visPanel" style="display:none;background:#f6f7f9;border-top:1px solid var(--border);padding:12px 16px;max-height:38vh;overflow:auto;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="visTogglesInline"></div>
+    </div>
+  </div>
+
+  <!-- VIDEO GENERATION -->
+  <div class="panel" id="tab-video" style="display:none;">
+    <div class="card" style="max-width:640px;">
+      <h3><i class="ti ti-video"></i> Generar vídeo</h3>
+      <p>Graba automáticamente la visualización (mástil + audio) tal como se ve al darle a Play, sin necesidad de usar un programa externo de captura de pantalla. Al pulsar "Generar vídeo" el navegador te pedirá compartir <strong>esta pestaña</strong> (acepta la que dice "Chrome Tab" / la pestaña actual) — no toques nada hasta que termine.</p>
+      <p style="font-size:12px;color:var(--text3);">Requiere Chrome o Edge (usa la API de captura de pestaña del navegador). El resultado se descarga en formato <code>.webm</code>.</p>
+      <div class="field-row" style="margin-bottom:10px;">
+        <label>Segundos extra al final:</label>
+        <input type="number" id="videoExtraSec" value="2" min="0" max="30" step="1" style="width:70px;">
+        <span style="font-size:12px;color:var(--text3);">Se añaden a la duración del audio, para dejar el último acorde un poco más en pantalla.</span>
+      </div>
+      <div class="field-row" style="gap:10px;">
+        <button class="btn primary" id="videoGenBtn" onclick="generateVideo()"><i class="ti ti-player-record"></i> Generar vídeo</button>
+        <button class="btn" id="videoCancelBtn" onclick="cancelVideoGen()" style="display:none;"><i class="ti ti-x"></i> Cancelar</button>
+        <span class="tag" id="videoGenStatus">Sin generar</span>
+      </div>
+      <div id="videoResultBox" style="display:none;margin-top:14px;">
+        <video id="videoResultPreview" controls style="width:100%;max-width:600px;border-radius:var(--rad2);background:#000;display:block;"></video>
+        <div style="margin-top:8px;">
+          <a class="btn green" id="videoDownloadLink" download="visualizacion.webm"><i class="ti ti-download"></i> Descargar vídeo (.webm)</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:640px;">
+      <h3><i class="ti ti-download"></i> Configuración visual para el lote</h3>
+      <p>Ajusta Elementos, colores, modo de acorde/notas, voces seguidas y trastes mostrados como quieras que salgan en los vídeos, y expórtalo. El lote de abajo usa este archivo para que todos los vídeos compartan la misma configuración.</p>
+      <div class="field-row">
+        <button class="btn" onclick="exportVisConfigFile()"><i class="ti ti-download"></i> Exportar configuración de Elementos</button>
+        <span style="font-size:12px;color:var(--text3);">Descarga <code>vis-config.json</code> con lo que tengas activado ahora.</span>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:640px;">
+      <h3><i class="ti ti-stack"></i> Generación por lotes</h3>
+      <p>Genera un vídeo por cada sesión <code>.json</code> exportada ("Guardar ejercicio") de una carpeta, todos con el mismo audio — ej. las 12 combinaciones de tríadas (4 grupos de cuerdas × 3 inversiones). Corre en Chrome invisible en segundo plano, varios a la vez, sin bloquear tu pantalla.</p>
+      <p style="font-size:12px;color:var(--text3);">
+        <i class="ti ti-info-circle"></i> Necesita un servidor local corriendo (una sola vez, se queda en marcha):
+        <code>node scripts/server.js</code>
+        <span id="batchServerStatus" class="tag" style="margin-left:6px;">comprobando…</span>
+      </p>
+      <p style="font-size:12px;color:var(--text3);">Una sola carpeta con todo dentro: el audio, las sesiones <code>.json</code> y (opcional) <code>vis-config.json</code> — como ya tienes en tu carpeta de proyecto.</p>
+      <div class="field-row" style="gap:10px;margin-bottom:8px;">
+        <button class="btn" onclick="document.getElementById('batchFolderPicker').click()"><i class="ti ti-folder"></i> Elegir carpeta…</button>
+        <input type="file" id="batchFolderPicker" webkitdirectory multiple class="hidden" onchange="onBatchFolderPicked(this)">
+        <span id="batchFolderSummary" style="font-size:12px;color:var(--text3);">Ninguna carpeta elegida.</span>
+      </div>
+      <div class="field-row" style="flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <label>Segundos extra: <input type="number" id="batchExtra" value="2" min="0" max="30" style="width:60px;"></label>
+        <label>En paralelo: <input type="number" id="batchConcurrency" value="1" min="1" max="8" style="width:60px;" title="En esta máquina (4 núcleos), cada vídeo usa casi un núcleo entero grabando. Súbelo solo si quieres ir más rápido a costa de riesgo de saltos en la animación."></label>
+      </div>
+      <div class="field-row" style="gap:10px;">
+        <button class="btn primary" id="batchGenBtn" onclick="startBatchGenerate()" disabled><i class="ti ti-player-record"></i> Generar vídeos</button>
+        <button class="btn" id="batchCancelBtn" onclick="cancelBatchGenerate()" style="display:none;"><i class="ti ti-x"></i> Detener</button>
+      </div>
+      <div id="batchProgress" style="margin-top:12px;display:none;">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px;" id="batchSummary"></div>
+        <div id="batchJobList" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
+      </div>
     </div>
   </div>
 
@@ -6915,6 +6978,266 @@ function stopAll(){
 function setBtns(p){const ic=p?'ti-player-pause':'ti-player-play',lb=p?'Pausa':'Play';document.getElementById('playBtn').innerHTML=`<i class="ti ${ic}"></i> ${lb}`;}
 function setSpeed(v){speed=parseFloat(v);if(audioEl)audioEl.playbackRate=speed;}
 
+// ════════════════════════════════════════════════════════════════════════════
+// GENERAR VÍDEO — graba automáticamente la visualización + audio, sin necesidad
+// de un programa externo de captura de pantalla. Comparte esta pestaña vía
+// getDisplayMedia (vídeo) + el audio real del <audio> vía Web Audio API, y lo
+// mezcla en directo con MediaRecorder. Duración = audio.duration + cola extra.
+// ════════════════════════════════════════════════════════════════════════════
+let videoGenState=null, videoGenAudioCtx=null;
+
+function videoGenSetStatus(msg,cls){
+  const s=document.getElementById('videoGenStatus');
+  if(!s)return;
+  s.textContent=msg; s.className='tag'+(cls?(' '+cls):'');
+}
+
+async function generateVideo(){
+  if(videoGenState)return; // ya en marcha
+  if(!audioEl||!audioEl.duration){alert('Carga primero un audio en la pestaña "Audio & XML".');showTab('audio');return;}
+  if(!cycles.length){alert('Carga primero un ejercicio (acordes) antes de generar el vídeo.');showTab('audio');return;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){
+    alert('Tu navegador no soporta la captura de pantalla necesaria (getDisplayMedia). Prueba con Chrome o Edge.');
+    return;
+  }
+
+  const extraSec=Math.max(0,parseFloat(document.getElementById('videoExtraSec').value)||0);
+  const totalDuration=audioEl.duration+extraSec;
+
+  let dispStream;
+  try{
+    dispStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30},audio:false,preferCurrentTab:true,selfBrowserSurface:'include'});
+  }catch(e){
+    videoGenSetStatus('Cancelado','warn');
+    return;
+  }
+
+  // Audio real del elemento <audio>, capturado vía Web Audio API (más fiable que depender
+  // de la casilla "compartir audio" del diálogo de captura). createMediaElementSource solo
+  // puede llamarse una vez por elemento, así que el nodo se cachea en el propio audioEl.
+  const actx=videoGenAudioCtx||(videoGenAudioCtx=new (window.AudioContext||window.webkitAudioContext)());
+  if(actx.state==='suspended')try{await actx.resume();}catch(e){}
+  let destNode=audioEl._gvDest;
+  if(!destNode){
+    const srcNode=actx.createMediaElementSource(audioEl);
+    destNode=actx.createMediaStreamDestination();
+    srcNode.connect(destNode);
+    srcNode.connect(actx.destination);
+    audioEl._gvSrc=srcNode;audioEl._gvDest=destNode;
+  }
+
+  const combined=new MediaStream([...dispStream.getVideoTracks(),...destNode.stream.getAudioTracks()]);
+  const mimeCandidates=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  const mimeType=mimeCandidates.find(m=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(m))||'';
+  let rec;
+  try{
+    rec=mimeType?new MediaRecorder(combined,{mimeType,videoBitsPerSecond:8000000}):new MediaRecorder(combined);
+  }catch(e){
+    dispStream.getTracks().forEach(t=>t.stop());
+    alert('No se pudo iniciar la grabación: '+e.message);
+    return;
+  }
+  const chunks=[];
+  rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+  rec.onstop=()=>{
+    const blob=new Blob(chunks,{type:mimeType||'video/webm'});
+    const url=URL.createObjectURL(blob);
+    document.getElementById('videoResultPreview').src=url;
+    const dl=document.getElementById('videoDownloadLink');
+    dl.href=url; dl.download='visualizacion-'+Date.now()+'.webm';
+    document.getElementById('videoResultBox').style.display='block';
+  };
+
+  const wasPresentation=document.body.classList.contains('presentation');
+  if(!wasPresentation)togglePresentation();
+  showTab('player');
+  stopAll();
+
+  const btn=document.getElementById('videoGenBtn'),cancelBtn=document.getElementById('videoCancelBtn');
+  if(btn)btn.disabled=true;
+  if(cancelBtn)cancelBtn.style.display='';
+  document.getElementById('videoResultBox').style.display='none';
+  videoGenSetStatus('Grabando… 0:00 / '+fmt(totalDuration));
+
+  videoGenState={dispStream,rec,timer:null,statusTimer:null,wasPresentation};
+  dispStream.getVideoTracks()[0].addEventListener('ended',()=>{if(videoGenState)videoGenFinish(false);});
+
+  rec.start(250);
+  await new Promise(r=>setTimeout(r,250)); // respiro para que el layout de presentación se asiente
+  startIt();
+
+  const t0=performance.now();
+  videoGenState.statusTimer=setInterval(()=>{
+    const el=Math.min(totalDuration,(performance.now()-t0)/1000);
+    videoGenSetStatus('Grabando… '+fmt(el)+' / '+fmt(totalDuration));
+  },250);
+  videoGenState.timer=setTimeout(()=>videoGenFinish(true),totalDuration*1000);
+}
+
+function videoGenFinish(completed){
+  if(!videoGenState)return;
+  const st=videoGenState; videoGenState=null;
+  clearTimeout(st.timer); clearInterval(st.statusTimer);
+  pauseIt();
+  try{st.rec.stop();}catch(e){}
+  st.dispStream.getTracks().forEach(t=>t.stop());
+  if(!st.wasPresentation)togglePresentation();
+  const btn=document.getElementById('videoGenBtn'),cancelBtn=document.getElementById('videoCancelBtn');
+  if(btn)btn.disabled=false;
+  if(cancelBtn)cancelBtn.style.display='none';
+  videoGenSetStatus(completed?'✓ Vídeo generado':'Cancelado',completed?'ok':'warn');
+}
+
+function cancelVideoGen(){videoGenFinish(false);}
+
+// Descarga TODA la configuración visual relevante para el vídeo, para pasársela al script de
+// generación por lotes (--vis-config): los toggles de "Elementos" (localStorage 'gv_vis'), los
+// colores de función/voces (localStorage 'gv_colors'), y los selectores del Visualizador que NO
+// se guardan en ningún sitio (modo de acorde, modo de notas, voces seguidas) — se resetean a su
+// valor por defecto en cada carga de página, así que hay que capturarlos aparte.
+function exportVisConfigFile(){
+  let vis={},colors={};
+  try{vis=JSON.parse(localStorage.getItem('gv_vis')||'{}');}catch(e){}
+  try{colors=JSON.parse(localStorage.getItem('gv_colors')||'{}');}catch(e){}
+  const cfg={
+    vis,colors,
+    chordDisplayMode:document.getElementById('chordDisplayMode')?.value||'carousel',
+    noteMode:document.getElementById('noteMode')?.value||'both',
+    followVoice:document.getElementById('followVoice')?.value||'none',
+    followVoice2:document.getElementById('followVoice2')?.value||'none',
+    maxFretsShown:typeof getMaxFretsShown==='function'?getMaxFretsShown():null,
+    previewMaxFrets:typeof getPreviewMaxFrets==='function'?getPreviewMaxFrets():null,
+  };
+  const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vis-config.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GENERACIÓN POR LOTES — habla con el servidor local (scripts/server.js) que hace el trabajo
+// real (Playwright + ffmpeg, fuera del navegador). La app solo manda los parámetros y sondea
+// el progreso; no puede lanzar procesos por sí misma (sandbox del navegador).
+// ════════════════════════════════════════════════════════════════════════════
+const BATCH_SERVER='http://localhost:8787';
+let batchPollTimer=null;
+let batchPicked={audioFile:null,sessionFiles:[],visConfigObj:null,folderName:''};
+
+const BATCH_AUDIO_EXT=/\.(m4a|m4b|mp3|wav|aiff?|caf)$/i;
+
+async function onBatchFolderPicked(input){
+  const files=Array.from(input.files||[]);
+  const summary=document.getElementById('batchFolderSummary');
+  const picked={audioFile:null,sessionFiles:[],visConfigObj:null,folderName:''};
+  if(files.length&&files[0].webkitRelativePath)picked.folderName=files[0].webkitRelativePath.split('/')[0];
+
+  for(const f of files){
+    if(BATCH_AUDIO_EXT.test(f.name)&&!picked.audioFile){picked.audioFile=f;continue;}
+    if(/\.json$/i.test(f.name)){
+      let data=null;
+      try{data=JSON.parse(await f.text());}catch(e){continue;}
+      if(data&&Array.isArray(data.cycles)&&Array.isArray(data.masterBars)){picked.sessionFiles.push(f);}
+      else if(data&&(data.vis||data.colors||data.chordDisplayMode)){picked.visConfigObj=data;}
+    }
+  }
+  batchPicked=picked;
+
+  const parts=[];
+  parts.push(picked.sessionFiles.length+' sesión'+(picked.sessionFiles.length===1?'':'es'));
+  parts.push(picked.audioFile?('audio: '+picked.audioFile.name):'sin audio ✗');
+  parts.push(picked.visConfigObj?'config visual: sí':'config visual: no (se usarán valores por defecto)');
+  if(summary)summary.textContent=(picked.folderName?picked.folderName+' — ':'')+parts.join(' · ');
+
+  const genBtn=document.getElementById('batchGenBtn');
+  if(genBtn)genBtn.disabled=!(picked.audioFile&&picked.sessionFiles.length);
+}
+
+async function batchCheckServer(){
+  const tag=document.getElementById('batchServerStatus');if(!tag)return;
+  try{
+    const r=await fetch(BATCH_SERVER+'/api/ping');
+    if(r.ok){tag.textContent='servidor activo';tag.className='tag ok';}
+    else throw new Error('bad status');
+  }catch(e){
+    tag.textContent='servidor no disponible — ejecuta "node scripts/server.js"';tag.className='tag warn';
+  }
+}
+
+function batchJobRow(j){
+  const iconByStatus={pending:'ti-clock',running:'ti-loader-2',done:'ti-circle-check',error:'ti-circle-x',cancelled:'ti-player-stop'};
+  const colorByStatus={pending:'var(--text3)',running:'var(--accent)',done:'#2e7d32',error:'#c62828',cancelled:'var(--text3)'};
+  const icon=iconByStatus[j.status]||'ti-clock',color=colorByStatus[j.status]||'var(--text3)';
+  const detail=j.status==='error'?(j.error||''):(j.message||'');
+  const dl=j.status==='done'?`<a href="${BATCH_SERVER}/api/download?tag=${encodeURIComponent(j.tag)}" class="btn sm green" style="flex-shrink:0;"><i class="ti ti-download"></i></a>`:'';
+  return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--bg2);border-radius:var(--rad);">
+    <i class="ti ${icon}" style="color:${color};width:16px;"></i>
+    <span style="font-weight:600;min-width:170px;">${j.tag}</span>
+    <span style="color:${color};min-width:80px;">${j.status}</span>
+    <span style="color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${detail}</span>
+    ${dl}
+  </div>`;
+}
+
+function batchRenderState(state){
+  const box=document.getElementById('batchProgress');if(!box)return;
+  if(state.idle){box.style.display='none';return;}
+  box.style.display='block';
+  const jobs=state.jobs||[];
+  const done=jobs.filter(j=>j.status==='done').length;
+  const errored=jobs.filter(j=>j.status==='error').length;
+  const summary=document.getElementById('batchSummary');
+  if(summary){
+    let txt=state.running?'Generando…':(state.fatalError?'Error: '+state.fatalError:'Terminado');
+    txt+=` — ${done}/${jobs.length} vídeos`+(errored?`, ${errored} con error`:'');
+    if(state.audioDuration)txt+=` · audio ${state.audioDuration.toFixed(1)}s`;
+    summary.textContent=txt;
+  }
+  const list=document.getElementById('batchJobList');
+  if(list)list.innerHTML=jobs.map(batchJobRow).join('');
+  const genBtn=document.getElementById('batchGenBtn'),cancelBtn=document.getElementById('batchCancelBtn');
+  if(genBtn)genBtn.disabled=!!state.running;
+  if(cancelBtn)cancelBtn.style.display=state.running?'':'none';
+}
+
+function batchStopPolling(){if(batchPollTimer){clearInterval(batchPollTimer);batchPollTimer=null;}}
+
+async function batchPollOnce(){
+  try{
+    const r=await fetch(BATCH_SERVER+'/api/status');
+    const state=await r.json();
+    batchRenderState(state);
+    if(!state.running)batchStopPolling();
+  }catch(e){batchStopPolling();}
+}
+
+async function startBatchGenerate(){
+  if(!batchPicked.audioFile||!batchPicked.sessionFiles.length){alert('Elige primero una carpeta con audio y sesiones.');return;}
+  const fd=new FormData();
+  fd.append('audio',batchPicked.audioFile,batchPicked.audioFile.name);
+  batchPicked.sessionFiles.forEach(f=>fd.append('session',f,f.name));
+  if(batchPicked.visConfigObj)fd.append('visConfig',JSON.stringify(batchPicked.visConfigObj));
+  fd.append('folderName',batchPicked.folderName||'lote');
+  fd.append('extra',String(parseFloat(document.getElementById('batchExtra').value)||2));
+  fd.append('concurrency',String(parseInt(document.getElementById('batchConcurrency').value,10)||1));
+  try{
+    const r=await fetch(BATCH_SERVER+'/api/generate',{method:'POST',body:fd});
+    const data=await r.json();
+    if(!r.ok){alert('No se pudo lanzar el lote: '+(data.error||r.status));return;}
+  }catch(e){
+    alert('No se pudo contactar con el servidor local. ¿Está corriendo "node scripts/server.js"?');
+    return;
+  }
+  batchStopPolling();
+  batchPollTimer=setInterval(batchPollOnce,2000);
+  batchPollOnce();
+}
+
+async function cancelBatchGenerate(){
+  try{await fetch(BATCH_SERVER+'/api/cancel',{method:'POST'});}catch(e){}
+}
+
+batchCheckServer();
+setInterval(batchCheckServer,8000);
+
 const ANIM_MS=480; // animation duration ms
 const ANIM_SEC=ANIM_MS/1000; // anticipation window for animation (seconds)
 let ghostPending=null; // bar/slot index for which ghost notes have been shown
@@ -9361,7 +9684,7 @@ function seekClick(e){if(!audioEl||!audioEl.duration)return;const p=e.offsetX/e.
 
 function showTab(name){
   try{
-    const panels=['editor','library','audio','player','settings','help','generate','sequence','targets','scales','triads'];
+    const panels=['editor','library','audio','player','video','settings','help','generate','sequence','targets','scales','triads'];
     panels.forEach(t=>{
       const p=document.getElementById('tab-'+t);
       if(!p)return;

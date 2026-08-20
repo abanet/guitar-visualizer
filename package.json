@@ -1,0 +1,26 @@
+{
+  "name": "guitar-visualizer-tools",
+  "version": "1.0.0",
+  "description": "Batch video generation tooling for Guitar Visualizer",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abanet/guitar-visualizer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/abanet/guitar-visualizer/issues"
+  },
+  "homepage": "https://github.com/abanet/guitar-visualizer#readme",
+  "private": "true",
+  "devDependencies": {
+    "busboy": "^1.6.0",
+    "playwright": "^1.62.1"
+  }
+}
