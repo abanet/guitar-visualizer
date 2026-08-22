@@ -9,7 +9,7 @@
  *   node scripts/generate-videos-from-sessions.js --dir <carpeta con *.json> --audio <audio.m4a> --out <carpeta salida>
  *
  * Opciones:
- *   --app <path>         Ruta al HTML de la app (por defecto: guitarvisualizerv4_3_14(7).html)
+ *   --app <path>         Ruta al HTML de la app (por defecto: guitarvisualizer.html)
  *   --dir <path>          Carpeta con los .json de sesión a procesar (obligatorio)
  *   --audio <path>        Audio m4a/mp3/wav, el mismo para todas las sesiones (obligatorio)
  *   --out <dir>            Carpeta de salida (por defecto: ./video-out)
@@ -47,7 +47,7 @@ async function main() {
   }
 
   const repoRoot = path.resolve(__dirname, '..');
-  const appPath = path.resolve(repoRoot, args.app || 'guitarvisualizerv4_3_14(7).html');
+  const appPath = path.resolve(repoRoot, args.app || 'guitarvisualizer.html');
   const dir = path.resolve(args.dir);
   const audioPath = path.resolve(args.audio);
   const outDir = path.resolve(args.out || './video-out');

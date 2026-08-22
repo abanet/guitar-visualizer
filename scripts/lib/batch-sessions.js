@@ -85,9 +85,11 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
   const recordStartAt = Date.now();
   let playStartAt = null;
   let stepError = null;
+  let appVersion = 'unknown';
   try {
     log('cargando app…');
     await page.goto(appUrl);
+    appVersion = await page.evaluate(() => (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'unknown'));
 
     log('cargando sesión…');
     const loadedSlots = await page.evaluate((s) => applySession(s), sessionObj);
@@ -131,14 +133,23 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
     // buffer). Si medimos el offset justo al volver de startIt(), ese hueco (~100-250ms, variable)
     // se cuela como vídeo adelantado al audio real. Esperamos al evento 'playing' (arranque
     // audible real) antes de tomar el timestamp de recorte.
-    await page.evaluate(() => new Promise((resolve) => {
+    //
+    // El timestamp NO se toma con Date.now() en Node tras el await — ese await cruza el
+    // protocolo CDP (evaluate → esperar el evento dentro del navegador → resolver → volver a
+    // Node), y ese viaje de vuelta tiene una latencia variable (de sobra pudimos medir ~500ms en
+    // un caso real) que se colaba entera como desync constante en el vídeo final. En su lugar,
+    // se toma el instante DENTRO del propio navegador con performance.timeOrigin+performance.now()
+    // (reloj de época, mismo dominio que Date.now() en Node, en la misma máquina) en el momento
+    // exacto del evento — antes de que empiece cualquier viaje de vuelta — y solo el NÚMERO ya
+    // congelado cruza esa latencia, no la medición en sí.
+    playStartAt = await page.evaluate(() => new Promise((resolve) => {
+      const stamp = () => resolve(performance.timeOrigin + performance.now());
       startIt();
-      if (!audioEl.paused && audioEl.currentTime > 0) { resolve(); return; }
-      const onPlaying = () => { audioEl.removeEventListener('playing', onPlaying); resolve(); };
+      if (!audioEl.paused && audioEl.currentTime > 0) { stamp(); return; }
+      const onPlaying = () => { audioEl.removeEventListener('playing', onPlaying); stamp(); };
       audioEl.addEventListener('playing', onPlaying);
-      setTimeout(resolve, 2000); // failsafe: no colgarse si el evento no llega
+      setTimeout(stamp, 2000); // failsafe: no colgarse si el evento no llega
     }));
-    playStartAt = Date.now();
     log(`grabando… (arranque: ${((playStartAt - recordStartAt) / 1000).toFixed(2)}s de setup a recortar)`);
     await page.waitForTimeout(total * 1000);
     await page.evaluate(() => { if (typeof pauseIt === 'function') pauseIt(); });
@@ -170,6 +181,7 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
     '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',
+    '-metadata', `comment=Generado con Guitar Visualizer v${appVersion}`,
     '-shortest',
     outPath,
   ]);

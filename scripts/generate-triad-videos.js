@@ -20,7 +20,7 @@
  *   node scripts/generate-triad-videos.js --xml tema.musicxml --audio tema.m4a --out ./videos
  *
  * Opciones:
- *   --app <path>         Ruta al HTML de la app (por defecto: guitarvisualizerv4_3_14(7).html)
+ *   --app <path>         Ruta al HTML de la app (por defecto: guitarvisualizer.html)
  *   --xml <path>          MusicXML con la progresión de acordes (obligatorio)
  *   --audio <path>        Audio m4a/mp3/wav (obligatorio)
  *   --out <dir>            Carpeta de salida (por defecto: ./video-out)
@@ -106,9 +106,11 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cyc
   const recordStartAt = Date.now();
   let playStartAt = null;
   let stepError = null;
+  let appVersion = 'unknown';
   try {
     log('cargando app…');
     await page.goto(appUrl);
+    appVersion = await page.evaluate(() => (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'unknown'));
 
     if (cycleLen) {
       // Los campos viven en pestañas ocultas (display:none) mientras no se seleccionan — se
@@ -173,8 +175,20 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cyc
     });
     await page.waitForTimeout(300); // deja asentar el layout de presentación
 
-    await page.evaluate(() => startIt());
-    playStartAt = Date.now();
+    // Ver el comentario largo en scripts/lib/batch-sessions.js sobre por qué el timestamp de
+    // arranque se captura DENTRO del navegador (performance.timeOrigin+performance.now(), en el
+    // evento 'playing' real) y no con Date.now() en Node tras el await — la vuelta por CDP mete
+    // una latencia variable que se colaba entera como desync constante en el vídeo final. Este
+    // script ni siquiera esperaba a 'playing' antes (tomaba el timestamp nada más volver de
+    // startIt(), con audioEl.play() aún sin empezar a sonar de verdad) — doble motivo de desync.
+    playStartAt = await page.evaluate(() => new Promise((resolve) => {
+      const stamp = () => resolve(performance.timeOrigin + performance.now());
+      startIt();
+      if (!audioEl.paused && audioEl.currentTime > 0) { stamp(); return; }
+      const onPlaying = () => { audioEl.removeEventListener('playing', onPlaying); stamp(); };
+      audioEl.addEventListener('playing', onPlaying);
+      setTimeout(stamp, 2000); // failsafe: no colgarse si el evento no llega
+    }));
     log(`grabando… (arranque: ${((playStartAt - recordStartAt) / 1000).toFixed(2)}s de setup a recortar)`);
     await page.waitForTimeout(total * 1000);
     await page.evaluate(() => { if (typeof pauseIt === 'function') pauseIt(); });
@@ -202,6 +216,7 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cyc
     '-map', '0:v:0', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',
+    '-metadata', `comment=Generado con Guitar Visualizer v${appVersion}`,
     '-shortest',
     outPath,
   ]);
@@ -233,7 +248,7 @@ async function main() {
   await waitFfmpeg();
 
   const repoRoot = path.resolve(__dirname, '..');
-  const appPath = path.resolve(repoRoot, args.app || 'guitarvisualizerv4_3_14(7).html');
+  const appPath = path.resolve(repoRoot, args.app || 'guitarvisualizer.html');
   const xmlPath = path.resolve(args.xml);
   const audioPath = path.resolve(args.audio);
   const outDir = path.resolve(args.out || './video-out');

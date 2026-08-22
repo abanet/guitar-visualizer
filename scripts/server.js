@@ -29,7 +29,7 @@ const { runBatch, requestCancel } = require('./lib/batch-sessions');
 
 const PORT = process.env.GV_SERVER_PORT ? parseInt(process.env.GV_SERVER_PORT, 10) : 8787;
 const repoRoot = path.resolve(__dirname, '..');
-const defaultAppPath = path.join(repoRoot, 'guitarvisualizerv4_3_14(7).html');
+const defaultAppPath = path.join(repoRoot, 'guitarvisualizer.html');
 const videoOutRoot = path.join(repoRoot, 'video-out');
 
 let currentState = { idle: true };

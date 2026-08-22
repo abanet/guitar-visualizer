@@ -446,6 +446,25 @@ body.presentation #tab-player{padding:0;}
 .vis-controls select{font-size:12px;padding:5px 8px;border-radius:var(--rad);border:1px solid var(--border2);background:white;color:var(--text);}
 .vis-time{font-size:12px;color:var(--text2);margin-left:auto;font-variant-numeric:tabular-nums;}
 
+/* FUNDIDO FINAL CON LOGO — capa fija a pantalla completa que se oscurece hasta negro con el
+   logo del canal centrado al terminar el audio en modo presentación (ver armEndFade()). El
+   filtro drop-shadow traza un contorno reluciente alrededor de la silueta de la púa a partir
+   de su canal alfa (el relleno interior es negro puro — invisible sobre el fondo negro — así
+   que sin esto no se distinguiría el borde de la púa, solo las letras). */
+#endFadeOverlay{position:fixed;inset:0;z-index:99999;background:#000;opacity:0;pointer-events:none;
+  display:flex;align-items:center;justify-content:center;}
+#endFadeOverlay img{max-width:38%;max-height:38%;object-fit:contain;
+  filter:drop-shadow(0 0 2px rgba(255,255,255,.85)) drop-shadow(0 0 10px rgba(180,210,255,.55)) drop-shadow(0 0 22px rgba(140,180,255,.3));}
+
+/* Marca de agua del canal — solo visible en modo presentación (lo que se graba), muy discreta.
+   z-index POR ENCIMA del fundido final: tiene que seguir viéndose incluso con la pantalla ya
+   en negro con el logo, no solo durante la reproducción. */
+#channelWatermark{display:none;position:fixed;right:16px;bottom:12px;z-index:100000;
+  font:700 15px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:.03em;
+  color:rgba(255,255,255,.92);background:rgba(0,0,0,.45);padding:5px 10px;border-radius:999px;
+  pointer-events:none;}
+body.presentation #channelWatermark{display:block;}
+
 /* MODALS */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;}
 .modal-overlay.open{display:flex;}
@@ -463,6 +482,8 @@ body.presentation #tab-player{padding:0;}
 </style>
 </head>
 <body>
+<div id="endFadeOverlay"><img id="endFadeLogo" src="img/logotransparente.png" alt=""></div>
+<div id="channelWatermark">@banetmasa</div>
 <div class="app" data-tab="editor">
   <div class="tabs">
     <div class="tab active" onclick="showTab('editor')"><i class="ti ti-layout-list"></i> Editor</div>
@@ -793,7 +814,7 @@ body.presentation #tab-player{padding:0;}
       <div class="field-row" style="margin-bottom:10px;">
         <label>Segundos extra al final:</label>
         <input type="number" id="videoExtraSec" value="2" min="0" max="30" step="1" style="width:70px;">
-        <span style="font-size:12px;color:var(--text3);">Se añaden a la duración del audio, para dejar el último acorde un poco más en pantalla.</span>
+        <span style="font-size:12px;color:var(--text3);">Se añaden a la duración del audio. En ese tramo final la pantalla hace un fundido a negro con el logo del canal centrado (deja al menos 1-2s para que se vea completo).</span>
       </div>
       <div class="field-row" style="gap:10px;">
         <button class="btn primary" id="videoGenBtn" onclick="generateVideo()"><i class="ti ti-player-record"></i> Generar vídeo</button>
@@ -819,7 +840,7 @@ body.presentation #tab-player{padding:0;}
 
     <div class="card" style="max-width:640px;">
       <h3><i class="ti ti-stack"></i> Generación por lotes</h3>
-      <p>Genera un vídeo por cada sesión <code>.json</code> exportada ("Guardar ejercicio") de una carpeta, todos con el mismo audio — ej. las 12 combinaciones de tríadas (4 grupos de cuerdas × 3 inversiones). Corre en Chrome invisible en segundo plano, varios a la vez, sin bloquear tu pantalla.</p>
+      <p>Genera un vídeo por cada sesión <code>.json</code> exportada ("Guardar ejercicio") de una carpeta, todos con el mismo audio — ej. las 12 combinaciones de tríadas (4 grupos de cuerdas × 3 inversiones). Corre en Chrome invisible en segundo plano, varios a la vez, sin bloquear tu pantalla. Igual que en el vídeo individual, cada uno termina con un fundido a negro y el logo del canal durante los "segundos extra".</p>
       <p style="font-size:12px;color:var(--text3);">
         <i class="ti ti-info-circle"></i> Necesita un servidor local corriendo (una sola vez, se queda en marcha):
         <code>node scripts/server.js</code>
@@ -3088,7 +3109,7 @@ function loadSession(input){
 
 // ── AUTOSAVE ─────────────────────────────────────────────────────────────────
 const AUTOSAVE_KEY='gv_autosave';
-const APP_VERSION='4.3.13';
+const APP_VERSION='4.3.15';
 console.log('%cGuitar Visualizer v'+APP_VERSION,'font-weight:bold');
 try{const _vb=document.getElementById('appVersionBadge');if(_vb)_vb.textContent='v'+APP_VERSION;}catch(e){}
 let _autosaveLast='';
@@ -6956,12 +6977,28 @@ function seqToPlayer(){
 function seqDisablePlayer(){seqActive=false;seqPlayData=null;}
 
 function togglePlay(){if(isPlaying)pauseIt();else startIt();}
+// Fundido a negro con el logo del canal al terminar el audio, SOLO en modo presentación (la
+// vista limpia que se usa para grabar, a mano o por lotes). Se dispara desde tick() un poco
+// ANTES del final real (END_FADE_SEC), no en el evento 'ended' del <audio> — el 'ended' nativo
+// llega a la vez que audioEl.onended=stopAll(), que borra la visualización al instante
+// (clearVis, sin transición); si el fundido esperase a ese mismo evento, el borrado brusco se
+// vería un frame antes de que el negro llegase a taparlo. Empezando antes, la pantalla ya está
+// en negro cuando stopAll() limpia por debajo. Dispara igual en la captura de pestaña
+// (generateVideo) y en la grabación headless de Playwright (scripts/*), sin tocar ninguno de
+// los dos pipelines — ambos se limitan a grabar lo que hay en pantalla.
+const END_FADE_SEC=1.4;
+function resetEndFade(){
+  const ov=document.getElementById('endFadeOverlay');
+  if(ov){ov.style.transition='none';ov.style.opacity='0';}
+  if(audioEl)audioEl._gvEndFadeStarted=false;
+}
 function startIt(){
   if(!cycles.length){showTab('audio');return;}
   if(!manualExercise&&getBPM()<=0){showTab('audio');return;}
   if(!manualExercise&&!audioEl){showTab('audio');return;}
   seqLastPaintedIdx=-2;
   isPlaying=true;setBtns(true);
+  resetEndFade(); // toma nueva: descarta cualquier fundido a medias de una reproducción anterior
   if(audioEl){audioEl.playbackRate=speed;audioEl.play();}
   renderStrip(-1);rafId=requestAnimationFrame(tick);
 }
@@ -6972,6 +7009,9 @@ function stopAll(){
   if(vlAnimId){cancelAnimationFrame(vlAnimId);vlAnimId=null;}
   cancelAnimationFrame(rafId);clearVis();clearGhostNotes();
   if(typeof hideNextPreview==='function')hideNextPreview();
+  // OJO: no tocar el fundido aquí — stopAll() también es audioEl.onended, y se dispara justo
+  // cuando el fundido debería estar completando (ver comentario junto a END_FADE_SEC). El
+  // reseteo real vive en startIt(), que es el verdadero punto de "empezar una toma nueva".
   document.getElementById('progFill').style.width='0%';
   document.getElementById('visTime').textContent=audioEl?'0:00 / '+fmt(audioEl.duration):'0:00 / 0:00';
 }
@@ -7044,7 +7084,7 @@ async function generateVideo(){
     const url=URL.createObjectURL(blob);
     document.getElementById('videoResultPreview').src=url;
     const dl=document.getElementById('videoDownloadLink');
-    dl.href=url; dl.download='visualizacion-'+Date.now()+'.webm';
+    dl.href=url; dl.download='visualizacion-v'+APP_VERSION+'-'+Date.now()+'.webm';
     document.getElementById('videoResultBox').style.display='block';
   };
 
@@ -8708,6 +8748,11 @@ function tick(){
   if(!isPlaying)return;
   if(!audioEl){rafId=requestAnimationFrame(tick);return;}
   const elapsed=audioEl.currentTime;
+  if(!audioEl._gvEndFadeStarted&&audioEl.duration&&elapsed>=audioEl.duration-END_FADE_SEC&&document.body.classList.contains('presentation')){
+    audioEl._gvEndFadeStarted=true;
+    const ov=document.getElementById('endFadeOverlay');
+    if(ov){ov.style.transition='opacity '+END_FADE_SEC+'s linear';requestAnimationFrame(()=>{ov.style.opacity='1';});}
+  }
   const introSec=getIntroSec()+getOffSec();
   const barSec=getBarSec();
   const allBars=getAllBars();
