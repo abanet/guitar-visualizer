@@ -693,11 +693,23 @@ body.presentation #channelWatermark{display:block;}
         <label>Estilo: <input type="text" id="tvCfgStyle" value="ROCK" style="width:130px" oninput="tvSync()"></label>
         <label>Subestilo: <input type="text" id="tvCfgSub" value="Classic Rock" style="width:160px" oninput="tvSync()"></label>
         <label>Tiempos por compás: <input type="number" id="tvCfgBeats" value="4" min="1" max="12" style="width:60px" oninput="tvSync()"></label>
+        <label>Color: <select id="tvCfgColorPreset" onchange="tvSync()">
+          <option value="rock">Rock (rojo/cian)</option>
+          <option value="funk">Funk (naranja/violeta)</option>
+          <option value="jazz">Jazz (dorado/azul)</option>
+          <option value="blues">Blues (azul/ámbar)</option>
+          <option value="metal">Metal (plata/rojo)</option>
+          <option value="pop">Pop (rosa/lima)</option>
+        </select></label>
       </div>
       <div class="field-row" style="margin-top:10px;gap:12px;align-items:center;">
         <label>Nº de compases: <input type="number" id="tvCfgBars" value="128" min="1" max="999" style="width:80px" oninput="tvSync()"></label>
         <button class="btn sm" onclick="tvComputeBars()"><i class="ti ti-calculator"></i> Calcular desde el audio</button>
         <span class="tag" id="tvCfgBarsInfo">—</span>
+      </div>
+      <div class="field-row" style="margin-top:10px;gap:12px;align-items:center;">
+        <button class="btn sm" onclick="exportRhythmConfigFile()"><i class="ti ti-download"></i> Exportar config.json (lote)</button>
+        <span style="font-size:12px;color:var(--text3);">Para <code>scripts/render-rhythm-video.js</code>: mete este archivo junto a los .m4a del mismo estilo a distintos tempos — el BPM de cada vídeo se lee del nombre de archivo, así que aquí NO hace falta el BPM ni el nº de compases (se recalculan por audio).</span>
       </div>
     </div>
     <div class="banner" id="readyBanner"></div>
@@ -6992,6 +7004,16 @@ function resetEndFade(){
   if(ov){ov.style.transition='none';ov.style.opacity='0';}
   if(audioEl)audioEl._gvEndFadeStarted=false;
 }
+// Extraído de tick() para que el modo Ritmo (bucle propio tvFrame(), ver más abajo) dispare el
+// mismo fundido — antes solo vivía dentro de tick(), que tvFrame() nunca llama.
+function armEndFade(){
+  if(!audioEl||audioEl._gvEndFadeStarted||!audioEl.duration)return;
+  if(!document.body.classList.contains('presentation'))return;
+  if(audioEl.currentTime<audioEl.duration-END_FADE_SEC)return;
+  audioEl._gvEndFadeStarted=true;
+  const ov=document.getElementById('endFadeOverlay');
+  if(ov){ov.style.transition='opacity '+END_FADE_SEC+'s linear';requestAnimationFrame(()=>{ov.style.opacity='1';});}
+}
 function startIt(){
   if(!cycles.length){showTab('audio');return;}
   if(!manualExercise&&getBPM()<=0){showTab('audio');return;}
@@ -7150,6 +7172,25 @@ function exportVisConfigFile(){
   };
   const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vis-config.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
+}
+
+// Config compartida para un LOTE de vídeos de Ritmo (scripts/render-rhythm-video.js): estilo,
+// compás, intro y offset de sync son iguales para todos los .m4a de la carpeta (el mismo groove
+// exportado de BiaB a distintos tempos) — el BPM y el nº de compases NO van aquí porque el
+// script los recalcula por archivo (nombre + duración real del audio).
+function exportRhythmConfigFile(){
+  const cfg={
+    style:document.getElementById('tvCfgStyle')?.value||'ROCK',
+    substyle:document.getElementById('tvCfgSub')?.value||'',
+    beats:parseInt(document.getElementById('tvCfgBeats')?.value)||4,
+    introBars:parseInt(document.getElementById('introCount')?.value)||0,
+    offsetMs:parseFloat(document.getElementById('offsetMs')?.value)||0,
+    extraSec:parseFloat(document.getElementById('videoExtraSec')?.value)||2,
+    colorPreset:document.getElementById('tvCfgColorPreset')?.value||'rock',
+  };
+  const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='config.json';
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
 }
 
@@ -8748,11 +8789,7 @@ function tick(){
   if(!isPlaying)return;
   if(!audioEl){rafId=requestAnimationFrame(tick);return;}
   const elapsed=audioEl.currentTime;
-  if(!audioEl._gvEndFadeStarted&&audioEl.duration&&elapsed>=audioEl.duration-END_FADE_SEC&&document.body.classList.contains('presentation')){
-    audioEl._gvEndFadeStarted=true;
-    const ov=document.getElementById('endFadeOverlay');
-    if(ov){ov.style.transition='opacity '+END_FADE_SEC+'s linear';requestAnimationFrame(()=>{ov.style.opacity='1';});}
-  }
+  armEndFade();
   const introSec=getIntroSec()+getOffSec();
   const barSec=getBarSec();
   const allBars=getAllBars();
@@ -10194,14 +10231,17 @@ try{
 const CSS=`
 #tvOverlay{position:absolute;inset:0;z-index:40;display:none;overflow:hidden;background:#000;
   --tv-scale:1;--tv-breath:1;--tv-glow:0;--tv-flash:0;
+  --tv-c1:#e53935;--tv-c2:#26c6da;
+  --tv-c1-light:color-mix(in srgb, var(--tv-c1) 75%, white);
+  --tv-c2-light:color-mix(in srgb, var(--tv-c2) 75%, white);
   font-family:"SF Pro Display","Helvetica Neue","Segoe UI",system-ui,-apple-system,sans-serif;color:#f4f7fb;}
 #tvStage{position:absolute;top:50%;left:50%;width:1920px;height:1080px;
   transform:translate(-50%,-50%) scale(var(--tv-scale));transform-origin:center center;}
 #tvBg{position:absolute;inset:0;background:
-  radial-gradient(1400px 900px at 50% 8%,rgba(38,198,218,.10),transparent 60%),
-  radial-gradient(1100px 800px at 50% 40%,rgba(229,57,53,.06),transparent 62%),
-  radial-gradient(900px 900px at 15% 85%,rgba(38,198,218,.05),transparent 60%),
-  radial-gradient(900px 900px at 85% 80%,rgba(229,57,53,.045),transparent 60%),
+  radial-gradient(1400px 900px at 50% 8%,color-mix(in srgb, var(--tv-c2) 10%, transparent),transparent 60%),
+  radial-gradient(1100px 800px at 50% 40%,color-mix(in srgb, var(--tv-c1) 6%, transparent),transparent 62%),
+  radial-gradient(900px 900px at 15% 85%,color-mix(in srgb, var(--tv-c2) 5%, transparent),transparent 60%),
+  radial-gradient(900px 900px at 85% 80%,color-mix(in srgb, var(--tv-c1) 4.5%, transparent),transparent 60%),
   linear-gradient(160deg,#080c13,#04060a 55%,#020305);}
 #tvBg::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 120% at 50% 42%,transparent 55%,rgba(0,0,0,.55) 100%);}
 #tvParticles{position:absolute;inset:0;}
@@ -10214,11 +10254,11 @@ const CSS=`
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
   filter:drop-shadow(0 3px 18px rgba(0,0,0,.6));}
 #tvOverlay .tv-rocksub{margin-top:10px;display:flex;align-items:center;gap:16px;font-size:23px;font-weight:600;
-  letter-spacing:.34em;color:#e53935;text-shadow:0 0 22px rgba(229,57,53,.45);}
-#tvOverlay .tv-rocksub::before,#tvOverlay .tv-rocksub::after{content:"";height:2px;width:26px;border-radius:2px;background:linear-gradient(90deg,transparent,#e53935);}
-#tvOverlay .tv-rocksub::after{background:linear-gradient(90deg,#e53935,transparent);}
+  letter-spacing:.34em;color:var(--tv-c1);text-shadow:0 0 22px color-mix(in srgb, var(--tv-c1) 45%, transparent);}
+#tvOverlay .tv-rocksub::before,#tvOverlay .tv-rocksub::after{content:"";height:2px;width:26px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--tv-c1));}
+#tvOverlay .tv-rocksub::after{background:linear-gradient(90deg,var(--tv-c1),transparent);}
 #tvOverlay .tv-brand{font-size:40px;font-weight:800;letter-spacing:.30em;color:#eef2f7;}
-#tvOverlay .tv-brandsub{margin-top:8px;font-size:19px;font-weight:600;letter-spacing:.42em;color:#e53935;text-shadow:0 0 18px rgba(229,57,53,.4);}
+#tvOverlay .tv-brandsub{margin-top:8px;font-size:19px;font-weight:600;letter-spacing:.42em;color:var(--tv-c1);text-shadow:0 0 18px color-mix(in srgb, var(--tv-c1) 40%, transparent);}
 #tvOverlay .tv-col{position:absolute;top:170px;bottom:170px;display:flex;flex-direction:column;justify-content:center;gap:34px;width:290px;}
 #tvOverlay .tv-col.left{left:78px;} #tvOverlay .tv-col.right{right:78px;}
 #tvOverlay .tv-card{position:relative;border-radius:26px;padding:30px 26px;text-align:center;overflow:hidden;
@@ -10231,24 +10271,24 @@ const CSS=`
 #tvOverlay .tv-foot{font-size:15px;font-weight:600;letter-spacing:.14em;color:#aab3c0;}
 #tvOverlay #tvOSig{font-size:82px;color:#fff;}
 #tvOverlay .tv-notebadge{width:60px;height:60px;margin:16px auto 14px;border-radius:50%;display:grid;place-items:center;
-  background:radial-gradient(circle at 50% 35%,rgba(38,198,218,.22),rgba(38,198,218,.05));border:1px solid rgba(38,198,218,.35);
-  box-shadow:0 0 26px rgba(38,198,218,.25),inset 0 0 18px rgba(38,198,218,.12);}
+  background:radial-gradient(circle at 50% 35%,color-mix(in srgb, var(--tv-c2) 22%, transparent),color-mix(in srgb, var(--tv-c2) 5%, transparent));border:1px solid color-mix(in srgb, var(--tv-c2) 35%, transparent);
+  box-shadow:0 0 26px color-mix(in srgb, var(--tv-c2) 25%, transparent),inset 0 0 18px color-mix(in srgb, var(--tv-c2) 12%, transparent);}
 #tvOverlay #tvOBar{font-size:82px;color:#fff;}
-#tvOverlay .tv-divider{height:1px;margin:16px 30px;background:linear-gradient(90deg,transparent,rgba(38,198,218,.5),transparent);}
-#tvOverlay #tvCardBar .tv-foot{color:#26c6da;font-weight:700;letter-spacing:.22em;}
+#tvOverlay .tv-divider{height:1px;margin:16px 30px;background:linear-gradient(90deg,transparent,color-mix(in srgb, var(--tv-c2) 50%, transparent),transparent);}
+#tvOverlay #tvCardBar .tv-foot{color:var(--tv-c2);font-weight:700;letter-spacing:.22em;}
 #tvOverlay #tvCardBar .tv-foot b{color:#eaf6f8;font-weight:800;}
 #tvCircle{position:absolute;left:640px;top:72px;width:640px;height:640px;transform:scale(var(--tv-breath));transform-origin:center center;}
 #tvRings{position:absolute;inset:0;width:100%;height:100%;overflow:visible;}
 #tvHalo{position:absolute;inset:0;margin:auto;width:540px;height:540px;border-radius:50%;
-  background:radial-gradient(circle,rgba(229,57,53,.55),rgba(229,57,53,0) 62%);filter:blur(22px);opacity:calc(.18 + var(--tv-glow)*.7);}
+  background:radial-gradient(circle,color-mix(in srgb, var(--tv-c1) 55%, transparent),transparent 62%);filter:blur(22px);opacity:calc(.18 + var(--tv-glow)*.7);}
 #tvBloom{position:absolute;left:50%;top:64%;transform:translate(-50%,-50%);width:420px;height:200px;border-radius:50%;
-  background:radial-gradient(circle,rgba(38,198,218,.5),rgba(38,198,218,0) 65%);filter:blur(26px);opacity:.5;}
+  background:radial-gradient(circle,color-mix(in srgb, var(--tv-c2) 50%, transparent),transparent 65%);filter:blur(26px);opacity:.5;}
 #tvCenter{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;}
 #tvOBpm{font-size:172px;font-weight:800;line-height:.9;letter-spacing:-.03em;color:#fff;font-variant-numeric:tabular-nums;
   text-shadow:0 6px 40px rgba(0,0,0,.45),0 0 60px rgba(255,255,255,.06);}
 #tvOverlay .tv-bpmlbl{font-size:44px;font-weight:600;letter-spacing:.24em;color:#aab3c0;margin-top:-6px;}
-#tvOverlay .tv-pill{margin-top:20px;padding:9px 26px;border-radius:999px;font-size:22px;font-weight:700;letter-spacing:.22em;color:#e53935;
-  border:1.5px solid rgba(229,57,53,.5);background:rgba(229,57,53,.06);box-shadow:0 0 26px rgba(229,57,53,.18),inset 0 0 18px rgba(229,57,53,.06);}
+#tvOverlay .tv-pill{margin-top:20px;padding:9px 26px;border-radius:999px;font-size:22px;font-weight:700;letter-spacing:.22em;color:var(--tv-c1);
+  border:1.5px solid color-mix(in srgb, var(--tv-c1) 50%, transparent);background:color-mix(in srgb, var(--tv-c1) 6%, transparent);box-shadow:0 0 26px color-mix(in srgb, var(--tv-c1) 18%, transparent),inset 0 0 18px color-mix(in srgb, var(--tv-c1) 6%, transparent);}
 #tvBeats{position:absolute;left:960px;top:812px;transform:translateX(-50%);display:flex;align-items:flex-start;gap:78px;}
 #tvOverlay .tv-beat{position:relative;display:flex;flex-direction:column;align-items:center;}
 #tvOverlay .tv-beat:not(:last-child)::after{content:"";position:absolute;top:56px;left:calc(100% + 6px);width:66px;height:4px;
@@ -10262,12 +10302,31 @@ const CSS=`
 #tvOverlay .tv-time.right{text-align:right;}
 #tvTrack{position:relative;flex:1;height:6px;border-radius:6px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 6px rgba(0,0,0,.5);}
 #tvTrackFill{position:absolute;left:0;top:0;height:100%;width:100%;border-radius:6px;transform:scaleX(0);transform-origin:left center;
-  background:linear-gradient(90deg,#e53935,#e53935);box-shadow:0 0 16px rgba(229,57,53,.6);}
+  background:var(--tv-c1);box-shadow:0 0 16px color-mix(in srgb, var(--tv-c1) 60%, transparent);}
 #tvTrackHead{position:absolute;top:50%;left:0;width:18px;height:18px;border-radius:50%;transform:translate(-50%,-50%);
-  background:radial-gradient(circle at 40% 35%,#fff,#e53935);box-shadow:0 0 18px rgba(229,57,53,.9),0 0 4px #fff;}
+  background:radial-gradient(circle at 40% 35%,#fff,var(--tv-c1));box-shadow:0 0 18px color-mix(in srgb, var(--tv-c1) 90%, transparent),0 0 4px #fff;}
 #tvOverlay .tv-gear{width:38px;height:38px;color:#68727f;opacity:.75;}
 `;
 const st=document.createElement('style'); st.id='tvStyles'; st.textContent=CSS; document.head.appendChild(st);
+
+/* ---- Presets de color por estilo (c1=acento principal, c2=acento secundario). Todo el CSS y
+   el SVG generado por este módulo referencian --tv-c1/--tv-c2 (y sus variantes claras, derivadas
+   con color-mix), así que aplicar un preset es solo fijar estas dos custom properties. ---- */
+const TV_COLOR_PRESETS={
+  rock:  {label:'Rock (rojo/cian)',      c1:'#e53935', c2:'#26c6da'},
+  funk:  {label:'Funk (naranja/violeta)',c1:'#ff8a00', c2:'#ab47bc'},
+  jazz:  {label:'Jazz (dorado/azul)',    c1:'#d4af37', c2:'#2979ff'},
+  blues: {label:'Blues (azul/ámbar)',    c1:'#29b6f6', c2:'#ffca28'},
+  metal: {label:'Metal (plata/rojo)',    c1:'#b0b3b8', c2:'#e53935'},
+  pop:   {label:'Pop (rosa/lima)',       c1:'#ec4899', c2:'#a3e635'},
+};
+function tvApplyColorPreset(){
+  if(!refs.ov)return;
+  const key=val('tvCfgColorPreset','rock');
+  const p=TV_COLOR_PRESETS[key]||TV_COLOR_PRESETS.rock;
+  refs.ov.style.setProperty('--tv-c1',p.c1);
+  refs.ov.style.setProperty('--tv-c2',p.c2);
+}
 
 /* ---- Geometría de los anillos ---- */
 const R_MAIN=250, C_MAIN=2*Math.PI*R_MAIN;
@@ -10287,7 +10346,7 @@ function tvBuild(){
     <div class="tv-col left">
       <div class="tv-card" id="tvCardSig">
         <div class="tv-eyebrow">COMPÁS</div><div class="tv-big" id="tvOSig">4/4</div>
-        <div class="tv-notebadge"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#26c6da" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg></div>
+        <div class="tv-notebadge"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="var(--tv-c2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg></div>
         <div class="tv-foot" id="tvOBpbLabel" style="color:#68727f;font-size:14px;">4 TIEMPOS POR COMPÁS</div>
       </div>
     </div>
@@ -10301,7 +10360,7 @@ function tvBuild(){
       <div id="tvHalo"></div><div id="tvBloom"></div>
       <svg id="tvRings" viewBox="0 0 620 620">
         <defs>
-          <linearGradient id="tvGrad" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e53935"/><stop offset=".5" stop-color="#fdfdfd"/><stop offset="1" stop-color="#26c6da"/></linearGradient>
+          <linearGradient id="tvGrad" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="var(--tv-c1)"/><stop offset=".5" stop-color="#fdfdfd"/><stop offset="1" stop-color="var(--tv-c2)"/></linearGradient>
           <filter id="tvSoft" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5"/></filter>
         </defs>
         <circle cx="310" cy="310" r="288" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1.5"/>
@@ -10310,7 +10369,7 @@ function tvBuild(){
         <circle id="tvArc" cx="310" cy="310" r="250" fill="none" stroke="url(#tvGrad)" stroke-width="9" stroke-linecap="round" transform="rotate(-90 310 310)" stroke-dasharray="${C_MAIN}" stroke-dashoffset="${C_MAIN}"/>
         <circle cx="310" cy="310" r="224" fill="none" stroke="rgba(138,120,255,.20)" stroke-width="2"/>
         <circle cx="310" cy="310" r="206" fill="rgba(6,9,14,.62)"/>
-        <circle id="tvHeadGlow" cx="310" cy="60" r="16" fill="#e53935" opacity=".55" filter="url(#tvSoft)"/>
+        <circle id="tvHeadGlow" cx="310" cy="60" r="16" fill="var(--tv-c1)" opacity=".55" filter="url(#tvSoft)"/>
         <circle id="tvHead" cx="310" cy="60" r="9" fill="#fff"/>
       </svg>
       <div id="tvCenter"><div id="tvOBpm">85</div><div class="tv-bpmlbl">BPM</div><div class="tv-pill">TEMPO</div></div>
@@ -10341,13 +10400,13 @@ function buildBeats(n){
     const b=document.createElement('div'); b.className='tv-beat';
     const accent=(i===0);
     b.innerHTML=`<div class="tv-beatdot"><svg viewBox="0 0 100 100">
-      <circle cx="50" cy="50" r="${R}" fill="none" stroke="rgba(38,198,218,.28)" stroke-width="3"/>
-      <circle class="bcore" cx="50" cy="50" r="20" fill="${accent?'#e53935':'#26c6da'}" opacity="${accent?'.9':'0'}"/>
-      <circle class="bglow" cx="50" cy="50" r="${R}" fill="none" stroke="${accent?'#e53935':'#26c6da'}" stroke-width="4" opacity="${accent?'.85':'0'}" style="filter:drop-shadow(0 0 8px ${accent?'#e53935':'#26c6da'})"/>
-      <circle class="bnext" cx="50" cy="50" r="${R}" fill="none" stroke="${accent?'#ff5147':'#4dd8e8'}" stroke-width="4" stroke-linecap="round"
+      <circle cx="50" cy="50" r="${R}" fill="none" stroke="color-mix(in srgb, var(--tv-c2) 28%, transparent)" stroke-width="3"/>
+      <circle class="bcore" cx="50" cy="50" r="20" fill="${accent?'var(--tv-c1)':'var(--tv-c2)'}" opacity="${accent?'.9':'0'}"/>
+      <circle class="bglow" cx="50" cy="50" r="${R}" fill="none" stroke="${accent?'var(--tv-c1)':'var(--tv-c2)'}" stroke-width="4" opacity="${accent?'.85':'0'}" style="filter:drop-shadow(0 0 8px ${accent?'var(--tv-c1)':'var(--tv-c2)'})"/>
+      <circle class="bnext" cx="50" cy="50" r="${R}" fill="none" stroke="${accent?'var(--tv-c1-light)':'var(--tv-c2-light)'}" stroke-width="4" stroke-linecap="round"
               transform="rotate(-90 50 50)" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${C.toFixed(2)}"
-              opacity="0" style="filter:drop-shadow(0 0 6px ${accent?'rgba(255,81,71,.7)':'rgba(77,216,232,.7)'})"/>
-    </svg></div><div class="tv-beatnum" style="${accent?'color:#fff':''}">${i+1}</div><div class="tv-beatrole" style="${accent?'color:#e53935':''}">TIEMPO</div>`;
+              opacity="0" style="filter:drop-shadow(0 0 6px ${accent?'color-mix(in srgb, var(--tv-c1-light) 70%, transparent)':'color-mix(in srgb, var(--tv-c2-light) 70%, transparent)'})"/>
+    </svg></div><div class="tv-beatnum" style="${accent?'color:#fff':''}">${i+1}</div><div class="tv-beatrole" style="${accent?'color:var(--tv-c1)':''}">TIEMPO</div>`;
     refs.beats.appendChild(b); beatEls.push(b);
   }
   beatEls._C=C; // circunferencia del anillo de anticipación (para tvDrawPlaying)
@@ -10397,6 +10456,7 @@ window.tvComputeBars=function(){
 /* ---- Volcar config → pantalla (estático) ---- */
 window.tvSync=function(){
   if(!built) return;
+  tvApplyColorPreset();
   const beats=getCfgBeats();
   if(beatEls.length!==beats) buildBeats(beats);
   const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
@@ -10486,7 +10546,7 @@ function tvPaintAtElapsed(elapsedRaw){
   for(let i=0;i<beatEls.length;i++){
     const el=beatEls[i], core=el.querySelector('.bcore'), glow=el.querySelector('.bglow'),
           next=el.querySelector('.bnext'), num=el.querySelector('.tv-beatnum'), role=el.querySelector('.tv-beatrole');
-    const col=(i===0)?'#e53935':'#26c6da';
+    const col=(i===0)?'var(--tv-c1)':'var(--tv-c2)';
     if(i===beatInBar){
       core.setAttribute('opacity',Math.min(1,0.75+env*0.25).toFixed(2));
       core.setAttribute('r',(20+(accent?env*3:env*2)).toFixed(2));
@@ -10523,14 +10583,19 @@ function tvPaintAtElapsed(elapsedRaw){
 function tvDrawPlaying(){ if(!audioEl) return; tvPaintAtElapsed(audioEl.currentTime); }
 
 /* =========================================================================
- *  API DE EXPORTACIÓN OFFLINE — usada por el script externo Node/Playwright
- *  (render-rhythm-video.js) que genera el vídeo fotograma a fotograma sin
- *  grabar pantalla. No la usa la UI normal de la app.
- *  - configure(cfg): fija estilo/BPM/compás/compases/intro/offset y activa
- *    el ejercicio de ritmo, SIN necesitar el audio cargado en el navegador
- *    (el audio real lo mezcla ffmpeg al final, fuera del navegador).
+ *  API DE EXPORTACIÓN OFFLINE (renderAt/getTotalDuration) — pensada en su día
+ *  para generar el vídeo fotograma a fotograma sin grabar pantalla. No la usa
+ *  la UI normal de la app. NO la usa scripts/render-rhythm-video.js: con
+ *  audios de varios minutos (backing tracks completos, no un loop corto),
+ *  page.screenshot() por fotograma resultó mucho más lento que grabar en
+ *  directo — ese script carga el audio real y graba con Playwright
+ *  (recordVideo) igual que generate-triad-videos.js. Se deja la API por si
+ *  algún día hace falta exportar sin audio real disponible (bpm/compás/
+ *  compases teóricos únicamente).
+ *  - configure(cfg): fija estilo/BPM/compás/compases/intro/offset/color y
+ *    activa el ejercicio de ritmo, SIN necesitar el audio cargado.
  *  - renderAt(t): pinta el instante t (segundos) de forma determinista.
- *  - getTotalDuration(): duración total del vídeo (claqueta + compases).
+ *  - getTotalDuration(): duración total teórica (claqueta + compases).
  *  - presentationOn(): activa el modo presentación (oculta pestañas/menú)
  *    reutilizando togglePresentation(), ya pensado para grabación limpia.
  * ========================================================================= */
@@ -10541,6 +10606,7 @@ window.tvExport={
     setVal('tvCfgStyle',cfg.style); setVal('tvCfgSub',cfg.substyle);
     setVal('tvCfgBeats',cfg.beats); setVal('bpmInput',cfg.bpm);
     setVal('tvCfgBars',cfg.bars); setVal('introCount',cfg.introBars); setVal('offsetMs',cfg.offsetMs);
+    setVal('tvCfgColorPreset',cfg.colorPreset);
     if(getExerciseType()!=='rhythm'){ setExerciseType('rhythm'); }else{ tvShow(); }
     tvSync();
     stopAmbient(); // el script pinta cada fotograma a mano; el bucle idle solo estorbaría
@@ -10560,6 +10626,7 @@ function tvFrame(now){
   const playingNow = (typeof isPlaying!=='undefined'&&isPlaying) && getExerciseType()==='rhythm' && !!audioEl;
   if(playingNow){
     tvDrawPlaying();
+    armEndFade();
   }else{
     const t=(now-tvT0)/1000;
     refs.ov.style.setProperty('--tv-breath',(1+0.010*Math.sin(t*0.9)).toFixed(4));
