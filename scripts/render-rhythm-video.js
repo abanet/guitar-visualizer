@@ -95,12 +95,40 @@ function bpmFromFilename(file) {
   return m ? parseInt(m[1], 10) : null;
 }
 
+// Detectada en la tanda "ritmoRock" (ago 2026): los .m4a exportados de BiaB a distintos tempos
+// llevan un tramo de silencio real pegado al final —y crece con el BPM (11s a 60bpm, 5+min a
+// 160bpm)—, probablemente porque BiaB renderiza a una longitud de pista fija en vez de recortar
+// al nº de compases real. audioDuration (duración del contenedor, vía ffmpeg -i) incluye ese
+// silencio, así que si se usa tal cual para la duración del vídeo, el nº de compases (bars) y el
+// tiempo de grabación, el resultado es un vídeo/audio correctos en longitud pero con minutos de
+// silencio pegados al final (el bug que reportó Alberto). Aquí buscamos dónde empieza el ÚLTIMO
+// tramo de silencio y, si llega hasta el final del archivo, usamos ese punto como duración real
+// del contenido en vez de la duración del contenedor.
+async function detectContentDurationSeconds(audioPath, containerDuration) {
+  const { stderr } = await execFileP('ffmpeg', [
+    '-i', audioPath, '-af', 'silencedetect=noise=-40dB:d=1', '-f', 'null', '-',
+  ]);
+  const starts = [...stderr.matchAll(/silence_start:\s*([\d.]+)/g)].map((m) => parseFloat(m[1]));
+  const ends = [...stderr.matchAll(/silence_end:\s*([\d.]+)/g)].map((m) => parseFloat(m[1]));
+  if (!starts.length) return containerDuration; // sin silencios detectados: nada que recortar
+  const lastStart = starts[starts.length - 1];
+  const lastEnd = ends.length >= starts.length ? ends[ends.length - 1] : containerDuration; // sin silence_end: llega al EOF
+  const reachesEnd = (containerDuration - lastEnd) < 0.5;
+  const trimmedSec = containerDuration - lastStart;
+  if (reachesEnd && trimmedSec >= 3) return Math.min(containerDuration, lastStart + 1.5); // +1.5s de margen (cola/reverb)
+  return containerDuration;
+}
+
 async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, outDir, tmpDir }) {
   const tag = path.parse(audioPath).name;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
   const audioDuration = await getAudioDurationSeconds(audioPath);
-  log(`bpm=${bpm} · compás=${cfg.beats || 4}/4 · audio ${audioDuration.toFixed(1)}s`);
+  const contentDuration = await detectContentDurationSeconds(audioPath, audioDuration);
+  if (contentDuration < audioDuration - 1) {
+    log(`⚠ silencio final detectado: recorto ${(audioDuration - contentDuration).toFixed(1)}s (contenido real ${contentDuration.toFixed(1)}s de ${audioDuration.toFixed(1)}s)`);
+  }
+  log(`bpm=${bpm} · compás=${cfg.beats || 4}/4 · audio ${contentDuration.toFixed(1)}s`);
 
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({
@@ -147,9 +175,21 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
       return el && el.classList.contains('ok');
     }, null, { timeout: 20000 });
 
-    // Nº de compases real: lo calcula la propia app desde la duración del audio ya cargado
-    // (misma función que el botón "Calcular desde el audio" del panel de Ritmo).
-    await page.evaluate(() => { if (typeof tvComputeBars === 'function') tvComputeBars(); });
+    // Nº de compases real: NO se delega en tvComputeBars() (botón "Calcular desde el audio"),
+    // porque esa función lee audioEl.duration —la duración del CONTENEDOR, que en estos archivos
+    // incluye el silencio final baqueado por BiaB (ver detectContentDurationSeconds arriba)—.
+    // Se replica su misma fórmula pero con contentDuration (el contenido real ya recortado).
+    {
+      const beats = cfg.beats || 4;
+      const barSec = (60 / bpm) * beats;
+      const introSec = (cfg.introBars || 0) * beats * (60 / bpm);
+      const offSec = (cfg.offsetMs || 0) / 1000;
+      const bars = Math.max(1, Math.round((contentDuration - introSec - offSec) / barSec));
+      await page.evaluate((barsVal) => {
+        const inp = document.getElementById('tvCfgBars'); if (inp) inp.value = barsVal;
+        if (typeof tvSync === 'function') tvSync();
+      }, bars);
+    }
 
     await page.evaluate(() => {
       showTab('player');
@@ -158,8 +198,8 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
     });
     await page.waitForTimeout(300); // deja asentar el layout de presentación
 
-    const total = audioDuration + extraSec;
-    log(`duración objetivo: ${total.toFixed(1)}s (audio ${audioDuration.toFixed(1)}s + ${extraSec}s extra)`);
+    const total = contentDuration + extraSec;
+    log(`duración objetivo: ${total.toFixed(1)}s (contenido ${contentDuration.toFixed(1)}s + ${extraSec}s extra)`);
 
     playStartAt = await page.evaluate(() => new Promise((resolve) => {
       const stamp = () => resolve(performance.timeOrigin + performance.now());

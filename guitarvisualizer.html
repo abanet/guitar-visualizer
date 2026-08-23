@@ -7007,9 +7007,15 @@ function resetEndFade(){
 // Extraído de tick() para que el modo Ritmo (bucle propio tvFrame(), ver más abajo) dispare el
 // mismo fundido — antes solo vivía dentro de tick(), que tvFrame() nunca llama.
 function armEndFade(){
-  if(!audioEl||audioEl._gvEndFadeStarted||!audioEl.duration)return;
+  if(!audioEl||audioEl._gvEndFadeStarted)return;
   if(!document.body.classList.contains('presentation'))return;
-  if(audioEl.currentTime<audioEl.duration-END_FADE_SEC)return;
+  // En Ritmo, audioEl.duration es la duración del CONTENEDOR del audio, que puede incluir
+  // minutos de silencio pegados al final (ver tvGetDuration arriba) — el vídeo grabado termina
+  // mucho antes de llegar ahí, así que el fundido nunca disparaba. Ahí se usa la duración real
+  // (compases/BPM), igual que el resto del módulo Ritmo.
+  const dur=(typeof getExerciseType==='function'&&getExerciseType()==='rhythm'&&typeof tvGetDuration==='function')?tvGetDuration():audioEl.duration;
+  if(!dur)return;
+  if(audioEl.currentTime<dur-END_FADE_SEC)return;
   audioEl._gvEndFadeStarted=true;
   const ov=document.getElementById('endFadeOverlay');
   if(ov){ov.style.transition='opacity '+END_FADE_SEC+'s linear';requestAnimationFrame(()=>{ov.style.opacity='1';});}
@@ -10492,7 +10498,7 @@ window.tvSync=function(){
   set('tvOBpm',getCfgBPM());
   set('tvOTotal',getCfgBars());
   set('tvOBar','1');
-  let dur=0; try{ if(typeof audioEl!=='undefined'&&audioEl&&audioEl.duration) dur=audioEl.duration; }catch(e){}
+  let dur=0; try{ dur=tvGetDuration(); }catch(e){}
   set('tvOTimeTot',dur?fmtT(dur):'—:—');
   set('tvOTimeCur','00:00');
   // Póster estático: anillo a ~1/(beats) del compás y cabeza ahí (aspecto vivo en reposo)
@@ -10528,13 +10534,24 @@ function tvClock(){
 }
 
 /* ---- Dibuja UN frame de reproducción REAL, a partir de audioEl.currentTime ---- */
-/* ---- Duración total del vídeo: si hay audio real cargado, la suya; si no
-   (modo exportación offline), la calculada desde BPM/compases/tiempos. ---- */
+/* ---- Duración total del vídeo: se calcula SIEMPRE desde compases/BPM/tiempos, no desde
+   audioEl.duration —esa es la duración del CONTENEDOR del audio, que puede incluir silencio
+   pegado al final o al principio (ver detectContentDurationSeconds en
+   scripts/render-rhythm-video.js: algunos .m4a de BiaB llevan minutos de silencio de sobra).
+   getCfgBars() es la fuente de verdad de "cuánto dura el ejercicio" —la propia UI la deja
+   corregir a mano precisamente porque el audio no siempre manda—, así que solo se cae a
+   audioEl.duration si no hay compases configurados todavía. ---- */
 function tvGetDuration(){
-  if(audioEl && audioEl.duration) return audioEl.duration;
   const {beats,spb,preRoll}=tvClock();
-  return preRoll+getCfgBars()*beats*spb;
+  const barsDur=preRoll+getCfgBars()*beats*spb;
+  if(barsDur>0)return barsDur;
+  if(audioEl && audioEl.duration) return audioEl.duration;
+  return 0;
 }
+// armEndFade() vive fuera de este IIFE (módulo Ritmo) y la necesita para saber cuándo termina
+// realmente el ejercicio — sin exponerla aquí, el typeof-guard de armEndFade() la ve como
+// inexistente y cae siempre a audioEl.duration (el bug del fundido que no disparaba).
+window.tvGetDuration=tvGetDuration;
 
 /* ---- Pintado PURO: dado un instante (segundos desde el arranque del audio,
    incluida la claqueta), deja la pantalla exactamente como debe verse ahí.
@@ -10711,6 +10728,7 @@ function tvRequireReady(){
 function tvStart(){
   if(!tvRequireReady()) return;
   isPlaying=true; if(typeof setBtns==='function') setBtns(true);
+  if(typeof resetEndFade==='function') resetEndFade(); // descarta el fundido de una reproducción anterior (ver startIt() en tríadas)
   audioEl.playbackRate=(typeof speed!=='undefined'&&speed)||1;
   audioEl.play();
 }
