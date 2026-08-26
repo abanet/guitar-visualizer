@@ -10393,20 +10393,20 @@ function tvBuild(){
   <div id="tvStage">
     <svg width="0" height="0" style="position:absolute"><filter id="tvGrainFilter" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" result="tvGrainNoise"/><feColorMatrix in="tvGrainNoise" type="saturate" values="0"/></filter></svg>
     <div id="tvBg"></div><canvas id="tvParticles" width="1920" height="1080"></canvas><div id="tvFlash"></div><div id="tvGrain"></div>
-    <div id="tvCountdown"><div id="tvCountdownNum">4</div><div class="tv-countdown-lbl">PREPÁRATE</div></div>
+    <div id="tvCountdown"><div id="tvCountdownNum">4</div><div class="tv-countdown-lbl">GET READY</div></div>
     <div class="tv-header left"><div class="tv-rock" id="tvOStyle">ROCK</div><div class="tv-rocksub" id="tvOSub">CLASSIC ROCK</div></div>
-    <div class="tv-header right"><div class="tv-brand">BANETMASA</div><div class="tv-brandsub">PRÁCTICA DE GUITARRA</div></div>
+    <div class="tv-header right"><div class="tv-brand">BANETMASA</div><div class="tv-brandsub">RHYTHMS</div></div>
     <div class="tv-col left">
       <div class="tv-card" id="tvCardSig">
-        <div class="tv-eyebrow">COMPÁS</div><div class="tv-big" id="tvOSig">4/4</div>
+        <div class="tv-eyebrow">TIME SIGNATURE</div><div class="tv-big" id="tvOSig">4/4</div>
         <div class="tv-notebadge"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="var(--tv-c2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg></div>
-        <div class="tv-foot" id="tvOBpbLabel" style="color:#68727f;font-size:14px;">4 TIEMPOS POR COMPÁS</div>
+        <div class="tv-foot" id="tvOBpbLabel" style="color:#68727f;font-size:14px;">4 BEATS PER BAR</div>
       </div>
     </div>
     <div class="tv-col right">
       <div class="tv-card" id="tvCardBar">
-        <div class="tv-eyebrow">COMPÁS</div><div class="tv-big" id="tvOBar">1</div>
-        <div class="tv-divider"></div><div class="tv-foot">DE <b id="tvOTotal">128</b></div>
+        <div class="tv-eyebrow">BAR</div><div class="tv-big" id="tvOBar">1</div>
+        <div class="tv-divider"></div><div class="tv-foot">OF <b id="tvOTotal">128</b></div>
       </div>
     </div>
     <div id="tvCircle">
@@ -10461,7 +10461,7 @@ function buildBeats(n){
       <circle class="bnext" cx="50" cy="50" r="${R}" fill="none" stroke="${accent?'var(--tv-c1-light)':'var(--tv-c2-light)'}" stroke-width="4" stroke-linecap="round"
               transform="rotate(-90 50 50)" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${C.toFixed(2)}"
               opacity="0" style="filter:drop-shadow(0 0 6px ${accent?'color-mix(in srgb, var(--tv-c1-light) 70%, transparent)':'color-mix(in srgb, var(--tv-c2-light) 70%, transparent)'})"/>
-    </svg></div><div class="tv-beatnum" style="${accent?'color:#fff':''}">${i+1}</div><div class="tv-beatrole" style="${accent?'color:var(--tv-c1)':''}">TIEMPO</div>`;
+    </svg></div><div class="tv-beatnum" style="${accent?'color:#fff':''}">${i+1}</div><div class="tv-beatrole" style="${accent?'color:var(--tv-c1)':''}">BEAT</div>`;
     refs.beats.appendChild(b); beatEls.push(b);
   }
   beatEls._C=C; // circunferencia del anillo de anticipación (para tvDrawPlaying)
@@ -10518,7 +10518,7 @@ window.tvSync=function(){
   set('tvOStyle',(val('tvCfgStyle','ROCK')||'ROCK').toUpperCase());
   set('tvOSub',(val('tvCfgSub','')||'').toUpperCase());
   set('tvOSig',beats+'/4');
-  set('tvOBpbLabel',beats+' TIEMPOS POR COMPÁS');
+  set('tvOBpbLabel',beats+' BEATS PER BAR');
   set('tvOBpm',getCfgBPM());
   set('tvOTotal',getCfgBars());
   set('tvOBar','1');

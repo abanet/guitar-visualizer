@@ -169,7 +169,7 @@ async function detectAudioOnsetNear(mp4Path, nearSec, windowAfterSec) {
 }
 
 // Fin real de la claqueta: se mide la luminancia media de un recorte fijo de pantalla sobre la
-// etiqueta "PREPÁRATE" (#tvCountdown .tv-countdown-lbl en guitarvisualizer.html — color
+// etiqueta "GET READY" (#tvCountdown .tv-countdown-lbl en guitarvisualizer.html — color
 // #aab3c0 constante, no depende del colorPreset). Esa etiqueta está SIEMPRE en la misma posición
 // mientras dura la claqueta y desaparece del todo al terminar, así que su luminancia es una señal
 // limpia de un único vencimiento — a diferencia de un detector de escena genérico, que en las
