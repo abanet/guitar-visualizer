@@ -3517,6 +3517,21 @@ function onMaxFretsInputChange(id,value){
   });
   setMaxFretsShown(value);
 }
+// Si el usuario tiene fijado "Mostrar el mástil hasta el traste" (gv_maxFretsShown) por debajo de
+// lo que necesita el lote que se acaba de generar, ese límite recortaría notas reales del ejercicio
+// (p.ej. una tríada cuya única posición legítima en ese grupo/inversión cae en el traste 14, con el
+// límite en 13) — computeViewWin() lo trata como un tope duro, no como un mínimo, así que no se
+// autoajusta solo. Lo subimos aquí al valor justo que hace falta y avisamos, en vez de dejar que la
+// nota desaparezca en silencio. Devuelve el nuevo límite si lo tocó, o null si no hizo falta.
+function bumpMaxFretsShownIfNeeded(neededMax){
+  const cur=getMaxFretsShown();
+  if(cur==null||cur>=neededMax)return null;
+  setMaxFretsShown(neededMax);
+  ['toggle_maxFretsShown','toggle_inline_maxFretsShown'].forEach(pid=>{
+    const el=document.getElementById(pid);if(el)el.value=String(neededMax);
+  });
+  return neededMax;
+}
 // ── Dimensión de la PREVISUALIZACIÓN, independiente del mástil principal (v4.2.19) ──────────
 // Cap de trastes propio para la figura previsualizada. null = sin límite (ventana nativa 0-15).
 function getPreviewMaxFrets(){
@@ -5415,6 +5430,7 @@ async function autoGenerateTriads(){
         const mx=Math.max(...voicing.frets);if(mx>sharedFretEnd)sharedFretEnd=mx;
       }
     }
+    const bumpedTo=bumpMaxFretsShownIfNeeded(sharedFretEnd);
     let applied=0,skipped=0;
     const usedSlotsByBar={}; // bi → Set de índices de imgs[] realmente escritos (para limpiar huecos)
     for(const{f,slot,chord,voicing}of sweepItems){
@@ -5456,6 +5472,7 @@ async function autoGenerateTriads(){
     const orderLabel=order==='random'?'orden aleatorio':('orden secuencial'+(endMode==='loop'?', en bucle':', se queda en la última posición'));
     alert('✓ '+applied+' tríadas generadas — barrido de posiciones sobre los acordes reales del tema ('+scopeLabel+', '+barsPerPos+' compás(es) por posición, '+orderLabel+')'+
       (skipped?'\n⚠ '+skipped+' acorde(s) no admitían esa posición y se dejaron sin generar.':'')+
+      (bumpedTo?'\n↔ Se ha ampliado el mástil hasta el traste '+bumpedTo+' (el límite anterior recortaba alguna posición real del lote).':'')+
       '.\nModo cambiado a Tríadas. Revísalas en el editor y pulsa Visualizador.');
     return;
   }
@@ -5537,6 +5554,9 @@ async function autoGenerateTriads(){
   // un compás a otro.
   let sharedFretEnd=13;
   voicings.forEach(v=>{if(v&&v.voicing&&v.voicing.frets&&v.voicing.frets.length){const mx=Math.max(...v.voicing.frets);if(mx>sharedFretEnd)sharedFretEnd=mx;}});
+  // Si el usuario tiene el mástil recortado por debajo de lo que hace falta para este lote, súbelo
+  // — si no, el recorte se comería en silencio la nota que motivó ensanchar sharedFretEnd.
+  const bumpedTo=bumpMaxFretsShownIfNeeded(sharedFretEnd);
 
   let applied=0,skipped=0;
   for(let idx=0;idx<flat.length;idx++){
@@ -5574,6 +5594,7 @@ async function autoGenerateTriads(){
     (perLapZones?' (zona distinta por vuelta)':'');
   alert('✓ '+applied+' tríadas generadas'+modeLabel+
     (skipped?'\n⚠ '+skipped+' acorde(s) no admitían esa figura y se dejaron sin generar.':'')+
+    (bumpedTo?'\n↔ Se ha ampliado el mástil hasta el traste '+bumpedTo+' (el límite anterior recortaba alguna posición real del lote).':'')+
     '.\nModo cambiado a Tríadas. Revísalas en el editor y pulsa Visualizador.');
 }
 
