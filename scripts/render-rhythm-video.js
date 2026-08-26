@@ -119,6 +119,92 @@ async function detectContentDurationSeconds(audioPath, containerDuration) {
   return containerDuration;
 }
 
+// Corrección automática de sincronización (ago 2026): trimOffsetSec se basa en un timestamp
+// medido en el navegador (evento 'playing' de audioEl) que resultó tener ruido de ±0.3-0.5s de
+// una toma a otra —imperceptible a tempos bajos, pero muy visible a 160bpm, donde un solo tiempo
+// dura 375ms (caso reportado por Alberto: la claqueta seguía encendida en el último tiempo varios
+// cientos de ms después de que la música ya hubiera arrancado). En vez de fiarse solo de ese
+// timestamp, se mide el desfase real en el propio .mp4 ya generado y se corrige el recorte con
+// ese dato — ver SYNC_LONG_GAP_SEC/detectAudioOnsetNear/detectOverlayFadeNear más abajo.
+const SYNC_LONG_GAP_SEC = 0.22; // hueco típico del click de conteo; un silencio musical breve no llega a esto
+const SYNC_TOLERANCE_SEC = 0.05;
+const SYNC_MAX_CORRECTION_SEC = 2; // por seguridad: no aplicar una "corrección" descabellada si la medición falla
+
+// Busca, cerca de `nearSec` (el instante teórico en que debería acabar la claqueta, según
+// config), el hueco de silencio "largo" (>= SYNC_LONG_GAP_SEC) cuyo final está MÁS CERCA de
+// nearSec — ese es el patrón del click de conteo (blips cortos separados por huecos largos y
+// regulares), y nearSec (derivado de bpm/introBars/offsetMs) predice ese instante con muy poco
+// margen de error (decenas de ms) porque el conteo lo genera la propia app a tempo fijo.
+// Antes se cogía el ÚLTIMO hueco largo dentro de toda la ventana [0, nearSec+windowAfterSec]: con
+// pistas donde la primera nota real queda seguida de un silencio breve antes de la segunda (algo
+// habitual en un rock ballad lento), ese hueco intermedio puede medir justo por encima de
+// SYNC_LONG_GAP_SEC —sobre todo tras el reencode a AAC, que desplaza los límites unos ms— y al
+// ser más tardío "ganaba" sobre el hueco real del click, moviendo el punto detectado un tiempo
+// entero más tarde de lo real (bug real, ago 2026: la corrección automática "convergía" sobre ese
+// hueco equivocado y dejaba el vídeo sistemáticamente un tiempo por detrás del audio real —
+// reportado por Alberto: el "4" de la cuenta atrás seguía iluminado cuando ya sonaba el primer
+// golpe). Coger el hueco más cercano a nearSec en vez del más tardío evita ese falso positivo.
+async function detectAudioOnsetNear(mp4Path, nearSec, windowAfterSec) {
+  const searchSec = nearSec + windowAfterSec;
+  let stderr = '';
+  try {
+    const r = await execFileP('ffmpeg', [
+      '-i', mp4Path, '-t', String(searchSec),
+      '-af', 'highpass=f=60,silencedetect=noise=-30dB:d=0.05',
+      '-f', 'null', '-',
+    ], { maxBuffer: 1024 * 1024 * 64 });
+    stderr = r.stderr || '';
+  } catch (e) { stderr = e.stderr || ''; }
+  const starts = [...stderr.matchAll(/silence_start:\s*([0-9.]+)/g)].map((m) => parseFloat(m[1]));
+  const ends = [...stderr.matchAll(/silence_end:\s*([0-9.]+)/g)].map((m) => parseFloat(m[1]));
+  let best = null;
+  let bestDist = Infinity;
+  for (let i = 0; i < starts.length; i++) {
+    const end = ends[i] !== undefined ? ends[i] : searchSec;
+    if (end - starts[i] < SYNC_LONG_GAP_SEC || end > searchSec) continue;
+    const dist = Math.abs(end - nearSec);
+    if (dist < bestDist) { best = end; bestDist = dist; }
+  }
+  return best;
+}
+
+// Fin real de la claqueta: se mide la luminancia media de un recorte fijo de pantalla sobre la
+// etiqueta "PREPÁRATE" (#tvCountdown .tv-countdown-lbl en guitarvisualizer.html — color
+// #aab3c0 constante, no depende del colorPreset). Esa etiqueta está SIEMPRE en la misma posición
+// mientras dura la claqueta y desaparece del todo al terminar, así que su luminancia es una señal
+// limpia de un único vencimiento — a diferencia de un detector de escena genérico, que en las
+// primeras pruebas confundía el simple cambio de DÍGITO del contador (cada tiempo, "2"→"1") con
+// el final real de la claqueta y daba un punto varios cientos de ms antes de tiempo (bug real,
+// ago 2026: la "corrección" automática convergía sobre esa señal equivocada).
+async function detectOverlayFadeNear(mp4Path, nearSec, windowAfterSec) {
+  const searchSec = nearSec + windowAfterSec;
+  const { stdout } = await execFileP('ffmpeg', [
+    '-i', mp4Path, '-t', String(searchSec),
+    '-vf', 'crop=320:30:800:745,signalstats,metadata=print:file=-',
+    '-f', 'null', '-',
+  ], { maxBuffer: 1024 * 1024 * 64 });
+  const samples = [];
+  let pts = null;
+  for (const line of stdout.split('\n')) {
+    const pm = line.match(/pts_time:([0-9.]+)/);
+    if (pm) { pts = parseFloat(pm[1]); continue; }
+    const ym = line.match(/YAVG=([0-9.]+)/);
+    if (ym && pts != null) samples.push({ t: pts, y: parseFloat(ym[1]) });
+  }
+  if (samples.length < 4) return null;
+  const ys = samples.map((s) => s.y);
+  const hi = Math.max(...ys), lo = Math.min(...ys);
+  if (hi - lo < 10) return null; // sin contraste claro entre "etiqueta visible" y "fondo vacío"
+  const threshold = (hi + lo) / 2;
+  for (let i = 0; i < samples.length - 2; i++) {
+    if (samples[i].y >= threshold && samples[i + 1].y < threshold && samples[i + 2].y < threshold) {
+      const a = samples[i], b = samples[i + 1]; // interpolación lineal entre la última muestra alta y la primera baja
+      return a.t + ((a.y - threshold) / (a.y - b.y)) * (b.t - a.t);
+    }
+  }
+  return null;
+}
+
 async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, outDir, tmpDir }) {
   const tag = path.parse(audioPath).name;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
@@ -227,12 +313,11 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
   const trimOffsetSec = Math.max(0, ((playStartAt || recordStartAt) - recordStartAt) / 1000);
 
   const outPath = path.join(outDir, `${tag}.mp4`);
-  log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
-  await execFileP('ffmpeg', [
+  const mux = (trimSec) => execFileP('ffmpeg', [
     '-y',
     '-i', silentPath,
     '-i', audioPath,
-    '-filter_complex', `[0:v]trim=start=${trimOffsetSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-filter_complex', `[0:v]trim=start=${trimSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
     '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',
@@ -240,6 +325,43 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
     '-shortest',
     outPath,
   ]);
+
+  log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
+  await mux(trimOffsetSec);
+
+  // Comprobación + corrección de sincronización (ver detectAudioOnsetNear/detectOverlayFadeNear
+  // más arriba). Solo aplica si hay claqueta (introBars>0) — sin ella no hay etiqueta que medir.
+  const beats = cfg.beats || 4;
+  const expectedContentSec = (cfg.introBars || 0) * beats * (60 / bpm) + (cfg.offsetMs || 0) / 1000;
+  if (expectedContentSec > 0) {
+    let curTrim = trimOffsetSec;
+    // Cada pasada corrige por el desfase medido, pero esa propia medición tiene su margen de
+    // error — una sola pasada podía dejar un resto por encima de la propia tolerancia. Se repite
+    // hasta entrar en tolerancia o agotar intentos.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
+      const videoChange = audioOnset != null ? await detectOverlayFadeNear(outPath, expectedContentSec, 4) : null;
+      if (audioOnset == null || videoChange == null) {
+        log('⚠ no se pudo medir la sincronización automáticamente — revisar a mano si hay dudas');
+        break;
+      }
+      const gap = audioOnset - videoChange;
+      log(`comprobación de sync (intento ${attempt}): audio en ${audioOnset.toFixed(2)}s, vídeo cambia en ${videoChange.toFixed(2)}s (desfase ${(gap * 1000).toFixed(0)}ms)`);
+      if (Math.abs(gap) <= SYNC_TOLERANCE_SEC) break;
+      if (Math.abs(gap) >= SYNC_MAX_CORRECTION_SEC) {
+        log('⚠ desfase medido demasiado grande para corregir automáticamente — revisar a mano');
+        break;
+      }
+      // trim=start=X desplaza el contenido a "raw_time - X" en la salida: recortar MÁS (subir X)
+      // adelanta el contenido (tiempos de salida más pequeños), no lo retrasa — de ahí el signo
+      // negativo. Con el signo cambiado (bug real, ago 2026) cada intento empeoraba el desfase.
+      curTrim = Math.max(0, curTrim - gap);
+      log(`corrigiendo recorte de arranque: → ${curTrim.toFixed(3)}s…`);
+      await mux(curTrim);
+      if (attempt === 3) log('⚠ sigue fuera de tolerancia tras 3 intentos — revisar a mano');
+    }
+  }
+
   log(`✓ ${outPath}`);
   return outPath;
 }

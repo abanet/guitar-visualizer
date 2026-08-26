@@ -10245,7 +10245,10 @@ const CSS=`
   transform:translate(-50%,-50%) scale(var(--tv-scale));transform-origin:center center;}
 #tvGrain{position:absolute;inset:0;background:#fff;filter:url(#tvGrainFilter);opacity:.05;mix-blend-mode:screen;pointer-events:none;}
 #tvCountdown{position:absolute;inset:0;z-index:35;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
-  opacity:0;pointer-events:none;transition:opacity .18s linear;}
+  /* Antes .18s: a 160bpm (375ms/tiempo) el fundido dejaba el último tiempo de la claqueta
+     todavía visible casi medio tiempo después de que el audio ya hubiera arrancado el
+     cuerpo — desincronización perceptible reportada por Alberto (ago 2026). */
+  opacity:0;pointer-events:none;transition:opacity .05s linear;}
 #tvCountdown.show{opacity:1;}
 #tvCountdownNum{font-size:420px;font-weight:800;line-height:1;color:var(--tv-c1);font-variant-numeric:tabular-nums;
   text-shadow:0 0 90px color-mix(in srgb, var(--tv-c1) 65%, transparent);}
