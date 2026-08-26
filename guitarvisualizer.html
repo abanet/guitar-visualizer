@@ -460,10 +460,11 @@ body.presentation #tab-player{padding:0;}
    z-index POR ENCIMA del fundido final: tiene que seguir viéndose incluso con la pantalla ya
    en negro con el logo, no solo durante la reproducción. */
 #channelWatermark{display:none;position:fixed;right:16px;bottom:12px;z-index:100000;
+  flex-direction:column;align-items:center;gap:2px;
   font:700 15px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:.03em;
-  color:rgba(255,255,255,.92);background:rgba(0,0,0,.45);padding:5px 10px;border-radius:999px;
-  pointer-events:none;}
-body.presentation #channelWatermark{display:block;}
+  color:rgba(255,255,255,.92);pointer-events:none;}
+#channelWatermark>span{background:rgba(0,0,0,.45);padding:5px 10px;border-radius:999px;}
+body.presentation #channelWatermark{display:flex;}
 
 /* MODALS */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;}
@@ -483,12 +484,13 @@ body.presentation #channelWatermark{display:block;}
 </head>
 <body>
 <div id="endFadeOverlay"><img id="endFadeLogo" src="img/logotransparente.png" alt=""></div>
-<div id="channelWatermark">@banetmasa</div>
+<div id="channelWatermark"><span>@banetmasa</span></div>
 <div class="app" data-tab="editor">
   <div class="tabs">
     <div class="tab active" onclick="showTab('editor')"><i class="ti ti-layout-list"></i> Editor</div>
     <div class="tab" onclick="showTab('library')"><i class="ti ti-book"></i> Librería</div>
     <div class="tab" onclick="showTab('audio')"><i class="ti ti-music"></i> Audio &amp; XML</div>
+    <div class="tab" title="Vídeos de ritmo: metrónomo sincronizado o ritmos reales (audio real + título/autor/BPM y fondo animado)." onclick="showTab('ritmos')"><i class="ti ti-drum"></i> Ritmos</div>
     <div class="tab" onclick="showTab('player')"><i class="ti ti-player-play"></i> Visualizador</div>
     <div class="tab" title="Genera el vídeo de la visualización automáticamente (mástil + audio), sin necesidad de grabar la pantalla a mano." onclick="showTab('video')"><i class="ti ti-video"></i> Vídeo</div>
     <div class="tab" onclick="showTab('settings')"><i class="ti ti-settings"></i> Configuración</div>
@@ -686,9 +688,14 @@ body.presentation #channelWatermark{display:block;}
         <span class="tag ok" id="tempoIncrLbl"></span>
       </div>
     </div>
-    <div class="card" id="rhythmCfgCard" style="grid-column:1/-1;display:none;">
+    <div class="banner" id="readyBanner"></div>
+  </div>
+
+  <!-- RITMOS -->
+  <div class="panel" id="tab-ritmos" style="display:none;padding:20px;">
+    <div class="card" id="rhythmCfgCard">
       <h3><i class="ti ti-drum"></i> Ritmo (solo batería)</h3>
-      <p>Ejercicio sin acordes: carga el <b>m4a</b> del ritmo (arriba, en Audio), pon el <b>BPM</b> a mano (en Sincronización) y el resto se calcula. El nº de compases se deduce de la duración del audio; puedes corregirlo.</p>
+      <p>Ejercicio sin acordes: carga el <b>m4a</b> del ritmo (en Audio &amp; XML), pon el <b>BPM</b> a mano (en Sincronización) y el resto se calcula. El nº de compases se deduce de la duración del audio; puedes corregirlo.</p>
       <div class="field-row" style="flex-wrap:wrap;gap:14px;">
         <label>Estilo: <input type="text" id="tvCfgStyle" value="ROCK" style="width:130px" oninput="tvSync()"></label>
         <label>Subestilo: <input type="text" id="tvCfgSub" value="Classic Rock" style="width:160px" oninput="tvSync()"></label>
@@ -712,7 +719,44 @@ body.presentation #channelWatermark{display:block;}
         <span style="font-size:12px;color:var(--text3);">Para <code>scripts/render-rhythm-video.js</code>: mete este archivo junto a los .m4a del mismo estilo a distintos tempos — el BPM de cada vídeo se lee del nombre de archivo, así que aquí NO hace falta el BPM ni el nº de compases (se recalculan por audio).</span>
       </div>
     </div>
-    <div class="banner" id="readyBanner"></div>
+    <div class="card" id="realRhythmCfgCard">
+      <h3><i class="ti ti-disc"></i> Ritmos Reales</h3>
+      <p>Ritmo extraído de un tema real: no hay compases ni acordes que sincronizar, así que el vídeo es una pantalla informativa con título, autor y BPM (a mano, solo texto) sobre un fondo animado abstracto que sale distinto en cada vídeo que generes.</p>
+      <div class="field-row" style="flex-wrap:wrap;gap:14px;">
+        <label>Título: <input type="text" id="rrTitle" style="width:220px"></label>
+        <label>Autor: <input type="text" id="rrAuthor" style="width:180px"></label>
+        <label>BPM: <input type="number" id="rrBpm" min="1" max="400" style="width:80px"></label>
+        <label>Tonalidad: <select id="rrKey">
+          <option value="">—</option>
+          <option>C</option><option>C#</option><option>Db</option><option>D</option><option>Eb</option><option>E</option><option>F</option><option>F#</option><option>Gb</option><option>G</option><option>Ab</option><option>A</option><option>Bb</option><option>B</option>
+          <option disabled>──────</option>
+          <option>Am</option><option>Bbm</option><option>Bm</option><option>Cm</option><option>C#m</option><option>Dm</option><option>Ebm</option><option>Em</option><option>Fm</option><option>F#m</option><option>Gm</option><option>G#m</option>
+        </select></label>
+      </div>
+      <div class="field-row" style="flex-wrap:wrap;gap:14px;margin-top:10px;">
+        <label>Estilo: <input type="text" id="rrGenre" placeholder="Jazz" style="width:140px"></label>
+        <label>Subestilo: <input type="text" id="rrSubgenre" placeholder="Jazz Fusion" style="width:160px"></label>
+      </div>
+      <div class="field-row" style="margin-top:10px;">
+        <button class="btn" onclick="document.getElementById('rrAudioPicker').click()"><i class="ti ti-upload"></i> Cargar audio</button>
+        <span class="tag" id="rrAudioStatus">Sin archivo</span>
+        <input type="file" accept=".m4a,.mp3,.wav,.aiff,.aif" class="hidden" id="rrAudioPicker" onchange="loadAudio(this)">
+      </div>
+      <div class="field-row" style="margin-top:10px;">
+        <label>Estilo de fondo: <select id="rrAnimStyle" onchange="setRRAnimStyle(this.value)">
+          <option value="particles">Partículas</option>
+          <option value="waves">Ondas</option>
+          <option value="shapes">Formas geométricas</option>
+        </select></label>
+      </div>
+      <div class="field-row" style="margin-top:14px;">
+        <button class="btn sm" onclick="exportRealRhythmConfigFile()"><i class="ti ti-download"></i> Exportar config.json</button>
+        <span style="font-size:12px;color:var(--text3);">Para <code>scripts/render-real-rhythm-video.js --dir</code>: mete este archivo junto al audio del tema en una carpeta — título/autor/BPM/tonalidad/estilo se leen de ahí, sin tener que repetirlos a mano.</span>
+      </div>
+      <div class="field-row" style="margin-top:14px;">
+        <button class="btn accent" onclick="rrGenerate()"><i class="ti ti-video"></i> Generar vídeo</button>
+      </div>
+    </div>
   </div>
 
   <!-- PLAYER -->
@@ -899,6 +943,7 @@ body.presentation #channelWatermark{display:block;}
           <option value="arpeggios">Arpegios / Escalas — fantasma con fundido + notas comunes ancladas</option>
           <option value="sequence">Secuencias — reproducción nota a nota</option>
           <option value="rhythm">Ritmo — vídeo de tempo (solo batería, sin acordes)</option>
+          <option value="realrhythm">Ritmos Reales — vídeo informativo (título/autor/BPM + fondo animado)</option>
         </select>
         <div id="arpTimingRow" style="margin-top:12px;display:none;gap:18px;flex-wrap:wrap;align-items:center;">
           <label style="font-size:13px;display:flex;align-items:center;gap:8px;">
@@ -2928,8 +2973,8 @@ function applyAudioFile(f,name,fromStore){
   audioURL=URL.createObjectURL(f);
   audioEl=new Audio(audioURL);
   audioEl.onloadedmetadata=()=>{
-    const tag=document.getElementById('audioStatus');
-    if(tag){tag.textContent=(name||'audio')+' ('+fmt(audioEl.duration)+')'+(fromStore?' · recordado':'');tag.className='tag ok';}
+    const statusText=(name||'audio')+' ('+fmt(audioEl.duration)+')'+(fromStore?' · recordado':'');
+    ['audioStatus','rrAudioStatus'].forEach(id=>{const tag=document.getElementById(id);if(tag){tag.textContent=statusText;tag.className='tag ok';}});
     const vt=document.getElementById('visTime');if(vt)vt.textContent='0:00 / '+fmt(audioEl.duration);
     checkReady();
   };
@@ -7084,7 +7129,7 @@ function videoGenSetStatus(msg,cls){
 async function generateVideo(){
   if(videoGenState)return; // ya en marcha
   if(!audioEl||!audioEl.duration){alert('Carga primero un audio en la pestaña "Audio & XML".');showTab('audio');return;}
-  if(!cycles.length){alert('Carga primero un ejercicio (acordes) antes de generar el vídeo.');showTab('audio');return;}
+  if(!cycles.length&&getExerciseType()!=='rhythm'&&getExerciseType()!=='realrhythm'){alert('Carga primero un ejercicio (acordes) antes de generar el vídeo.');showTab('audio');return;}
   if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){
     alert('Tu navegador no soporta la captura de pantalla necesaria (getDisplayMedia). Prueba con Chrome o Edge.');
     return;
@@ -7402,6 +7447,9 @@ function getArpAnimations(){return getVisConfig().arpAnimations===true;}
 // and beats over which the old non-common notes fade out (default 1).
 function getArpGhostBeats(){const v=parseFloat(localStorage.getItem('gv_arpGhostBeats'));return (isNaN(v)||v<=0)?3:v;}
 function getArpFadeBeats(){const v=parseFloat(localStorage.getItem('gv_arpFadeBeats'));return (isNaN(v)||v<=0)?1:v;}
+// Estilo de fondo animado de "Ritmos Reales" (particles/waves/shapes) — persiste entre vídeos/recargas.
+function getRRAnimStyle(){const v=localStorage.getItem('gv_rrAnimStyle');return(v==='waves'||v==='shapes')?v:'particles';}
+function setRRAnimStyle(v){try{localStorage.setItem('gv_rrAnimStyle',v);}catch(e){}}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // EXERCISE REGISTRY (dispatcher) — Sesión A de la refactorización.
@@ -7456,6 +7504,8 @@ const EX_BADGE_LABELS={
   sequence:'Secuencias',
   tn:'Chord tones',
   sp:'Escalas por tramos',
+  rhythm:'Ritmo',
+  realrhythm:'Ritmos Reales',
 };
 function exBadgeKind(parsed){
   if(typeof seqActive!=='undefined'&&seqActive)return 'sequence';
@@ -9793,7 +9843,7 @@ function seekClick(e){if(!audioEl||!audioEl.duration)return;const p=e.offsetX/e.
 
 function showTab(name){
   try{
-    const panels=['editor','library','audio','player','video','settings','help','generate','sequence','targets','scales','triads'];
+    const panels=['editor','library','audio','player','video','settings','help','generate','sequence','targets','scales','triads','ritmos'];
     panels.forEach(t=>{
       const p=document.getElementById('tab-'+t);
       if(!p)return;
@@ -10801,10 +10851,8 @@ function tvStopFn(){
 window.tvOnExerciseType=function(t){
   try{
     if(t==='rhythm'){
-      const c=document.getElementById('rhythmCfgCard'); if(c)c.style.display='';
       tvShow();
     }else{
-      const c=document.getElementById('rhythmCfgCard'); if(c)c.style.display='none';
       if(typeof isPlaying!=='undefined'&&isPlaying) pauseIt(); // corta el audio de ritmo al cambiar de tipo
       tvHide();
     }
@@ -10821,6 +10869,333 @@ if(document.readyState==='complete'||document.readyState==='interactive') setTim
 else window.addEventListener('DOMContentLoaded',()=>setTimeout(tvInit,300));
 
 }catch(err){ console.error('[Ritmo] módulo deshabilitado por error:',err); }
+})();
+</script>
+
+<script>
+/* =========================================================================
+ *  MÓDULO RITMOS REALES (nuevo tipo de ejercicio 'realrhythm')
+ *  - Pantalla informativa a pantalla completa: título/autor/BPM (texto fijo,
+ *    NO sincronizado a nada) sobre un fondo animado abstracto y aleatorio —
+ *    para ritmos extraídos de un tema real, donde no hay compás que cuadrar.
+ *  - Mismo patrón que el módulo Ritmo de arriba: envuelve setExerciseType/
+ *    startIt/pauseIt/stopAll, no los edita. Aislado: un fallo aquí no debe
+ *    tumbar el resto de la app.
+ * ========================================================================= */
+(function(){
+"use strict";
+try{
+
+/* ---- CSS (todo bajo #rrOverlay, clases rr- para no colisionar con la app) ---- */
+const CSS=`
+#rrOverlay{position:absolute;inset:0;z-index:40;display:none;overflow:hidden;background:#04060a;
+  --rr-scale:1;--rr-c1:#e53935;--rr-c2:#26c6da;
+  font-family:"SF Pro Display","Helvetica Neue","Segoe UI",system-ui,-apple-system,sans-serif;color:#f4f7fb;}
+#rrStage{position:absolute;top:50%;left:50%;width:1920px;height:1080px;
+  transform:translate(-50%,-50%) scale(var(--rr-scale));transform-origin:center center;}
+#rrCanvas{position:absolute;inset:0;}
+#rrOverlay .rr-vignette{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 120% at 50% 45%,transparent 50%,rgba(0,0,0,.6) 100%);}
+#rrOverlay .rr-genre-block{position:absolute;top:90px;left:130px;}
+#rrOverlay .rr-genre{font-size:52px;font-weight:800;letter-spacing:-.01em;color:#eef2f7;line-height:1;
+  filter:drop-shadow(0 3px 14px rgba(0,0,0,.55));}
+#rrOverlay .rr-subgenre{margin-top:9px;font-size:20px;font-weight:600;letter-spacing:.26em;color:var(--rr-c1);
+  text-shadow:0 0 18px color-mix(in srgb, var(--rr-c1) 40%, transparent);}
+#rrCard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;max-width:1500px;padding:0 60px;}
+#rrTitleText{font-weight:800;letter-spacing:-.01em;line-height:1.1;
+  text-shadow:0 6px 40px rgba(0,0,0,.55),0 0 70px rgba(0,0,0,.35);}
+#rrAuthorText{margin-top:22px;font-size:38px;font-weight:600;letter-spacing:.06em;color:#c7cedb;}
+#rrPills{display:flex;align-items:center;justify-content:center;gap:20px;margin-top:46px;}
+#rrBpmPill,#rrKeyPill{display:inline-flex;align-items:baseline;gap:14px;padding:14px 34px;border-radius:999px;}
+#rrBpmPill{border:1.5px solid color-mix(in srgb, var(--rr-c1) 50%, transparent);background:color-mix(in srgb, var(--rr-c1) 8%, transparent);
+  box-shadow:0 0 30px color-mix(in srgb, var(--rr-c1) 18%, transparent),inset 0 0 18px color-mix(in srgb, var(--rr-c1) 6%, transparent);}
+#rrKeyPill{border:1.5px solid color-mix(in srgb, var(--rr-c2) 50%, transparent);background:color-mix(in srgb, var(--rr-c2) 8%, transparent);
+  box-shadow:0 0 30px color-mix(in srgb, var(--rr-c2) 18%, transparent),inset 0 0 18px color-mix(in srgb, var(--rr-c2) 6%, transparent);}
+#rrBpmVal,#rrKeyVal{font-size:40px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;}
+#rrBpmLbl{font-size:18px;font-weight:700;letter-spacing:.28em;color:var(--rr-c1);}
+#rrKeyLbl{font-size:18px;font-weight:700;letter-spacing:.28em;color:var(--rr-c2);}
+#channelWatermark img.rr-wm-logo{display:block;width:66px;height:auto;opacity:.95;}
+`;
+const st=document.createElement('style'); st.id='rrStyles'; st.textContent=CSS; document.head.appendChild(st);
+
+/* ---- Paleta curada (mismo espíritu que TV_COLOR_PRESETS del módulo Ritmo, copia propia:
+   ese objeto vive dentro del closure del otro módulo y no es accesible desde aquí) — se elige
+   un par al azar en cada vídeo para que el fondo también varíe de color, no solo de disposición. */
+const RR_PALETTES=[
+  {c1:'#e53935',c2:'#26c6da'},{c1:'#ff8a00',c2:'#ab47bc'},{c1:'#d4af37',c2:'#2979ff'},
+  {c1:'#29b6f6',c2:'#ffca28'},{c1:'#b0b3b8',c2:'#e53935'},{c1:'#ec4899',c2:'#a3e635'},
+];
+function rrMixRGB(hex){ // mezcla hacia gris claro, igual que tvParticleTint (a color plano queda muy saturado)
+  const m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex||'');
+  if(!m)return '200,210,225';
+  const mix=(h)=>Math.round((parseInt(h,16)+200)/2);
+  return mix(m[1])+','+mix(m[2])+','+mix(m[3]);
+}
+
+let built=false, refs={}, rrRaf=0, lastF=0, ctx=null, cfg=null;
+
+/* ---- Construcción de la pantalla (DOM) dentro de .vis-screen, igual que el módulo Ritmo ---- */
+function rrBuild(){
+  if(built) return;
+  const host=document.querySelector('.vis-screen'); if(!host) return;
+  const ov=document.createElement('div'); ov.id='rrOverlay';
+  ov.innerHTML=`
+  <div id="rrStage">
+    <canvas id="rrCanvas" width="1920" height="1080"></canvas>
+    <div class="rr-vignette"></div>
+    <div class="rr-genre-block">
+      <div class="rr-genre" id="rrGenreText"></div>
+      <div class="rr-subgenre" id="rrSubgenreText"></div>
+    </div>
+    <div id="rrCard">
+      <div id="rrTitleText">—</div>
+      <div id="rrAuthorText"></div>
+      <div id="rrPills">
+        <div id="rrBpmPill"><span id="rrBpmVal">—</span><span id="rrBpmLbl">BPM</span></div>
+        <div id="rrKeyPill"><span id="rrKeyVal">—</span><span id="rrKeyLbl">KEY</span></div>
+      </div>
+    </div>
+  </div>`;
+  host.appendChild(ov);
+  refs={ov, canvas:ov.querySelector('#rrCanvas'), title:ov.querySelector('#rrTitleText'),
+    author:ov.querySelector('#rrAuthorText'), bpmVal:ov.querySelector('#rrBpmVal'), bpmPill:ov.querySelector('#rrBpmPill'),
+    keyVal:ov.querySelector('#rrKeyVal'), keyPill:ov.querySelector('#rrKeyPill'),
+    genreBlock:ov.querySelector('.rr-genre-block'), genre:ov.querySelector('#rrGenreText'), subgenre:ov.querySelector('#rrSubgenreText')};
+  ctx=refs.canvas.getContext('2d');
+  built=true;
+}
+function rrFitScale(){
+  const ov=refs.ov; if(!ov)return;
+  const w=ov.clientWidth||1920,h=ov.clientHeight||1080;
+  ov.style.setProperty('--rr-scale', Math.min(w/1920,h/1080));
+}
+
+/* ---- Config aleatoria del fondo: se regenera en CADA rrShow(), así que dos vídeos generados
+   seguidos (sin recargar la página) salen con una disposición distinta. Rangos de velocidad
+   deliberadamente bajos en los 3 estilos — "lento y abstracto", no debe distraer del texto. ---- */
+function rrRandomizeConfig(){
+  const style=getRRAnimStyle();
+  const palette=RR_PALETTES[Math.floor(Math.random()*RR_PALETTES.length)];
+  if(refs.ov){ refs.ov.style.setProperty('--rr-c1',palette.c1); refs.ov.style.setProperty('--rr-c2',palette.c2); }
+  const rgb1=rrMixRGB(palette.c1), rgb2=rrMixRGB(palette.c2);
+  const c={style};
+  // Velocidades/opacidades más marcadas que en el primer pase (Alberto: "la animación es
+  // demasiado suave") — sigue siendo lenta y de fondo, pero ahora se aprecia el movimiento
+  // sin necesidad de fijarse.
+  if(style==='waves'){
+    c.waves=[]; const n=2+Math.floor(Math.random()*3);
+    for(let i=0;i<n;i++)c.waves.push({
+      amp:55+Math.random()*95, wl:600+Math.random()*700, speed:0.16+Math.random()*0.24,
+      phase:Math.random()*6.28, y:300+Math.random()*500, tint:i%2===0?rgb1:rgb2, alpha:0.16+Math.random()*0.14,
+    });
+  }else if(style==='shapes'){
+    c.shapes=[]; const n=5+Math.floor(Math.random()*6);
+    for(let i=0;i<n;i++)c.shapes.push({
+      x:Math.random()*1920, y:Math.random()*1080, r:90+Math.random()*180,
+      vx:(Math.random()-.5)*20, vy:(Math.random()-.5)*20, rot:Math.random()*6.28, rotSpeed:(Math.random()-.5)*0.4,
+      sides:3+Math.floor(Math.random()*4), tint:Math.random()<0.5?rgb1:rgb2, alpha:0.14+Math.random()*0.12,
+    });
+  }else{ // particles (por defecto)
+    c.style='particles';
+    c.particles=[]; const n=40+Math.floor(Math.random()*50);
+    for(let i=0;i<n;i++)c.particles.push({
+      x:Math.random()*1920, y:Math.random()*1080, r:Math.random()*10+4,
+      vx:(Math.random()-.5)*22, vy:(Math.random()-.5)*22, a:Math.random()*.42+.18, tw:Math.random()*6.28,
+      tint:Math.random()<0.5?rgb1:rgb2,
+    });
+  }
+  cfg=c;
+}
+
+function rrDrawParticles(dt){
+  ctx.clearRect(0,0,1920,1080);
+  for(const p of cfg.particles){
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.tw+=dt*1.2;
+    if(p.x<-20)p.x+=1960; if(p.x>1940)p.x-=1960; if(p.y<-20)p.y+=1120; if(p.y>1100)p.y-=1120;
+    const a=p.a*(0.6+0.4*Math.sin(p.tw));
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.283);
+    ctx.fillStyle='rgba('+p.tint+','+a+')'; ctx.fill();
+  }
+}
+function rrDrawWaves(dt){
+  ctx.clearRect(0,0,1920,1080);
+  for(const w of cfg.waves){
+    w.phase+=dt*w.speed;
+    ctx.beginPath(); ctx.moveTo(0,1080);
+    for(let x=0;x<=1920;x+=32) ctx.lineTo(x, w.y+Math.sin(x/w.wl*6.283+w.phase)*w.amp);
+    ctx.lineTo(1920,1080); ctx.closePath();
+    ctx.fillStyle='rgba('+w.tint+','+w.alpha+')'; ctx.fill();
+  }
+}
+function rrDrawShapes(dt){
+  ctx.clearRect(0,0,1920,1080);
+  for(const s of cfg.shapes){
+    s.x+=s.vx*dt; s.y+=s.vy*dt; s.rot+=s.rotSpeed*dt;
+    if(s.x<-s.r)s.x=1920+s.r; if(s.x>1920+s.r)s.x=-s.r;
+    if(s.y<-s.r)s.y=1080+s.r; if(s.y>1080+s.r)s.y=-s.r;
+    ctx.save(); ctx.translate(s.x,s.y); ctx.rotate(s.rot);
+    ctx.beginPath();
+    for(let i=0;i<s.sides;i++){ const a=i/s.sides*6.283, x=Math.cos(a)*s.r, y=Math.sin(a)*s.r; if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+    ctx.closePath();
+    ctx.fillStyle='rgba('+s.tint+','+s.alpha+')'; ctx.fill();
+    ctx.restore();
+  }
+}
+function rrDraw(dt){
+  if(!ctx||!cfg)return;
+  if(cfg.style==='waves')rrDrawWaves(dt);
+  else if(cfg.style==='shapes')rrDrawShapes(dt);
+  else rrDrawParticles(dt);
+}
+
+/* ---- Texto estático (título/autor/BPM) — se vuelca desde los campos de la card, tamaño de
+   título adaptado a la longitud para que no se salga de la pantalla. ---- */
+function rrSyncText(){
+  if(!refs.title)return;
+  const title=(document.getElementById('rrTitle')?.value||'').trim()||'—';
+  const author=(document.getElementById('rrAuthor')?.value||'').trim();
+  const bpm=(document.getElementById('rrBpm')?.value||'').trim();
+  refs.title.textContent=title;
+  refs.title.style.fontSize=(title.length>34?'56px':title.length>20?'72px':'96px');
+  refs.author.textContent=author;
+  refs.author.style.display=author?'':'none';
+  refs.bpmVal.textContent=bpm||'—';
+  if(refs.bpmPill)refs.bpmPill.style.display=bpm?'':'none';
+  const key=(document.getElementById('rrKey')?.value||'').trim();
+  refs.keyVal.textContent=key||'—';
+  if(refs.keyPill)refs.keyPill.style.display=key?'':'none';
+  const genre=(document.getElementById('rrGenre')?.value||'').trim();
+  const subgenre=(document.getElementById('rrSubgenre')?.value||'').trim();
+  refs.genre.textContent=genre;
+  refs.subgenre.textContent=subgenre;
+  if(refs.genreBlock)refs.genreBlock.style.display=(genre||subgenre)?'':'none';
+}
+const RR_FIELD_IDS=new Set(['rrTitle','rrAuthor','rrBpm','rrKey','rrGenre','rrSubgenre']);
+['input','change'].forEach(evt=>document.addEventListener(evt,(e)=>{
+  if(e.target&&RR_FIELD_IDS.has(e.target.id)&&getExerciseType()==='realrhythm')rrSyncText();
+}));
+
+/* ---- Bucle propio: el fondo se anima siempre (suene o no), y mientras suena el audio real
+   llama a armEndFade() cada frame — igual que tvFrame() del módulo Ritmo. Sin rama especial de
+   duración: un audio subido directamente no tiene el silencio final de los .m4a de BiaB, así
+   que la rama por defecto de armEndFade() (audioEl.duration) ya es la correcta aquí. ---- */
+function rrFrame(now){
+  if(!refs.ov || refs.ov.style.display==='none'){ rrRaf=0; return; }
+  rrRaf=requestAnimationFrame(rrFrame);
+  const dt=lastF?Math.min((now-lastF)/1000,0.05):0; lastF=now;
+  rrFitScale();
+  rrDraw(dt);
+  const playingNow=(typeof isPlaying!=='undefined'&&isPlaying)&&getExerciseType()==='realrhythm'&&!!audioEl;
+  if(playingNow) armEndFade();
+}
+function rrStartLoop(){ if(rrRaf)return; lastF=0; rrRaf=requestAnimationFrame(rrFrame); }
+function rrStopLoop(){ if(rrRaf){cancelAnimationFrame(rrRaf);rrRaf=0;} }
+
+/* ---- Mostrar / ocultar ---- */
+// El logo (misma imagen que el fundido final, en pequeño) se apila DENTRO de #channelWatermark
+// —marca de agua global, en coordenadas de viewport reales, no del stage 1920×1080 escalado—
+// para quedar centrado de verdad sobre "@banetmasa" en vez de solo coincidir por casualidad a
+// una resolución de grabación concreta. Solo se añade en Ritmos Reales; el resto de tipos no lo
+// llevan, así que se retira en rrHide().
+function rrShowWatermarkLogo(){
+  const wm=document.getElementById('channelWatermark'); if(!wm||wm.querySelector('.rr-wm-logo'))return;
+  const img=document.createElement('img'); img.className='rr-wm-logo'; img.src='img/logotransparente.png'; img.alt='';
+  wm.insertBefore(img,wm.firstChild);
+}
+function rrHideWatermarkLogo(){
+  const el=document.querySelector('#channelWatermark .rr-wm-logo'); if(el)el.remove();
+}
+function rrShow(){ rrBuild(); if(refs.ov){ rrRandomizeConfig(); rrSyncText(); refs.ov.style.display='block'; rrStartLoop(); rrShowWatermarkLogo(); } }
+function rrHide(){ if(refs.ov){ refs.ov.style.display='none'; } rrStopLoop(); rrHideWatermarkLogo(); }
+
+/* ---- Play / Pausa / Stop — mismo patrón que tvStart/tvPauseFn/tvStopFn, sin matemática de
+   compases (aquí el BPM es solo texto informativo, no hace falta para reproducir). ---- */
+function rrRequireReady(){
+  if(audioEl)return true;
+  if(document.body.classList.contains('presentation'))togglePresentation();
+  if(typeof showTab==='function')showTab('ritmos');
+  alert('Carga primero el audio del tema (pestaña "Ritmos" → Ritmos Reales) antes de darle a Play.');
+  return false;
+}
+function rrStart(){
+  if(!rrRequireReady())return;
+  isPlaying=true; if(typeof setBtns==='function')setBtns(true);
+  if(typeof resetEndFade==='function')resetEndFade(); // descarta el fundido de una reproducción anterior
+  audioEl.playbackRate=(typeof speed!=='undefined'&&speed)||1;
+  audioEl.play();
+}
+function rrPauseFn(){
+  isPlaying=false; if(typeof setBtns==='function')setBtns(false);
+  if(audioEl)audioEl.pause();
+}
+function rrStopFn(){
+  isPlaying=false; if(typeof setBtns==='function')setBtns(false);
+  if(audioEl){audioEl.pause();audioEl.currentTime=0;}
+}
+(function wirePlaybackRR(){
+  const _origStartIt=window.startIt, _origPauseIt=window.pauseIt, _origStopAll=window.stopAll;
+  if(typeof _origStartIt==='function')window.startIt=function(){ if(getExerciseType()==='realrhythm'){rrStart();return;} return _origStartIt.apply(this,arguments); };
+  if(typeof _origPauseIt==='function')window.pauseIt=function(){ if(getExerciseType()==='realrhythm'){rrPauseFn();return;} return _origPauseIt.apply(this,arguments); };
+  if(typeof _origStopAll==='function')window.stopAll=function(){ if(getExerciseType()==='realrhythm'){rrStopFn();return;} return _origStopAll.apply(this,arguments); };
+})();
+
+/* ---- Botón "Generar vídeo" de la propia card: activa el tipo si hace falta y reutiliza el
+   pipeline genérico de la pestaña Vídeo (generateVideo()), sin obligar a cambiar de pestaña. ---- */
+window.rrGenerate=function(){
+  if(getExerciseType()!=='realrhythm')setExerciseType('realrhythm');
+  const title=(document.getElementById('rrTitle')?.value||'').trim();
+  const bpm=(document.getElementById('rrBpm')?.value||'').trim();
+  if((!title||!bpm)&&!confirm('Falta título o BPM en la ficha — ¿generar el vídeo igualmente?'))return;
+  if(typeof generateVideo==='function')generateVideo();
+};
+
+/* ---- Exporta título/autor/BPM/tonalidad/estilo musical/estilo de fondo a config.json — mismo
+   patrón que exportRhythmConfigFile() del módulo Ritmo: se guarda junto al audio del tema y
+   scripts/render-real-rhythm-video.js --dir lo lee de ahí, sin pedir cada campo por CLI. ---- */
+window.exportRealRhythmConfigFile=function(){
+  const cfg={
+    title:document.getElementById('rrTitle')?.value||'',
+    author:document.getElementById('rrAuthor')?.value||'',
+    bpm:document.getElementById('rrBpm')?.value||'',
+    key:document.getElementById('rrKey')?.value||'',
+    genre:document.getElementById('rrGenre')?.value||'',
+    subgenre:document.getElementById('rrSubgenre')?.value||'',
+    style:document.getElementById('rrAnimStyle')?.value||'particles',
+  };
+  const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='config.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
+};
+
+/* ---- Enganche con el tipo de ejercicio (sin editar setExerciseType) ---- */
+window.rrOnExerciseType=function(t){
+  try{
+    if(t==='realrhythm'){
+      rrShow();
+    }else{
+      if(typeof isPlaying!=='undefined'&&isPlaying) pauseIt(); // corta el audio al cambiar de tipo
+      rrHide();
+    }
+  }catch(e){console.warn('rrOnExerciseType',e);}
+};
+if(typeof window.setExerciseType==='function'){
+  const _orig=window.setExerciseType;
+  window.setExerciseType=function(t){ _orig(t); window.rrOnExerciseType(t); };
+}
+
+/* ---- Init: refleja el estilo de fondo guardado y el tipo de ejercicio activo al cargar ---- */
+function rrInit(){
+  try{
+    const sel=document.getElementById('rrAnimStyle'); if(sel)sel.value=getRRAnimStyle();
+    const esel=document.getElementById('exerciseType');
+    const cur=(esel&&esel.value)||(typeof exerciseType!=='undefined'?exerciseType:'');
+    rrOnExerciseType(cur);
+  }catch(e){console.warn('rrInit',e);}
+}
+if(document.readyState==='complete'||document.readyState==='interactive') setTimeout(rrInit,300);
+else window.addEventListener('DOMContentLoaded',()=>setTimeout(rrInit,300));
+
+}catch(err){ console.error('[Ritmos Reales] módulo deshabilitado por error:',err); }
 })();
 </script>
 
