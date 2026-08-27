@@ -29,6 +29,99 @@ async function getAudioDurationSeconds(audioPath) {
   }
 }
 
+// Corrección automática de sincronización (portado de scripts/render-rhythm-video.js, ago 2026 —
+// ese script ya tenía que corregir este mismo tipo de ruido para el módulo Ritmo, pero el arreglo
+// nunca se portó aquí). El único timestamp del navegador (evento 'playing', ver playStartAt más
+// abajo) tiene un ruido medido de ±0.3-0.5s de una toma a otra — imperceptible en ejercicios
+// lentos, pero se nota claramente en compases cortos (p.ej. 123-F, ago 2026: la pantalla
+// ya mostraba el primer acorde real ~0.6s antes de que el clic de la intro sonara de verdad en el
+// audio). Se mide el desfase real en el .mp4 ya generado y se corrige el recorte con ese dato.
+const SYNC_LONG_GAP_SEC = 0.22; // hueco típico del click de conteo; un silencio musical breve no llega a esto
+const SYNC_TOLERANCE_SEC = 0.05;
+const SYNC_MAX_CORRECTION_SEC = 2; // por seguridad: no aplicar una "corrección" descabellada si la medición falla
+
+// Busca, cerca de `nearSec` (el instante teórico en que debería acabar la intro, según
+// getIntroSec()+getOffSec()), el hueco de silencio "largo" (>= SYNC_LONG_GAP_SEC) cuyo final está
+// MÁS CERCA de nearSec — el patrón del click de conteo (blips cortos separados por huecos largos y
+// regulares). Idéntica a la de render-rhythm-video.js: el click de conteo es genérico, no depende
+// del tipo de ejercicio (tríadas, arpegios, ritmo…), así que la detección tampoco.
+async function detectAudioOnsetNear(mp4Path, nearSec, windowAfterSec) {
+  const searchSec = nearSec + windowAfterSec;
+  let stderr = '';
+  try {
+    const r = await execFileP('ffmpeg', [
+      '-i', mp4Path, '-t', String(searchSec),
+      '-af', 'highpass=f=60,silencedetect=noise=-30dB:d=0.05',
+      '-f', 'null', '-',
+    ], { maxBuffer: 1024 * 1024 * 64 });
+    stderr = r.stderr || '';
+  } catch (e) { stderr = e.stderr || ''; }
+  const starts = [...stderr.matchAll(/silence_start:\s*([0-9.]+)/g)].map((m) => parseFloat(m[1]));
+  const ends = [...stderr.matchAll(/silence_end:\s*([0-9.]+)/g)].map((m) => parseFloat(m[1]));
+  let best = null;
+  let bestDist = Infinity;
+  for (let i = 0; i < starts.length; i++) {
+    const end = ends[i] !== undefined ? ends[i] : searchSec;
+    if (end - starts[i] < SYNC_LONG_GAP_SEC || end > searchSec) continue;
+    const dist = Math.abs(end - nearSec);
+    if (dist < bestDist) { best = end; bestDist = dist; }
+  }
+  return best;
+}
+
+// Equivalente en vídeo a detectAudioOnsetNear, pero genérico para cualquier tipo de ejercicio (no
+// solo Ritmo, que tiene una etiqueta fija "GET READY" que medir): al salir de la intro, el panel
+// "AHORA" cambia de un número de cuenta atrás a un nombre de acorde/posición — un cambio de
+// contenido real, no un simple fundido, así que en vez de medir luminancia (como
+// detectOverlayFadeNear en render-rhythm-video.js) se mide la DIFERENCIA entre cada fotograma y el
+// anterior dentro de esa zona (tblend=difference + signalstats) y se busca el pico más cercano a
+// nearSec — un cambio de contenido genera un pico claro sobre el ruido de fondo (partículas,
+// pulso de las notas), que decae de inmediato al quedarse estable el nuevo acorde.
+// `crop` son fracciones [0,1] del fotograma completo (no píxeles) para no depender de la
+// resolución exacta con la que se grabó — ver el rectángulo del panel "AHORA" en
+// guitarvisualizer.html (.chord-center / #vChord).
+const AHORA_PANEL_CROP = { x: 0.18, y: 0.09, w: 0.38, h: 0.14 };
+async function detectContentChangeNear(mp4Path, nearSec, windowAfterSec, width, height) {
+  const searchSec = nearSec + windowAfterSec;
+  const even = (n) => Math.max(2, Math.floor(n / 2) * 2);
+  const cw = even(AHORA_PANEL_CROP.w * width);
+  const ch = even(AHORA_PANEL_CROP.h * height);
+  const cx = even(AHORA_PANEL_CROP.x * width);
+  const cy = even(AHORA_PANEL_CROP.y * height);
+  let stdout = '';
+  try {
+    const r = await execFileP('ffmpeg', [
+      '-i', mp4Path, '-t', String(searchSec),
+      '-vf', `crop=${cw}:${ch}:${cx}:${cy},tblend=all_mode=difference,signalstats,metadata=print:file=-`,
+      '-f', 'null', '-',
+    ], { maxBuffer: 1024 * 1024 * 64 });
+    stdout = r.stdout || '';
+  } catch (e) { stdout = e.stdout || ''; }
+  const samples = [];
+  let pts = null;
+  for (const line of stdout.split('\n')) {
+    const pm = line.match(/pts_time:([0-9.]+)/);
+    if (pm) { pts = parseFloat(pm[1]); continue; }
+    const ym = line.match(/YAVG=([0-9.]+)/);
+    if (ym && pts != null) samples.push({ t: pts, y: parseFloat(ym[1]) });
+  }
+  if (samples.length < 5) return null;
+  const ys = samples.map((s) => s.y).sort((a, b) => a - b);
+  const baseline = ys[Math.floor(ys.length / 2)]; // mediana: ruido de fondo típico (partículas, glow)
+  const peak = ys[ys.length - 1];
+  if (peak - baseline < 4) return null; // sin pico claro por encima del ruido de fondo
+  const threshold = baseline + (peak - baseline) * 0.5;
+  let best = null;
+  let bestDist = Infinity;
+  for (let i = 1; i < samples.length - 1; i++) {
+    const s = samples[i];
+    if (s.y < threshold || s.y < samples[i - 1].y || s.y < samples[i + 1].y) continue; // solo máximos locales
+    const dist = Math.abs(s.t - nearSec);
+    if (dist < bestDist) { best = s.t; bestDist = dist; }
+  }
+  return best;
+}
+
 // Una sesión válida tiene 'cycles' y 'masterBars' como arrays — descarta cualquier otro .json
 // suelto en la carpeta (p.ej. el vis-config.json exportado desde la app).
 function listSessionFiles(dir, excludeAbsPaths, onSkip) {
@@ -86,6 +179,7 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
   let playStartAt = null;
   let stepError = null;
   let appVersion = 'unknown';
+  let expectedContentSec = 0;
   try {
     log('cargando app…');
     await page.goto(appUrl);
@@ -94,6 +188,16 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
     log('cargando sesión…');
     const loadedSlots = await page.evaluate((s) => applySession(s), sessionObj);
     log(`sesión aplicada (${loadedSlots} slots con imagen)`);
+
+    // Instante teórico en que debería acabar la intro (mismo cálculo que usa tick() en
+    // guitarvisualizer.html: getIntroSec()+getOffSec()) — se usa después para verificar/corregir
+    // la sincronización. 0 si no hay intro (nada que verificar, ver más abajo).
+    expectedContentSec = await page.evaluate(() => {
+      let s = 0;
+      try { if (typeof getIntroSec === 'function') s += getIntroSec(); } catch (e) {}
+      try { if (typeof getOffSec === 'function') s += getOffSec(); } catch (e) {}
+      return s;
+    });
 
     log('cargando audio…');
     await page.setInputFiles('#audioPicker', [audioPath]);
@@ -169,15 +273,14 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
   const trimOffsetSec = Math.max(0, ((playStartAt || recordStartAt) - recordStartAt) / 1000);
 
   const outPath = path.join(outDir, `${tag}.mp4`);
-  log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
   // Recorte EXACTO por timestamp de fotograma (filtro trim+setpts), no por keyframe: el "-ss"
   // antes de "-i" busca al keyframe más cercano y puede desviarse del punto real hasta un GOP
   // entero, lo que se notaba como el audio ligeramente desfasado del metrónomo/cambio de acorde.
-  await execFileP('ffmpeg', [
+  const mux = (trimSec) => execFileP('ffmpeg', [
     '-y',
     '-i', silentPath,
     '-i', audioPath,
-    '-filter_complex', `[0:v]trim=start=${trimOffsetSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-filter_complex', `[0:v]trim=start=${trimSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
     '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',
@@ -185,6 +288,39 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
     '-shortest',
     outPath,
   ]);
+
+  log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
+  await mux(trimOffsetSec);
+
+  // Comprobación + corrección de sincronización (ver detectAudioOnsetNear/detectContentChangeNear
+  // más arriba). Solo aplica si hay intro (expectedContentSec>0) — sin ella no hay transición que
+  // medir. Mismo patrón que render-rhythm-video.js: varias pasadas hasta entrar en tolerancia.
+  if (expectedContentSec > 0) {
+    let curTrim = trimOffsetSec;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
+      const videoChange = audioOnset != null ? await detectContentChangeNear(outPath, expectedContentSec, 4, width, height) : null;
+      if (audioOnset == null || videoChange == null) {
+        log('⚠ no se pudo medir la sincronización automáticamente — revisar a mano si hay dudas');
+        break;
+      }
+      const gap = audioOnset - videoChange;
+      log(`comprobación de sync (intento ${attempt}): audio en ${audioOnset.toFixed(2)}s, vídeo cambia en ${videoChange.toFixed(2)}s (desfase ${(gap * 1000).toFixed(0)}ms)`);
+      if (Math.abs(gap) <= SYNC_TOLERANCE_SEC) break;
+      if (Math.abs(gap) >= SYNC_MAX_CORRECTION_SEC) {
+        log('⚠ desfase medido demasiado grande para corregir automáticamente — revisar a mano');
+        break;
+      }
+      // trim=start=X desplaza el contenido a "raw_time - X" en la salida: recortar MÁS (subir X)
+      // adelanta el contenido (tiempos de salida más pequeños), no lo retrasa — de ahí el signo
+      // negativo (mismo criterio que render-rhythm-video.js).
+      curTrim = Math.max(0, curTrim - gap);
+      log(`corrigiendo recorte de arranque: → ${curTrim.toFixed(3)}s…`);
+      await mux(curTrim);
+      if (attempt === 3) log('⚠ sigue fuera de tolerancia tras 3 intentos — revisar a mano');
+    }
+  }
+
   log(`✓ ${outPath}`);
   return outPath;
 }
