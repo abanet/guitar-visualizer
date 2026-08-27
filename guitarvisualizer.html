@@ -696,6 +696,7 @@ body.presentation #channelWatermark{display:flex;}
     <div class="card" id="rhythmCfgCard">
       <h3><i class="ti ti-drum"></i> Ritmo (solo batería)</h3>
       <p>Ejercicio sin acordes: carga el <b>m4a</b> del ritmo (en Audio &amp; XML), pon el <b>BPM</b> a mano (en Sincronización) y el resto se calcula. El nº de compases se deduce de la duración del audio; puedes corregirlo.</p>
+      <p><b>Tempo progresivo (opcional):</b> si además cargas el <b>MusicXML</b> del tema (en Audio &amp; XML) con al menos un acorde de referencia — para marcar dónde acaba la intro, aunque el ritmo no use ese acorde para nada más — y ese XML trae cambios de tempo (<code>&lt;sound tempo&gt;</code> por compás, como exporta BiaB), el vídeo los sigue automáticamente: BPM, nº de compases y duración se leen del XML en vez de calcularse a BPM fijo. El aviso "Del XML: X → Y BPM" en Sincronización confirma que se ha detectado.</p>
       <div class="field-row" style="flex-wrap:wrap;gap:14px;">
         <label>Estilo: <input type="text" id="tvCfgStyle" value="ROCK" style="width:130px" oninput="tvSync()"></label>
         <label>Subestilo: <input type="text" id="tvCfgSub" value="Classic Rock" style="width:160px" oninput="tvSync()"></label>
@@ -10581,7 +10582,37 @@ window.tvSync=function(){
   if(refs.arc){refs.arc.setAttribute('stroke-dashoffset',off);refs.arcGlow.setAttribute('stroke-dashoffset',off);}
   const ang=-Math.PI/2+prog*Math.PI*2, hx=310+R_MAIN*Math.cos(ang), hy=310+R_MAIN*Math.sin(ang);
   if(refs.head){refs.head.setAttribute('cx',hx);refs.head.setAttribute('cy',hy);refs.headGlow.setAttribute('cx',hx);refs.headGlow.setAttribute('cy',hy);}
+  tvUpdateMilestones();
 };
+
+/* ---- Puntos de la barra de progreso: sin mapa de tempo son solo decorativos (25/50/75% fijos,
+   comportamiento de siempre); con mapa de tempo, marcan los cambios de tempo REALES — en el
+   instante en que cada uno ocurre (getBarStartTime, ya cuenta la intro), no como fracción fija
+   del vídeo, que quedaba sistemáticamente antes de tiempo (tantos segundos como dura la intro). */
+function tvUpdateMilestones(){
+  const track=document.getElementById('tvTrack'); const head=document.getElementById('tvTrackHead');
+  if(!track||!head) return;
+  track.querySelectorAll('.tv-milestone').forEach(el=>el.remove());
+  let points=[0.25,0.5,0.75];
+  if(tvHasTempoMap()){
+    const dur=tvGetDuration();
+    if(dur>0){
+      const entries=Object.entries(window._tempoMap).map(([k,v])=>[parseInt(k),v]).filter(([bi])=>bi>=0).sort((a,b)=>a[0]-b[0]);
+      const pts=[]; let prevBpm=null;
+      for(const [bi,bpm] of entries){
+        if(prevBpm!==null&&bpm!==prevBpm)pts.push(getBarStartTime(bi)/dur);
+        prevBpm=bpm;
+      }
+      if(pts.length)points=pts.filter(p=>p>0.01&&p<0.99);
+    }
+  }
+  for(const p of points){
+    const d=document.createElement('div');
+    d.className='tv-milestone'; d.dataset.p=String(Math.round(p*1000)/10); d.style.left=(p*100)+'%';
+    track.insertBefore(d,head);
+  }
+  refs.milestones=Array.from(track.querySelectorAll('.tv-milestone'));
+}
 
 /* ---- Partículas ---- */
 function initDust(){ particles=[]; for(let i=0;i<80;i++)particles.push({x:Math.random()*1920,y:Math.random()*1080,r:Math.random()*1.6+.4,a:Math.random()*.35+.05,vx:(Math.random()-.5)*6,vy:(Math.random()-.5)*6,tw:Math.random()*6.28}); }
@@ -10615,7 +10646,39 @@ function tvClock(){
    getCfgBars() es la fuente de verdad de "cuánto dura el ejercicio" —la propia UI la deja
    corregir a mano precisamente porque el audio no siempre manda—, así que solo se cae a
    audioEl.duration si no hay compases configurados todavía. ---- */
+// ¿Hay un mapa de tempo cargado? (mismo _tempoMap que ya usa Tríadas, leído del XML por
+// loadXML() — ver el bloque "Read full tempo map" más arriba en el archivo). Mismo criterio
+// que hasTempoVar en el resto de la app: hace falta más de un valor distinto para que cuente
+// como "tempo progresivo" — un solo valor es indistinguible de BPM fijo.
+function tvHasTempoMap(){
+  try{ return !!(window._tempoMap && Object.keys(window._tempoMap).length>1); }catch(e){ return false; }
+}
+
+/* Resuelve el "reloj" efectivo para pintar el instante `elapsedRaw` (segundos desde que
+ * arrancó el audio, incluida la claqueta). Sin mapa de tempo, es idéntico a tvClock() (BPM
+ * constante, camino sin tocar). Con mapa de tempo, sigue los cambios compás a compás
+ * reutilizando el mismo motor que ya usa Tríadas (getBarIndexAt/getBarStartTime/getBpmAtBar,
+ * más arriba en el archivo) — así no hay dos implementaciones del mismo cálculo de tempo.
+ * barIdx=-1 significa "todavía en la claqueta" (tempo constante = tempo del primer compás
+ * real, igual que ya asume getIntroSec() en el resto de la app). */
+function tvClockAt(elapsedRaw){
+  if(!tvHasTempoMap())return tvClock();
+  const beats=getCfgBeats();
+  let off=0; try{ if(typeof getOffSec==='function') off=getOffSec(); }catch(e){}
+  let preRoll=0; try{ if(typeof getIntroSec==='function') preRoll=getIntroSec(); }catch(e){}
+  const barIdx=getBarIndexAt(elapsedRaw);
+  if(barIdx<0){
+    const spb=60/(getIntroBPM()||getCfgBPM());
+    return {beats,spb,preRoll,off,barStart:0,barIdx:-1};
+  }
+  const bpmNow=getBpmAtBar(barIdx)||getCfgBPM();
+  return {beats,spb:60/bpmNow,preRoll,off,barStart:getBarStartTime(barIdx),barIdx};
+}
+
 function tvGetDuration(){
+  if(tvHasTempoMap()){
+    try{ const d=getBarStartTime(getCfgBars()); if(d>0)return d; }catch(e){}
+  }
   const {beats,spb,preRoll}=tvClock();
   const barsDur=preRoll+getCfgBars()*beats*spb;
   if(barsDur>0)return barsDur;
@@ -10632,15 +10695,31 @@ window.tvGetDuration=tvGetDuration;
    No lee audioEl.currentTime — así puede fijarse fotograma a fotograma desde
    fuera (script de exportación) sin que el audio tenga que estar reproduciéndose. ---- */
 function tvPaintAtElapsed(elapsedRaw){
-  const {beats,spb,preRoll,off}=tvClock();
+  const tempoMapMode=tvHasTempoMap();
+  const {beats,spb,preRoll,off,barStart,barIdx}=tempoMapMode?tvClockAt(elapsedRaw):tvClock();
   // El offset fino SIEMPRE resta (retrasa el inicio del cuerpo), igual que en el
   // motor principal (getIntroSec()+getOffSec() se resta al elapsed, ver getBarIndexAt
   // / getBarStartTime) y que en tvComputeBars (dur-introSec-off). Antes se sumaba aquí,
   // contradiciendo al propio tvComputeBars con el signo cambiado — bug real (fix jul 2026).
   const elapsed=elapsedRaw-off;
   const mt=elapsed-preRoll;
-  const effBeat=elapsed/spb;                                  // continuo (incluye la claqueta)
-  const beatInBar=((Math.floor(effBeat)%beats)+beats)%beats;
+  let effBeat,beatInBar,curBarIdx,inIntroSeg;
+  if(tempoMapMode){
+    // Con tempo variable, "compás en curso" lo da el propio mapa (barIdx, ya resuelto arriba
+    // por tvClockAt vía getBarIndexAt) en vez de una división lineal del tiempo total — cada
+    // compás puede durar distinto, así que effBeat se mide relativo al ARRANQUE del tramo
+    // actual (la claqueta o el compás en curso), no desde el origen del audio.
+    inIntroSeg=barIdx<0;
+    const segStart=inIntroSeg?off:barStart;
+    effBeat=Math.max(0,(elapsedRaw-segStart)/spb);
+    beatInBar=inIntroSeg?(((Math.floor(effBeat)%beats)+beats)%beats):Math.min(beats-1,Math.floor(effBeat));
+    curBarIdx=barIdx;
+  }else{
+    inIntroSeg=false;
+    effBeat=elapsed/spb;                                        // continuo (incluye la claqueta)
+    beatInBar=((Math.floor(effBeat)%beats)+beats)%beats;
+    curBarIdx=mt>=0?Math.floor(mt/(spb*beats)):-1;
+  }
   const phase=effBeat-Math.floor(effBeat);
   const accent=beatInBar===0;
   const env=Math.exp(-phase*4.6);                              // envolvente de pulso (ataque/caída)
@@ -10649,7 +10728,10 @@ function tvPaintAtElapsed(elapsedRaw){
   refs.ov.style.setProperty('--tv-glow',(env*(accent?1:0.55)).toFixed(3));
   refs.ov.style.setProperty('--tv-flash',(env*(accent?0.9:0.4)).toFixed(3));
 
-  const barProg=(effBeat%beats)/beats;
+  // Con tempo variable y ya dentro del cuerpo, effBeat está acotado al compás en curso
+  // (0..beats) — durante la claqueta, o sin mapa de tempo, sigue siendo el contador
+  // continuo de siempre (varios compases de intro pueden sumar más de "beats" tiempos).
+  const barProg=(tempoMapMode&&!inIntroSeg)?Math.min(1,effBeat/beats):(effBeat%beats)/beats;
   const dashOff=C_MAIN*(1-barProg);
   refs.arc.setAttribute('stroke-dashoffset',dashOff);
   refs.arcGlow.setAttribute('stroke-dashoffset',dashOff);
@@ -10680,12 +10762,16 @@ function tvPaintAtElapsed(elapsedRaw){
     }
   }
 
-  if(mt>=0){
-    const barIdx=Math.floor(mt/(spb*beats));
-    tvSetText('tvOBar', String(Math.min(getCfgBars(), barIdx+1)));
+  if(curBarIdx>=0){
+    tvSetText('tvOBar', String(Math.min(getCfgBars(), curBarIdx+1)));
   }else{
     tvSetText('tvOBar','1');
   }
+
+  // BPM en pantalla: con mapa de tempo sube en vivo según el compás actual (spb ya resuelto
+  // arriba para este instante); sin mapa, sigue siendo el mismo valor fijo de siempre —
+  // tvSetText no toca el DOM si el texto no cambia, así que no cuesta nada en ese caso.
+  tvSetText('tvOBpm', String(Math.round(60/spb)));
 
   // Cuenta atrás durante la claqueta (compases de intro): "GOLPES QUE FALTAN" para que arranque
   // el cuerpo, en vez de dejar la claqueta sin ningún indicador propio.
@@ -10693,7 +10779,7 @@ function tvPaintAtElapsed(elapsedRaw){
     const inIntro=mt<0 && preRoll>0;
     if(inIntro){
       const introBeats=Math.max(1,Math.round(preRoll/spb));
-      const beatsLeft=Math.max(1,introBeats-Math.floor(elapsed/spb));
+      const beatsLeft=Math.max(1,introBeats-Math.floor(effBeat));
       refs.countdown.classList.add('show');
       if(refs.countdownNum){
         tvSetText('tvCountdownNum',String(beatsLeft));

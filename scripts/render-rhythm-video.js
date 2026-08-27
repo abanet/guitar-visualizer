@@ -34,13 +34,36 @@
  * colorPreset es uno de los presets de TV_COLOR_PRESETS en guitarvisualizer.html (rock, funk,
  * jazz, blues, metal, pop) — controla el acento de color del diseño, no solo el texto.
  *
- * Opciones:
+ * ---- MODO TEMPO PROGRESIVO (--xml) --------------------------------------------------------
+ * Para un tema con cambios de tempo (BiaB exportado con un <sound tempo> por compás — ver el
+ * mapa de tempo que ya usa Tríadas, ahora también el módulo Ritmo, ver guitarvisualizer.html):
+ * un único XML + un único audio = un único vídeo, en vez de una carpeta con varios audios a BPM
+ * fijo. El XML necesita al menos UN acorde de referencia (aunque el ritmo no lo use para nada
+ * más) para que la app sepa dónde acaba la intro — igual que se explica en la propia tarjeta
+ * "Ritmo" de la app. BPM base, nº de compases y duración se leen todos del XML/del propio motor
+ * (tvGetDuration()), no hace falta pasarlos a mano.
+ *
+ *   node scripts/render-rhythm-video.js --xml tema.xml --audio tema.m4a \
+ *     --style ROCK --substyle "Pop Ballad" --color-preset rock
+ *
+ * Opciones propias de este modo (todas opcionales salvo --xml/--audio):
+ *   --style/--substyle/--beats/--color-preset   Igual que en config.json (por defecto: los que
+ *                                                traiga la app al cargar, p.ej. beats=4).
+ *   --intro-bars/--offset-ms                    Solo si quieres PISAR lo que detecta el XML
+ *                                                (intro por el primer acorde, offset 0).
+ *   --name <texto>                               Nombre base del archivo de salida (por defecto:
+ *                                                se deriva del nombre del audio).
+ *
+ * Opciones (ambos modos):
  *   --app <path>         Ruta al HTML de la app (por defecto: guitarvisualizer.html)
- *   --dir <path>          Carpeta con los audios + config.json (obligatorio)
+ *   --dir <path>          Carpeta con los audios + config.json (modo BPM fijo, ver arriba)
+ *   --xml <path>          MusicXML con mapa de tempo (modo tempo progresivo, ver arriba)
+ *   --audio <path>        Audio del tema (obligatorio junto a --xml)
+ *   --extra <seg>         Segundos extra al final (modo --xml; en modo --dir viene de config.json)
  *   --out <dir>            Carpeta de salida (por defecto: ./video-out)
- *   --concurrency <n>      Vídeos en paralelo (por defecto: 1 — cada uno graba en tiempo real,
- *                          así que el lote entero tarda aprox. la suma de todas las duraciones
- *                          dividida entre la concurrencia)
+ *   --concurrency <n>      Vídeos en paralelo (solo modo --dir; por defecto: 1 — cada uno graba
+ *                          en tiempo real, así que el lote entero tarda aprox. la suma de todas
+ *                          las duraciones dividida entre la concurrencia)
  *   --width/--height       Tamaño del viewport grabado (por defecto: 1920x1080, la resolución
  *                          nativa del módulo)
  */
@@ -205,6 +228,67 @@ async function detectOverlayFadeNear(mp4Path, nearSec, windowAfterSec) {
   return null;
 }
 
+// Mezcla el vídeo silencioso con el audio real y corrige la sincronización automáticamente
+// (ver detectAudioOnsetNear/detectOverlayFadeNear más arriba). Compartida por runOne (modo BPM
+// fijo) y runOneXml (modo tempo progresivo) — la única diferencia entre ambos es CÓMO se calcula
+// expectedContentSec (el instante teórico en que debería acabar la claqueta), no qué se hace con
+// ese número una vez calculado.
+async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audioPath, extraSec, outDir, appVersion, expectedContentSec }) {
+  const silentPath = await videoObj.path();
+  const trimOffsetSec = Math.max(0, ((playStartAt || recordStartAt) - recordStartAt) / 1000);
+
+  const outPath = path.join(outDir, `${tag}.mp4`);
+  const mux = (trimSec) => execFileP('ffmpeg', [
+    '-y',
+    '-i', silentPath,
+    '-i', audioPath,
+    '-filter_complex', `[0:v]trim=start=${trimSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-map', '[v]', '-map', '[a]',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
+    '-c:a', 'aac', '-b:a', '192k',
+    '-metadata', `comment=Generado con Guitar Visualizer v${appVersion}`,
+    '-shortest',
+    outPath,
+  ]);
+
+  log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
+  await mux(trimOffsetSec);
+
+  // Comprobación + corrección de sincronización (ver detectAudioOnsetNear/detectOverlayFadeNear
+  // más arriba). Solo aplica si hay claqueta (introBars>0) — sin ella no hay etiqueta que medir.
+  if (expectedContentSec > 0) {
+    let curTrim = trimOffsetSec;
+    // Cada pasada corrige por el desfase medido, pero esa propia medición tiene su margen de
+    // error — una sola pasada podía dejar un resto por encima de la propia tolerancia. Se repite
+    // hasta entrar en tolerancia o agotar intentos.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
+      const videoChange = audioOnset != null ? await detectOverlayFadeNear(outPath, expectedContentSec, 4) : null;
+      if (audioOnset == null || videoChange == null) {
+        log('⚠ no se pudo medir la sincronización automáticamente — revisar a mano si hay dudas');
+        break;
+      }
+      const gap = audioOnset - videoChange;
+      log(`comprobación de sync (intento ${attempt}): audio en ${audioOnset.toFixed(2)}s, vídeo cambia en ${videoChange.toFixed(2)}s (desfase ${(gap * 1000).toFixed(0)}ms)`);
+      if (Math.abs(gap) <= SYNC_TOLERANCE_SEC) break;
+      if (Math.abs(gap) >= SYNC_MAX_CORRECTION_SEC) {
+        log('⚠ desfase medido demasiado grande para corregir automáticamente — revisar a mano');
+        break;
+      }
+      // trim=start=X desplaza el contenido a "raw_time - X" en la salida: recortar MÁS (subir X)
+      // adelanta el contenido (tiempos de salida más pequeños), no lo retrasa — de ahí el signo
+      // negativo. Con el signo cambiado (bug real, ago 2026) cada intento empeoraba el desfase.
+      curTrim = Math.max(0, curTrim - gap);
+      log(`corrigiendo recorte de arranque: → ${curTrim.toFixed(3)}s…`);
+      await mux(curTrim);
+      if (attempt === 3) log('⚠ sigue fuera de tolerancia tras 3 intentos — revisar a mano');
+    }
+  }
+
+  log(`✓ ${outPath}`);
+  return outPath;
+}
+
 async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, outDir, tmpDir }) {
   const tag = path.parse(audioPath).name;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
@@ -309,61 +393,126 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
 
   if (stepError) throw stepError;
   if (!videoObj) throw new Error('No se generó ningún vídeo (context sin recordVideo).');
-  const silentPath = await videoObj.path();
-  const trimOffsetSec = Math.max(0, ((playStartAt || recordStartAt) - recordStartAt) / 1000);
 
-  const outPath = path.join(outDir, `${tag}.mp4`);
-  const mux = (trimSec) => execFileP('ffmpeg', [
-    '-y',
-    '-i', silentPath,
-    '-i', audioPath,
-    '-filter_complex', `[0:v]trim=start=${trimSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
-    '-map', '[v]', '-map', '[a]',
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
-    '-c:a', 'aac', '-b:a', '192k',
-    '-metadata', `comment=Generado con Guitar Visualizer v${appVersion}`,
-    '-shortest',
-    outPath,
-  ]);
-
-  log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
-  await mux(trimOffsetSec);
-
-  // Comprobación + corrección de sincronización (ver detectAudioOnsetNear/detectOverlayFadeNear
-  // más arriba). Solo aplica si hay claqueta (introBars>0) — sin ella no hay etiqueta que medir.
   const beats = cfg.beats || 4;
   const expectedContentSec = (cfg.introBars || 0) * beats * (60 / bpm) + (cfg.offsetMs || 0) / 1000;
-  if (expectedContentSec > 0) {
-    let curTrim = trimOffsetSec;
-    // Cada pasada corrige por el desfase medido, pero esa propia medición tiene su margen de
-    // error — una sola pasada podía dejar un resto por encima de la propia tolerancia. Se repite
-    // hasta entrar en tolerancia o agotar intentos.
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
-      const videoChange = audioOnset != null ? await detectOverlayFadeNear(outPath, expectedContentSec, 4) : null;
-      if (audioOnset == null || videoChange == null) {
-        log('⚠ no se pudo medir la sincronización automáticamente — revisar a mano si hay dudas');
-        break;
-      }
-      const gap = audioOnset - videoChange;
-      log(`comprobación de sync (intento ${attempt}): audio en ${audioOnset.toFixed(2)}s, vídeo cambia en ${videoChange.toFixed(2)}s (desfase ${(gap * 1000).toFixed(0)}ms)`);
-      if (Math.abs(gap) <= SYNC_TOLERANCE_SEC) break;
-      if (Math.abs(gap) >= SYNC_MAX_CORRECTION_SEC) {
-        log('⚠ desfase medido demasiado grande para corregir automáticamente — revisar a mano');
-        break;
-      }
-      // trim=start=X desplaza el contenido a "raw_time - X" en la salida: recortar MÁS (subir X)
-      // adelanta el contenido (tiempos de salida más pequeños), no lo retrasa — de ahí el signo
-      // negativo. Con el signo cambiado (bug real, ago 2026) cada intento empeoraba el desfase.
-      curTrim = Math.max(0, curTrim - gap);
-      log(`corrigiendo recorte de arranque: → ${curTrim.toFixed(3)}s…`);
-      await mux(curTrim);
-      if (attempt === 3) log('⚠ sigue fuera de tolerancia tras 3 intentos — revisar a mano');
-    }
+  return muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audioPath, extraSec, outDir, appVersion, expectedContentSec });
+}
+
+// Modo tempo progresivo: un XML con mapa de tempo (<sound tempo> por compás, exportado de BiaB
+// — ver el bloque MÓDULO RITMO/TEMPO en guitarvisualizer.html, ahora consciente de _tempoMap) +
+// un único audio = un único vídeo. A diferencia de runOne, el BPM/nº de compases/duración NO se
+// calculan aquí: se dejan en manos del propio motor (tvGetDuration(), tras cargar el XML), que
+// ya sabe seguir los cambios de tempo compás a compás — replicar esa matemática en Node sería la
+// forma más fácil de que este script y la app se desincronizaran entre sí con el tiempo.
+async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag }) {
+  const log = (msg) => console.log(`[${tag}] ${msg}`);
+
+  const audioDuration = await getAudioDurationSeconds(audioPath);
+  const contentDuration = await detectContentDurationSeconds(audioPath, audioDuration);
+  if (contentDuration < audioDuration - 1) {
+    log(`⚠ silencio final detectado: recorto ${(audioDuration - contentDuration).toFixed(1)}s (contenido real ${contentDuration.toFixed(1)}s de ${audioDuration.toFixed(1)}s)`);
   }
 
-  log(`✓ ${outPath}`);
-  return outPath;
+  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const context = await browser.newContext({
+    viewport: { width, height },
+    recordVideo: { dir: tmpDir, size: { width, height } },
+  });
+  const page = await context.newPage();
+  page.on('pageerror', (e) => log('pageerror: ' + e.message));
+  page.on('console', (m) => {
+    if (m.type() === 'error' && !/ERR_CONNECTION_REFUSED/.test(m.text())) log('console.error: ' + m.text());
+  });
+
+  const recordStartAt = Date.now();
+  let playStartAt = null;
+  let stepError = null;
+  let appVersion = 'unknown';
+  let introBars = 0, baseBpm = 0, beats = cfg.beats || 4;
+  try {
+    log('cargando app…');
+    await page.goto(appUrl);
+    appVersion = await page.evaluate(() => (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'unknown'));
+
+    log('cargando XML (tempo progresivo)…');
+    await page.setInputFiles('#xmlPicker', [xmlPath]);
+    await page.waitForFunction(() => {
+      const t3 = document.getElementById('t3');
+      const err = document.getElementById('xmlStatus');
+      if (err && err.classList.contains('err')) throw new Error('Error al leer el MusicXML');
+      return t3 && t3.textContent && t3.textContent.length > 0;
+    }, null, { timeout: 20000 });
+
+    log('configurando ejercicio de ritmo…');
+    await page.evaluate((c) => {
+      setExerciseType('rhythm');
+      const setVal = (id, v) => { if (v === undefined || v === null) return; const e = document.getElementById(id); if (e) e.value = String(v); };
+      setVal('tvCfgStyle', c.style); setVal('tvCfgSub', c.substyle);
+      setVal('tvCfgBeats', c.beats || 4);
+      setVal('tvCfgColorPreset', c.colorPreset);
+      // introBars/offsetMs: el XML ya los ha rellenado al cargarlo (intro detectada por el
+      // primer acorde de referencia, offset a 0) — solo se pisan si se han pasado explícitos.
+      if (c.introBars !== undefined) setVal('introCount', c.introBars);
+      if (c.offsetMs !== undefined) setVal('offsetMs', c.offsetMs);
+      if (typeof updateIntroLbl === 'function') updateIntroLbl();
+      if (typeof tvSync === 'function') tvSync();
+    }, { style: cfg.style, substyle: cfg.substyle, beats: cfg.beats, colorPreset: cfg.colorPreset, introBars: cfg.introBars, offsetMs: cfg.offsetMs });
+
+    log('cargando audio…');
+    await page.setInputFiles('#audioPicker', [audioPath]);
+    await page.waitForFunction(() => {
+      const el = document.getElementById('audioStatus');
+      return el && el.classList.contains('ok');
+    }, null, { timeout: 20000 });
+
+    await page.evaluate(() => {
+      showTab('player');
+      if (!document.body.classList.contains('presentation')) togglePresentation();
+      stopAll();
+    });
+    await page.waitForTimeout(300); // deja asentar el layout de presentación
+
+    const readBack = await page.evaluate(() => ({
+      dur: tvGetDuration(),
+      introBars: parseInt(document.getElementById('introCount').value) || 0,
+      bpm: parseFloat(document.getElementById('bpmInput').value) || 0,
+      beats: parseInt(document.getElementById('tvCfgBeats').value) || 4,
+      bars: parseInt(document.getElementById('tvCfgBars').value) || 0,
+      hasTempoMap: !!(window._tempoMap && Object.keys(window._tempoMap).length > 1),
+    }));
+    introBars = readBack.introBars; baseBpm = readBack.bpm; beats = readBack.beats;
+    if (!readBack.hasTempoMap) log('⚠ el XML no trae mapa de tempo (o solo un valor) — se generará como BPM fijo normal, revisa si es lo esperado');
+    log(`bpm base=${baseBpm} (del XML) · compás=${beats}/4 · intro=${introBars} compases · ${readBack.bars} compases · duración teórica ${readBack.dur.toFixed(1)}s`);
+
+    const total = Math.max(readBack.dur, contentDuration) + extraSec;
+    log(`duración objetivo: ${total.toFixed(1)}s (teórica ${readBack.dur.toFixed(1)}s · audio ${contentDuration.toFixed(1)}s + ${extraSec}s extra)`);
+
+    playStartAt = await page.evaluate(() => new Promise((resolve) => {
+      const stamp = () => resolve(performance.timeOrigin + performance.now());
+      startIt();
+      if (!audioEl.paused && audioEl.currentTime > 0) { stamp(); return; }
+      const onPlaying = () => { audioEl.removeEventListener('playing', onPlaying); stamp(); };
+      audioEl.addEventListener('playing', onPlaying);
+      setTimeout(stamp, 2000); // failsafe: no colgarse si el evento no llega
+    }));
+    log(`grabando… (arranque: ${((playStartAt - recordStartAt) / 1000).toFixed(2)}s de setup a recortar)`);
+    await page.waitForTimeout(total * 1000);
+    await page.evaluate(() => { if (typeof pauseIt === 'function') pauseIt(); });
+  } catch (e) {
+    stepError = e;
+  }
+
+  const videoObj = page.video();
+  await page.close().catch(() => {});
+  await context.close().catch(() => {});
+  await browser.close().catch(() => {});
+
+  if (stepError) throw stepError;
+  if (!videoObj) throw new Error('No se generó ningún vídeo (context sin recordVideo).');
+
+  const expectedContentSec = baseBpm > 0 ? introBars * beats * (60 / baseBpm) : 0;
+  return muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audioPath, extraSec, outDir, appVersion, expectedContentSec });
 }
 
 async function runPool(jobs, concurrency, worker) {
@@ -383,21 +532,63 @@ async function runPool(jobs, concurrency, worker) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.dir) {
+  if (!args.dir && !args.xml) {
     console.error('Uso: node scripts/render-rhythm-video.js --dir <carpeta-con-audios-y-config.json> [opciones]');
+    console.error('  o (tempo progresivo): node scripts/render-rhythm-video.js --xml <archivo.xml> --audio <archivo.m4a> [opciones]');
     process.exit(1);
   }
   await waitFfmpeg();
 
   const repoRoot = path.resolve(__dirname, '..');
   const appPath = path.resolve(repoRoot, args.app || 'guitarvisualizer.html');
-  const dir = path.resolve(args.dir);
   const outDir = path.resolve(args.out || './video-out');
   const width = args.width ? parseInt(args.width, 10) : 1920;
   const height = args.height ? parseInt(args.height, 10) : 1080;
-  const concurrency = args.concurrency ? parseInt(args.concurrency, 10) : 1;
 
   if (!fs.existsSync(appPath)) { console.error('No existe: ' + appPath); process.exit(1); }
+
+  // ---- Modo tempo progresivo (--xml): un XML + un audio = un único vídeo. No toca nada del
+  // modo --dir de abajo (BPM fijo por nombre de archivo) — son caminos totalmente separados. ----
+  if (args.xml) {
+    if (!args.audio) { console.error('--xml requiere --audio.'); process.exit(1); }
+    const xmlPath = path.resolve(args.xml);
+    const audioPath = path.resolve(args.audio);
+    for (const p of [xmlPath, audioPath]) {
+      if (!fs.existsSync(p)) { console.error('No existe: ' + p); process.exit(1); }
+    }
+    const extraSec = args.extra !== undefined ? parseFloat(args.extra) : 2;
+    const cfg = {
+      style: args.style,
+      substyle: args.substyle,
+      beats: args.beats ? parseInt(args.beats, 10) : undefined,
+      colorPreset: args['color-preset'],
+      introBars: args['intro-bars'] !== undefined ? parseInt(args['intro-bars'], 10) : undefined,
+      offsetMs: args['offset-ms'] !== undefined ? parseFloat(args['offset-ms']) : undefined,
+    };
+    const tag = args.name ? String(args.name) : path.parse(audioPath).name;
+
+    fs.mkdirSync(outDir, { recursive: true });
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gv-rhythm-'));
+    const appUrl = 'file://' + appPath;
+
+    console.log(`Generando vídeo de tempo progresivo (${tag})…`);
+    const t0 = Date.now();
+    try {
+      const outPath = await runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag });
+      console.log(`\nHecho en ${((Date.now() - t0) / 1000).toFixed(1)}s: ${outPath}`);
+    } catch (e) {
+      console.error(`✗ ${tag}: ${e.message}`);
+      process.exitCode = 1;
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+    return;
+  }
+
+  // ---- Modo BPM fijo (--dir): sin tocar — carpeta de audios a distinto tempo fijo por nombre
+  // de archivo, tal como se usaba antes de este cambio. ----
+  const dir = path.resolve(args.dir);
+  const concurrency = args.concurrency ? parseInt(args.concurrency, 10) : 1;
   if (!fs.existsSync(dir)) { console.error('No existe: ' + dir); process.exit(1); }
 
   const configPath = path.join(dir, 'config.json');
