@@ -10381,6 +10381,17 @@ const CSS=`
 #tvOverlay .tv-bpmlbl{font-size:44px;font-weight:600;letter-spacing:.24em;color:#aab3c0;margin-top:-6px;}
 #tvOverlay .tv-pill{margin-top:20px;padding:9px 26px;border-radius:999px;font-size:22px;font-weight:700;letter-spacing:.22em;color:var(--tv-c1);
   border:1.5px solid color-mix(in srgb, var(--tv-c1) 50%, transparent);background:color-mix(in srgb, var(--tv-c1) 6%, transparent);box-shadow:0 0 26px color-mix(in srgb, var(--tv-c1) 18%, transparent),inset 0 0 18px color-mix(in srgb, var(--tv-c1) 6%, transparent);}
+/* Aviso de próximo cambio de tempo (solo con mapa de tempo del XML — ver tvUpdateNextChange).
+   Reposo: tono secundario (--tv-c2), discreto. A pocos compases del cambio (.tv-pill-close) pasa
+   al acento (--tv-c1) y usa --tv-glow (ya calculado por golpe en tvPaintAtElapsed) para un pulso
+   sutil en cada tiempo — así el ojo lo capta sin necesidad de leer el número. */
+#tvOverlay .tv-pill-next{margin-top:14px;padding:7px 22px;border-radius:999px;font-size:18px;font-weight:700;letter-spacing:.14em;color:var(--tv-c2);
+  border:1.5px solid color-mix(in srgb, var(--tv-c2) 45%, transparent);background:color-mix(in srgb, var(--tv-c2) 6%, transparent);
+  box-shadow:0 0 18px color-mix(in srgb, var(--tv-c2) 14%, transparent);transition:color .3s,border-color .3s,background-color .3s,box-shadow .3s;}
+#tvOverlay .tv-pill-next.tv-pill-close{color:var(--tv-c1);border-color:color-mix(in srgb, var(--tv-c1) 60%, transparent);
+  background:color-mix(in srgb, var(--tv-c1) 10%, transparent);box-shadow:0 0 24px color-mix(in srgb, var(--tv-c1) 30%, transparent);
+  transform:scale(calc(1 + var(--tv-glow, 0)*0.06));}
+#tvOverlay .tv-pill-next[hidden]{display:none;}
 #tvBeats{position:absolute;left:960px;top:812px;transform:translateX(-50%);display:flex;align-items:flex-start;gap:78px;}
 #tvOverlay .tv-beat{position:relative;display:flex;flex-direction:column;align-items:center;}
 #tvOverlay .tv-beat:not(:last-child)::after{content:"";position:absolute;top:56px;left:calc(100% + 6px);width:66px;height:4px;
@@ -10476,7 +10487,9 @@ function tvBuild(){
         <circle id="tvHeadGlow" cx="310" cy="60" r="16" fill="var(--tv-c1)" opacity=".55" filter="url(#tvSoft)"/>
         <circle id="tvHead" cx="310" cy="60" r="9" fill="#fff"/>
       </svg>
-      <div id="tvCenter"><div id="tvOBpm">85</div><div class="tv-bpmlbl">BPM</div><div class="tv-pill">TEMPO</div></div>
+      <div id="tvCenter"><div id="tvOBpm">85</div><div class="tv-bpmlbl">BPM</div><div class="tv-pill">TEMPO</div>
+        <div class="tv-pill-next" id="tvNextChange" hidden></div>
+      </div>
     </div>
     <div id="tvBeats"></div>
     <div id="tvFooter">
@@ -10597,13 +10610,8 @@ function tvUpdateMilestones(){
   if(tvHasTempoMap()){
     const dur=tvGetDuration();
     if(dur>0){
-      const entries=Object.entries(window._tempoMap).map(([k,v])=>[parseInt(k),v]).filter(([bi])=>bi>=0).sort((a,b)=>a[0]-b[0]);
-      const pts=[]; let prevBpm=null;
-      for(const [bi,bpm] of entries){
-        if(prevBpm!==null&&bpm!==prevBpm)pts.push(getBarStartTime(bi)/dur);
-        prevBpm=bpm;
-      }
-      if(pts.length)points=pts.filter(p=>p>0.01&&p<0.99);
+      const pts=getTempoChangeBars().map(c=>getBarStartTime(c.barIdx)/dur).filter(p=>p>0.01&&p<0.99);
+      if(pts.length)points=pts;
     }
   }
   for(const p of points){
@@ -10612,6 +10620,29 @@ function tvUpdateMilestones(){
     track.insertBefore(d,head);
   }
   refs.milestones=Array.from(track.querySelectorAll('.tv-milestone'));
+}
+
+// Umbral (en compases) a partir del cual la pastilla "próximo cambio" pasa a su estado
+// "close" (acento + pulso) — ver .tv-pill-close. 4 compases da tiempo a prepararse sin que el
+// aviso lleve encendido "para siempre" en tramos largos entre cambios.
+const TV_NEXT_CHANGE_CLOSE_BARS=4;
+
+/* ---- Aviso de próximo cambio de tempo, en compases (mismo criterio que las líneas de la barra
+   de progreso, ver tvUpdateMilestones): sin mapa de tempo no hay nada que anunciar. Con mapa,
+   busca el PRÓXIMO cambio a partir del compás en curso y muestra a cuántos compases está y el
+   BPM de destino — sin sorpresas, el usuario pidió ver el número, no solo una cuenta atrás muda.
+   curBarIdx puede ser -1 (todavía en la claqueta): se trata como "antes del compás 0", así el
+   aviso ya cuenta los compases que faltan desde antes de que arranque el cuerpo. */
+function tvUpdateNextChange(curBarIdx,tempoMapMode){
+  const el=document.getElementById('tvNextChange');
+  if(!el)return;
+  if(!tempoMapMode){ el.hidden=true; el.classList.remove('tv-pill-close'); return; }
+  const next=getTempoChangeBars().find(c=>c.barIdx>curBarIdx);
+  if(!next){ el.hidden=true; el.classList.remove('tv-pill-close'); return; }
+  const barsLeft=next.barIdx-Math.max(0,curBarIdx);
+  el.hidden=false;
+  el.classList.toggle('tv-pill-close',barsLeft<=TV_NEXT_CHANGE_CLOSE_BARS);
+  tvSetText('tvNextChange',(barsLeft===1?'NEXT BAR':'IN '+barsLeft+' BARS')+' → '+Math.round(next.bpm)+' BPM');
 }
 
 /* ---- Partículas ---- */
@@ -10652,6 +10683,20 @@ function tvClock(){
 // como "tempo progresivo" — un solo valor es indistinguible de BPM fijo.
 function tvHasTempoMap(){
   try{ return !!(window._tempoMap && Object.keys(window._tempoMap).length>1); }catch(e){ return false; }
+}
+
+// Lista ordenada de los cambios de tempo REALES del mapa (bar index donde entra cada BPM nuevo,
+// ya sin la intro — mismo _tempoMap que window._tempoMap). Compartida por tvUpdateMilestones (los
+// puntos de la barra de progreso) y tvUpdateNextChange (el aviso "próximo cambio" del círculo).
+function getTempoChangeBars(){
+  if(!tvHasTempoMap())return [];
+  const entries=Object.entries(window._tempoMap).map(([k,v])=>[parseInt(k),v]).filter(([bi])=>bi>=0).sort((a,b)=>a[0]-b[0]);
+  const changes=[]; let prevBpm=null;
+  for(const [bi,bpm] of entries){
+    if(prevBpm!==null&&bpm!==prevBpm)changes.push({barIdx:bi,bpm});
+    prevBpm=bpm;
+  }
+  return changes;
 }
 
 /* Resuelve el "reloj" efectivo para pintar el instante `elapsedRaw` (segundos desde que
@@ -10772,6 +10817,7 @@ function tvPaintAtElapsed(elapsedRaw){
   // arriba para este instante); sin mapa, sigue siendo el mismo valor fijo de siempre —
   // tvSetText no toca el DOM si el texto no cambia, así que no cuesta nada en ese caso.
   tvSetText('tvOBpm', String(Math.round(60/spb)));
+  tvUpdateNextChange(curBarIdx,tempoMapMode);
 
   // Cuenta atrás durante la claqueta (compases de intro): "GOLPES QUE FALTAN" para que arranque
   // el cuerpo, en vez de dejar la claqueta sin ningún indicador propio.
