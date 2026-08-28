@@ -29,25 +29,11 @@ async function getAudioDurationSeconds(audioPath) {
   }
 }
 
-// Corrección automática de sincronización (portado de scripts/render-rhythm-video.js, ago 2026 —
-// ese script ya tenía que corregir este mismo tipo de ruido para el módulo Ritmo, pero el arreglo
-// nunca se portó aquí). El único timestamp del navegador (evento 'playing', ver playStartAt más
-// abajo) tiene un ruido medido de ±0.3-0.5s de una toma a otra — imperceptible en ejercicios
-// lentos, pero se nota claramente en compases cortos (p.ej. 123-F, ago 2026: la pantalla
-// ya mostraba el primer acorde real ~0.6s antes de que el clic de la intro sonara de verdad en el
-// audio). Se mide el desfase real en el .mp4 ya generado y se corrige el recorte con ese dato.
+// Detección (solo informativa, ver el comentario grande más abajo sobre por qué NO se corrige
+// automáticamente en este pipeline) del instante real en que empieza a sonar el audio, para
+// comparar contra el recorte inicial del navegador (evento 'playing', ±0.3-0.5s de ruido
+// documentado de una toma a otra).
 const SYNC_LONG_GAP_SEC = 0.22; // hueco típico del click de conteo; un silencio musical breve no llega a esto
-const SYNC_TOLERANCE_SEC = 0.05;
-const SYNC_MAX_CORRECTION_SEC = 2; // por seguridad: no aplicar una "corrección" descabellada si la medición falla
-// El recorte inicial (trimOffsetSec, medido en el navegador con el evento 'playing') solo tiene
-// el ruido documentado más arriba (±0.3-0.5s). Caso real, ago 2026 (TriadasMenoresPorQuintas-123-F,
-// la MISMA sesión que motivó el comentario de arriba): la corrección automática se fue alejando
-// del recorte inicial hasta +1.67s (de 1.35s a 3.02s) y "convergió" dentro de tolerancia, pero el
-// primer fotograma del vídeo resultante ya mostraba el TERCER tiempo del metrónomo en vez del
-// primero — la claqueta quedaba visualmente cortada, aunque la comprobación automática lo diera
-// por bueno (había enganchado un evento visual distinto al real). Una corrección que se aleja más
-// de esto del recorte inicial es más probable que sea ruido del detector que un desfase real.
-const SYNC_MAX_DRIFT_FROM_BASELINE_SEC = 0.8;
 
 // Busca, cerca de `nearSec` (el instante teórico en que debería acabar la intro, según
 // getIntroSec()+getOffSec()), el hueco de silencio "largo" (>= SYNC_LONG_GAP_SEC) cuyo final está
@@ -301,57 +287,28 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
   await mux(trimOffsetSec);
 
-  // Comprobación + corrección de sincronización (ver detectAudioOnsetNear/detectContentChangeNear
-  // más arriba). Solo aplica si hay intro (expectedContentSec>0) — sin ella no hay transición que
-  // medir. Mismo patrón que render-rhythm-video.js: varias pasadas hasta entrar en tolerancia.
+  // Auto-corrección de sincronización DESACTIVADA para este pipeline (sesiones de Tríadas/
+  // Arpegios) — investigación real, ago 2026 (TriadasMenoresPorQuintas): detectContentChangeNear
+  // mide la diferencia entre fotogramas dentro del panel "AHORA", pero esa misma zona tiene un
+  // indicador de pulso/tiempo que se anima de forma CONTINUA (no solo al cambiar de acorde), con
+  // una amplitud de diferencia MAYOR que el propio cambio de texto real («Cm» apareciendo) que se
+  // quería detectar — comprobado volcando la señal cruda: el pico de la transición real medía
+  // 2.5, mientras que el pulso decorativo alcanzaba 9.1 en varios puntos ajenos a la transición.
+  // El detector, tal como está, engancha ese pulso en vez de la transición real, con errores de
+  // hasta varios segundos (confirmado comparando fotograma a fotograma contra el audio real). En
+  // TriadasMenoresPorQuintas-123-F, dejar que el bucle "corrigiera" sobre esa lectura ruidosa
+  // acabó CORTANDO visualmente los 2 primeros tiempos de la claqueta (el primer fotograma ya
+  // mostraba el tercer tiempo del metrónomo en vez del primero) aunque la comprobación diera el
+  // resultado por bueno. El recorte inicial (trimOffsetSec, medido en el navegador con el evento
+  // 'playing', ±0.3-0.5s de margen documentado) ya deja la transición real dentro de ese margen en
+  // todas las sesiones verificadas a mano — así que aquí no se intenta "mejorar" con una señal que
+  // resulta ser más ruido que señal. Se deja solo el audio (si acaso, para depurar a mano) sin
+  // aplicar ninguna corrección sobre él. Si se rehace detectContentChangeNear con una zona de
+  // recorte que aísle solo el texto del acorde (sin el indicador de pulso), esto se puede
+  // reactivar con el mismo patrón best-of-N + límite de deriva que usa render-rhythm-video.js.
   if (expectedContentSec > 0) {
-    let curTrim = trimOffsetSec;
-    const baselineTrim = trimOffsetSec;
-    // Mejor recorte CONFIRMADO por una medición (no un intento a ciegas todavía sin verificar),
-    // y que además no se haya alejado más de SYNC_MAX_DRIFT_FROM_BASELINE_SEC del recorte inicial
-    // (ver comentario de esa constante). Caso real, ago 2026 (TriadasMenoresPorQuintas-123-1):
-    // intento 2 medía un desfase de 84ms (ya muy bueno) pero, al seguir fuera de la tolerancia de
-    // 50ms, el bucle probaba un intento 3 — cuya lectura previa a corregir venía de un salto
-    // ruidoso del detector de cambio visual (~1s sin motivo real: el panel "AHORA" no se mueve de
-    // sitio, pero las animaciones de fondo del ejercicio de tríadas pueden confundirlo) — y
-    // aplicaba una corrección a ciegas sobre esa lectura mala, sin volver a medirla. El vídeo
-    // resultante quedaba con ~1,5s de desfase real (el panel "AHORA" aparecía antes de que sonara
-    // el audio real), peor que el intento 2 ya descartado. Quedarse con el MEJOR gap medido evita
-    // que un intento final más ruidoso empeore un resultado ya bueno.
-    let bestTrim = curTrim, bestGap = Infinity;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
-      const videoChange = audioOnset != null ? await detectContentChangeNear(outPath, expectedContentSec, 4, width, height) : null;
-      if (audioOnset == null || videoChange == null) {
-        log('⚠ no se pudo medir la sincronización automáticamente — revisar a mano si hay dudas');
-        break;
-      }
-      const gap = audioOnset - videoChange;
-      log(`comprobación de sync (intento ${attempt}): audio en ${audioOnset.toFixed(2)}s, vídeo cambia en ${videoChange.toFixed(2)}s (desfase ${(gap * 1000).toFixed(0)}ms)`);
-      const withinDrift = Math.abs(curTrim - baselineTrim) <= SYNC_MAX_DRIFT_FROM_BASELINE_SEC;
-      if (withinDrift && Math.abs(gap) < Math.abs(bestGap)) { bestGap = gap; bestTrim = curTrim; }
-      if (Math.abs(gap) <= SYNC_TOLERANCE_SEC) break;
-      if (Math.abs(gap) >= SYNC_MAX_CORRECTION_SEC) {
-        log('⚠ desfase medido demasiado grande para corregir automáticamente — revisar a mano');
-        break;
-      }
-      // trim=start=X desplaza el contenido a "raw_time - X" en la salida: recortar MÁS (subir X)
-      // adelanta el contenido (tiempos de salida más pequeños), no lo retrasa — de ahí el signo
-      // negativo (mismo criterio que render-rhythm-video.js).
-      const candidateTrim = Math.max(0, curTrim - gap);
-      if (Math.abs(candidateTrim - baselineTrim) > SYNC_MAX_DRIFT_FROM_BASELINE_SEC) {
-        log(`⚠ la corrección se alejaría ${(candidateTrim - baselineTrim).toFixed(2)}s del recorte inicial — probablemente el detector está siguiendo ruido, no se aplica`);
-        break;
-      }
-      curTrim = candidateTrim;
-      log(`corrigiendo recorte de arranque: → ${curTrim.toFixed(3)}s…`);
-      await mux(curTrim);
-      if (attempt === 3) log('⚠ sigue fuera de tolerancia tras 3 intentos — revisar a mano');
-    }
-    if (bestTrim !== curTrim) {
-      log(`el último intento no fue el mejor medido — remezclando con el mejor recorte confirmado (${bestTrim.toFixed(3)}s, desfase ${(bestGap * 1000).toFixed(0)}ms)…`);
-      await mux(bestTrim);
-    }
+    const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
+    if (audioOnset != null) log(`referencia: audio real a partir de ${audioOnset.toFixed(2)}s (teórico ${expectedContentSec.toFixed(2)}s) — sin corrección automática, ver comentario`);
   }
 
   log(`✓ ${outPath}`);
