@@ -62,6 +62,8 @@
  * Opciones propias de este modo (todas opcionales salvo --xml/--audio):
  *   --style/--substyle/--beats/--color-preset   Igual que en config.json (por defecto: los que
  *                                                traiga la app al cargar, p.ej. beats=4).
+ *   --lang <es|en|fr|de|it|pt>                   Idioma de los textos en pantalla (por defecto:
+ *                                                español — ver TV_I18N en guitarvisualizer.html).
  *   --intro-bars/--offset-ms                    Solo si quieres PISAR lo que detecta el XML
  *                                                (intro por el primer acorde, offset 0).
  *   --name <texto>                               Nombre base del archivo de salida (por defecto:
@@ -388,10 +390,10 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
       setVal('tvCfgStyle', c.style); setVal('tvCfgSub', c.substyle);
       setVal('tvCfgBeats', c.beats); setVal('bpmInput', c.bpm);
       setVal('introCount', c.introBars); setVal('offsetMs', c.offsetMs);
-      setVal('tvCfgColorPreset', c.colorPreset);
+      setVal('tvCfgColorPreset', c.colorPreset); setVal('tvCfgLang', c.lang);
       if (typeof updateIntroLbl === 'function') updateIntroLbl();
       if (typeof tvSync === 'function') tvSync();
-    }, { style: cfg.style, substyle: cfg.substyle, beats: cfg.beats || 4, bpm, introBars: cfg.introBars || 0, offsetMs: cfg.offsetMs || 0, colorPreset: cfg.colorPreset });
+    }, { style: cfg.style, substyle: cfg.substyle, beats: cfg.beats || 4, bpm, introBars: cfg.introBars || 0, offsetMs: cfg.offsetMs || 0, colorPreset: cfg.colorPreset, lang: cfg.lang });
 
     log('cargando audio…');
     await page.setInputFiles('#audioPicker', [audioPath]);
@@ -506,14 +508,14 @@ async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, hei
       const setVal = (id, v) => { if (v === undefined || v === null) return; const e = document.getElementById(id); if (e) e.value = String(v); };
       setVal('tvCfgStyle', c.style); setVal('tvCfgSub', c.substyle);
       setVal('tvCfgBeats', c.beats || 4);
-      setVal('tvCfgColorPreset', c.colorPreset);
+      setVal('tvCfgColorPreset', c.colorPreset); setVal('tvCfgLang', c.lang);
       // introBars/offsetMs: el XML ya los ha rellenado al cargarlo (intro detectada por el
       // primer acorde de referencia, offset a 0) — solo se pisan si se han pasado explícitos.
       if (c.introBars !== undefined) setVal('introCount', c.introBars);
       if (c.offsetMs !== undefined) setVal('offsetMs', c.offsetMs);
       if (typeof updateIntroLbl === 'function') updateIntroLbl();
       if (typeof tvSync === 'function') tvSync();
-    }, { style: cfg.style, substyle: cfg.substyle, beats: cfg.beats, colorPreset: cfg.colorPreset, introBars: cfg.introBars, offsetMs: cfg.offsetMs });
+    }, { style: cfg.style, substyle: cfg.substyle, beats: cfg.beats, colorPreset: cfg.colorPreset, introBars: cfg.introBars, offsetMs: cfg.offsetMs, lang: cfg.lang });
 
     log('cargando audio…');
     await page.setInputFiles('#audioPicker', [audioPath]);
@@ -623,6 +625,7 @@ async function main() {
       substyle: args.substyle || fileCfg.substyle,
       beats: args.beats ? parseInt(args.beats, 10) : fileCfg.beats,
       colorPreset: args['color-preset'] || fileCfg.colorPreset,
+      lang: args.lang || fileCfg.lang,
       introBars: args['intro-bars'] !== undefined ? parseInt(args['intro-bars'], 10) : undefined,
       offsetMs: args['offset-ms'] !== undefined ? parseFloat(args['offset-ms']) : undefined,
     };
@@ -682,6 +685,7 @@ async function main() {
       substyle: args.substyle,
       beats: args.beats ? parseInt(args.beats, 10) : undefined,
       colorPreset: args['color-preset'],
+      lang: args.lang,
       introBars: args['intro-bars'] !== undefined ? parseInt(args['intro-bars'], 10) : undefined,
       offsetMs: args['offset-ms'] !== undefined ? parseFloat(args['offset-ms']) : undefined,
     };

@@ -709,6 +709,14 @@ body.presentation #channelWatermark{display:flex;}
           <option value="metal">Metal (plata/rojo)</option>
           <option value="pop">Pop (rosa/lima)</option>
         </select></label>
+        <label>Idioma del vídeo: <select id="tvCfgLang" onchange="tvSync()">
+          <option value="es" selected>Español</option>
+          <option value="en">English</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="it">Italiano</option>
+          <option value="pt">Português</option>
+        </select></label>
       </div>
       <div class="field-row" style="margin-top:10px;gap:12px;align-items:center;">
         <label>Nº de compases: <input type="number" id="tvCfgBars" value="128" min="1" max="999" style="width:80px" oninput="tvSync()"></label>
@@ -7261,6 +7269,7 @@ function exportRhythmConfigFile(){
     offsetMs:parseFloat(document.getElementById('offsetMs')?.value)||0,
     extraSec:parseFloat(document.getElementById('videoExtraSec')?.value)||2,
     colorPreset:document.getElementById('tvCfgColorPreset')?.value||'rock',
+    lang:document.getElementById('tvCfgLang')?.value||'es',
   };
   const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='config.json';
@@ -10455,20 +10464,20 @@ function tvBuild(){
   <div id="tvStage">
     <svg width="0" height="0" style="position:absolute"><filter id="tvGrainFilter" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" result="tvGrainNoise"/><feColorMatrix in="tvGrainNoise" type="saturate" values="0"/></filter></svg>
     <div id="tvBg"></div><canvas id="tvParticles" width="1920" height="1080"></canvas><div id="tvFlash"></div><div id="tvGrain"></div>
-    <div id="tvCountdown"><div id="tvCountdownNum">4</div><div class="tv-countdown-lbl">GET READY</div></div>
+    <div id="tvCountdown"><div id="tvCountdownNum">4</div><div class="tv-countdown-lbl" id="tvLblGetReady">GET READY</div></div>
     <div class="tv-header left"><div class="tv-rock" id="tvOStyle">ROCK</div><div class="tv-rocksub" id="tvOSub">CLASSIC ROCK</div></div>
-    <div class="tv-header right"><div class="tv-brand">BANETMASA</div><div class="tv-brandsub">RHYTHMS</div></div>
+    <div class="tv-header right"><div class="tv-brand">BANETMASA</div><div class="tv-brandsub">TODO RITMOS</div></div>
     <div class="tv-col left">
       <div class="tv-card" id="tvCardSig">
-        <div class="tv-eyebrow">TIME SIGNATURE</div><div class="tv-big" id="tvOSig">4/4</div>
+        <div class="tv-eyebrow" id="tvLblSig">TIME SIGNATURE</div><div class="tv-big" id="tvOSig">4/4</div>
         <div class="tv-notebadge"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="var(--tv-c2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg></div>
         <div class="tv-foot" id="tvOBpbLabel" style="color:#68727f;font-size:14px;">4 BEATS PER BAR</div>
       </div>
     </div>
     <div class="tv-col right">
       <div class="tv-card" id="tvCardBar">
-        <div class="tv-eyebrow">BAR</div><div class="tv-big" id="tvOBar">1</div>
-        <div class="tv-divider"></div><div class="tv-foot">OF <b id="tvOTotal">128</b></div>
+        <div class="tv-eyebrow" id="tvLblBar">BAR</div><div class="tv-big" id="tvOBar">1</div>
+        <div class="tv-divider"></div><div class="tv-foot"><span id="tvLblOf">OF</span> <b id="tvOTotal">128</b></div>
       </div>
     </div>
     <div id="tvCircle">
@@ -10487,7 +10496,7 @@ function tvBuild(){
         <circle id="tvHeadGlow" cx="310" cy="60" r="16" fill="var(--tv-c1)" opacity=".55" filter="url(#tvSoft)"/>
         <circle id="tvHead" cx="310" cy="60" r="9" fill="#fff"/>
       </svg>
-      <div id="tvCenter"><div id="tvOBpm">85</div><div class="tv-bpmlbl">BPM</div><div class="tv-pill">TEMPO</div>
+      <div id="tvCenter"><div id="tvOBpm">85</div><div class="tv-bpmlbl">BPM</div><div class="tv-pill" id="tvLblTempo">TEMPO</div>
         <div class="tv-pill-next" id="tvNextChange" hidden></div>
       </div>
     </div>
@@ -10525,7 +10534,7 @@ function buildBeats(n){
       <circle class="bnext" cx="50" cy="50" r="${R}" fill="none" stroke="${accent?'var(--tv-c1-light)':'var(--tv-c2-light)'}" stroke-width="4" stroke-linecap="round"
               transform="rotate(-90 50 50)" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${C.toFixed(2)}"
               opacity="0" style="filter:drop-shadow(0 0 6px ${accent?'color-mix(in srgb, var(--tv-c1-light) 70%, transparent)':'color-mix(in srgb, var(--tv-c2-light) 70%, transparent)'})"/>
-    </svg></div><div class="tv-beatnum" style="${accent?'color:#fff':''}">${i+1}</div><div class="tv-beatrole" style="${accent?'color:var(--tv-c1)':''}">BEAT</div>`;
+    </svg></div><div class="tv-beatnum" style="${accent?'color:#fff':''}">${i+1}</div><div class="tv-beatrole" style="${accent?'color:var(--tv-c1)':''}">${tvT().beat}</div>`;
     refs.beats.appendChild(b); beatEls.push(b);
   }
   beatEls._C=C; // circunferencia del anillo de anticipación (para tvDrawPlaying)
@@ -10537,6 +10546,29 @@ function getCfgBeats(){return Math.max(1,parseInt(val('tvCfgBeats',4))||4);}
 function getCfgBars(){return Math.max(1,parseInt(val('tvCfgBars',128))||128);}
 function getCfgBPM(){try{return (typeof getBPM==='function'&&getBPM()>0)?getBPM():85;}catch(e){return 85;}}
 function fmtT(s){s=Math.max(0,Math.floor(s));const m=Math.floor(s/60),r=s%60;return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0');}
+
+/* ---- Idioma del vídeo (#tvCfgLang, por defecto español) ---- */
+/* Textos fijos de la pantalla del módulo Ritmo, sin complicarse la vida: solo las etiquetas
+   cortas de la propia pantalla (compás, "de", tempo, cuenta atrás, tiempo/beat, próximo cambio)
+   — ni "BANETMASA"/"TODO RITMOS" (firma del canal, no se traduce) ni "BPM" (abreviatura ya
+   universal) cambian con el idioma. Añadir un idioma nuevo es solo añadir una entrada aquí + una
+   <option> en #tvCfgLang. */
+const TV_I18N={
+  es:{sig:'COMPÁS',bar:'COMPÁS',of:'DE',tempo:'TEMPO',getReady:'PREPARADOS',beat:'TIEMPO',
+    beatsPerBar:n=>`${n} TIEMPOS POR COMPÁS`,nextIn:n=>`EN ${n} COMPASES`,nextBar:'PRÓXIMO COMPÁS'},
+  en:{sig:'TIME SIGNATURE',bar:'BAR',of:'OF',tempo:'TEMPO',getReady:'GET READY',beat:'BEAT',
+    beatsPerBar:n=>`${n} BEATS PER BAR`,nextIn:n=>`IN ${n} BARS`,nextBar:'NEXT BAR'},
+  fr:{sig:'SIGNATURE',bar:'MESURE',of:'SUR',tempo:'TEMPO',getReady:'PRÊTS',beat:'TEMPS',
+    beatsPerBar:n=>`${n} TEMPS PAR MESURE`,nextIn:n=>`DANS ${n} MESURES`,nextBar:'MESURE SUIVANTE'},
+  de:{sig:'TAKTART',bar:'TAKT',of:'VON',tempo:'TEMPO',getReady:'BEREIT MACHEN',beat:'SCHLAG',
+    beatsPerBar:n=>`${n} SCHLÄGE PRO TAKT`,nextIn:n=>`IN ${n} TAKTEN`,nextBar:'NÄCHSTER TAKT'},
+  it:{sig:'METRO',bar:'MISURA',of:'DI',tempo:'TEMPO',getReady:'PRONTI',beat:'BATTITO',
+    beatsPerBar:n=>`${n} TEMPI PER MISURA`,nextIn:n=>`TRA ${n} MISURE`,nextBar:'PROSSIMA MISURA'},
+  pt:{sig:'COMPASSO',bar:'COMPASSO',of:'DE',tempo:'TEMPO',getReady:'PREPARAR',beat:'TEMPO',
+    beatsPerBar:n=>`${n} TEMPOS POR COMPASSO`,nextIn:n=>`EM ${n} COMPASSOS`,nextBar:'PRÓXIMO COMPASSO'},
+};
+function getCfgLang(){const v=(val('tvCfgLang','es')||'es').toLowerCase();return TV_I18N[v]?v:'es';}
+function tvT(){return TV_I18N[getCfgLang()];}
 
 /* ---- Recibe el nº de compases real desde el XML (hook desde loadXML) ----
    Más fiable que "Calcular desde el audio": no depende de audioEl.duration,
@@ -10579,10 +10611,15 @@ window.tvSync=function(){
   const beats=getCfgBeats();
   if(beatEls.length!==beats) buildBeats(beats);
   const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
+  const t=tvT();
   set('tvOStyle',(val('tvCfgStyle','ROCK')||'ROCK').toUpperCase());
   set('tvOSub',(val('tvCfgSub','')||'').toUpperCase());
   set('tvOSig',beats+'/4');
-  set('tvOBpbLabel',beats+' BEATS PER BAR');
+  set('tvOBpbLabel',t.beatsPerBar(beats));
+  set('tvLblSig',t.sig); set('tvLblBar',t.bar); set('tvLblOf',t.of); set('tvLblTempo',t.tempo); set('tvLblGetReady',t.getReady);
+  // Las etiquetas "BEAT" de tv-beatrole se regeneran en buildBeats() solo si CAMBIA el nº de
+  // tiempos por compás — si lo único que cambia es el idioma, hay que refrescarlas aquí a mano.
+  if(refs.beats)refs.beats.querySelectorAll('.tv-beatrole').forEach(el=>{el.textContent=t.beat;});
   set('tvOBpm',getCfgBPM());
   set('tvOTotal',getCfgBars());
   set('tvOBar','1');
@@ -10642,7 +10679,8 @@ function tvUpdateNextChange(curBarIdx,tempoMapMode){
   const barsLeft=next.barIdx-Math.max(0,curBarIdx);
   el.hidden=false;
   el.classList.toggle('tv-pill-close',barsLeft<=TV_NEXT_CHANGE_CLOSE_BARS);
-  tvSetText('tvNextChange',(barsLeft===1?'NEXT BAR':'IN '+barsLeft+' BARS')+' → '+Math.round(next.bpm)+' BPM');
+  const t=tvT();
+  tvSetText('tvNextChange',(barsLeft===1?t.nextBar:t.nextIn(barsLeft))+' → '+Math.round(next.bpm)+' BPM');
 }
 
 /* ---- Partículas ---- */
@@ -10875,7 +10913,7 @@ window.tvExport={
     setVal('tvCfgStyle',cfg.style); setVal('tvCfgSub',cfg.substyle);
     setVal('tvCfgBeats',cfg.beats); setVal('bpmInput',cfg.bpm);
     setVal('tvCfgBars',cfg.bars); setVal('introCount',cfg.introBars); setVal('offsetMs',cfg.offsetMs);
-    setVal('tvCfgColorPreset',cfg.colorPreset);
+    setVal('tvCfgColorPreset',cfg.colorPreset); setVal('tvCfgLang',cfg.lang);
     if(getExerciseType()!=='rhythm'){ setExerciseType('rhythm'); }else{ tvShow(); }
     tvSync();
     stopAmbient(); // el script pinta cada fotograma a mano; el bucle idle solo estorbaría
