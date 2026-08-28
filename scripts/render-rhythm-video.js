@@ -70,6 +70,14 @@
  *                                                se deriva del nombre del audio).
  *   --strict                                     Aborta (ese vídeo, o todo en modo --xml) si el
  *                                                XML tiene algún aviso grave de progresión de tempo.
+ *   --chapters-every <n>                          Cada cuántos BPM marcar un capítulo de YouTube
+ *                                                en el .txt que se deja junto al vídeo (por
+ *                                                defecto: 10 — ver generate-youtube-chapters.js).
+ *
+ * Junto a cada vídeo de tempo progresivo se genera también un <nombre>.txt con las líneas
+ * "M:SS XX BPM" listas para pegar en la descripción o en un comentario de YouTube — así el
+ * espectador puede saltar directamente a, por ejemplo, "cuando suena a 60 BPM". Para generarlo
+ * suelto (sin renderizar nada): node scripts/generate-youtube-chapters.js --xml tema.xml.
  *
  * Opciones (ambos modos):
  *   --app <path>         Ruta al HTML de la app (por defecto: guitarvisualizer.html)
@@ -92,9 +100,31 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileP = promisify(execFile);
 const { parseTempoByMeasure, analyzeTempoProgression } = require('./lib/tempo-progression');
+const { buildChapters, fmtChapter } = require('./generate-youtube-chapters');
 
 const AUDIO_EXT_RE = /\.(m4a|mp3|wav|aac)$/i;
 const XML_EXT_RE = /\.xml$/i;
+
+// Capítulos de YouTube (ver scripts/generate-youtube-chapters.js): junto a cada vídeo de tempo
+// progresivo se deja un <nombre>.txt con las líneas "M:SS XX BPM" listas para pegar en la
+// descripción o en un comentario del vídeo — así el espectador puede saltar directamente a, por
+// ejemplo, "cuando suena a 60 BPM" sin tener que buscarlo a mano.
+function writeYoutubeChapters(xmlPath, cfg, txtPath, log) {
+  try {
+    const xmlText = fs.readFileSync(xmlPath, 'utf8');
+    const chapters = buildChapters(xmlText, {
+      beats: cfg.beats || 4,
+      every: cfg.chaptersEvery || 10,
+      introBars: cfg.introBars,
+      offSec: (cfg.offsetMs || 0) / 1000,
+    });
+    const text = chapters.map((c) => `${fmtChapter(c.sec)} ${c.bpm} BPM`).join('\n');
+    fs.writeFileSync(txtPath, text + '\n');
+    log(`capítulos de YouTube: ${txtPath}`);
+  } catch (e) {
+    log(`⚠ no se pudieron generar los capítulos de YouTube: ${e.message}`);
+  }
+}
 
 // Avisa si la progresión de tempo del XML tiene algún salto de BPM o de compases que no encaja
 // con el patrón del resto del tema — ver scripts/lib/tempo-progression.js. Antes de grabar nada,
@@ -315,9 +345,16 @@ async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audi
   // más arriba). Solo aplica si hay claqueta (introBars>0) — sin ella no hay etiqueta que medir.
   if (expectedContentSec > 0) {
     let curTrim = trimOffsetSec;
-    // Cada pasada corrige por el desfase medido, pero esa propia medición tiene su margen de
-    // error — una sola pasada podía dejar un resto por encima de la propia tolerancia. Se repite
-    // hasta entrar en tolerancia o agotar intentos.
+    // Mejor recorte CONFIRMADO por una medición (no un intento a ciegas todavía sin verificar).
+    // Caso real, ago 2026 (TriadasMenoresPorQuintas-123-1): intento 2 medía un desfase de 84ms
+    // (ya muy bueno) pero, al seguir fuera de la tolerancia de 50ms, el bucle probaba un intento
+    // 3 — cuya MEDICIÓN previa a corregir venía de una lectura ruidosa del detector (un salto de
+    // casi 1s sin motivo real, ver comentario de detectOverlayFadeNear/detectContentChangeNear) —
+    // y aplicaba una corrección a ciegas sobre esa lectura mala, sin volver a medirla. El vídeo
+    // resultante quedaba con ~1,5s de desfase real (el panel "AHORA" aparecía antes de que sonara
+    // el audio real), peor que el intento 2 ya descartado. Quedarse con el MEJOR gap medido evita
+    // que un intento final más ruidoso empeore un resultado ya bueno.
+    let bestTrim = curTrim, bestGap = Infinity;
     for (let attempt = 1; attempt <= 3; attempt++) {
       const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
       const videoChange = audioOnset != null ? await detectOverlayFadeNear(outPath, expectedContentSec, 4) : null;
@@ -327,6 +364,7 @@ async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audi
       }
       const gap = audioOnset - videoChange;
       log(`comprobación de sync (intento ${attempt}): audio en ${audioOnset.toFixed(2)}s, vídeo cambia en ${videoChange.toFixed(2)}s (desfase ${(gap * 1000).toFixed(0)}ms)`);
+      if (Math.abs(gap) < Math.abs(bestGap)) { bestGap = gap; bestTrim = curTrim; }
       if (Math.abs(gap) <= SYNC_TOLERANCE_SEC) break;
       if (Math.abs(gap) >= SYNC_MAX_CORRECTION_SEC) {
         log('⚠ desfase medido demasiado grande para corregir automáticamente — revisar a mano');
@@ -339,6 +377,10 @@ async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audi
       log(`corrigiendo recorte de arranque: → ${curTrim.toFixed(3)}s…`);
       await mux(curTrim);
       if (attempt === 3) log('⚠ sigue fuera de tolerancia tras 3 intentos — revisar a mano');
+    }
+    if (bestTrim !== curTrim) {
+      log(`el último intento no fue el mejor medido — remezclando con el mejor recorte confirmado (${bestTrim.toFixed(3)}s, desfase ${(bestGap * 1000).toFixed(0)}ms)…`);
+      await mux(bestTrim);
     }
   }
 
@@ -626,6 +668,7 @@ async function main() {
       beats: args.beats ? parseInt(args.beats, 10) : fileCfg.beats,
       colorPreset: args['color-preset'] || fileCfg.colorPreset,
       lang: args.lang || fileCfg.lang,
+      chaptersEvery: args['chapters-every'] ? parseInt(args['chapters-every'], 10) : fileCfg.chaptersEvery,
       introBars: args['intro-bars'] !== undefined ? parseInt(args['intro-bars'], 10) : undefined,
       offsetMs: args['offset-ms'] !== undefined ? parseFloat(args['offset-ms']) : undefined,
     };
@@ -656,6 +699,7 @@ async function main() {
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gv-rhythm-'));
       try {
         await runOneXml({ appUrl, xmlPath: job.xmlPath, audioPath: job.audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag: job.tag, strict: !!args.strict });
+        writeYoutubeChapters(job.xmlPath, cfg, path.join(outDir, `${job.tag}.txt`), (msg) => console.log(`[${job.tag}] ${msg}`));
         ok++;
       } catch (e) {
         console.error(`✗ ${job.tag}: ${e.message}`);
@@ -686,6 +730,7 @@ async function main() {
       beats: args.beats ? parseInt(args.beats, 10) : undefined,
       colorPreset: args['color-preset'],
       lang: args.lang,
+      chaptersEvery: args['chapters-every'] ? parseInt(args['chapters-every'], 10) : undefined,
       introBars: args['intro-bars'] !== undefined ? parseInt(args['intro-bars'], 10) : undefined,
       offsetMs: args['offset-ms'] !== undefined ? parseFloat(args['offset-ms']) : undefined,
     };
@@ -699,6 +744,7 @@ async function main() {
     const t0 = Date.now();
     try {
       const outPath = await runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict: !!args.strict });
+      writeYoutubeChapters(xmlPath, cfg, path.join(outDir, `${tag}.txt`), console.log);
       console.log(`\nHecho en ${((Date.now() - t0) / 1000).toFixed(1)}s: ${outPath}`);
     } catch (e) {
       console.error(`✗ ${tag}: ${e.message}`);

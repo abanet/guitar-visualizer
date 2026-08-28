@@ -297,6 +297,17 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
   // medir. Mismo patrón que render-rhythm-video.js: varias pasadas hasta entrar en tolerancia.
   if (expectedContentSec > 0) {
     let curTrim = trimOffsetSec;
+    // Mejor recorte CONFIRMADO por una medición (no un intento a ciegas todavía sin verificar).
+    // Caso real, ago 2026 (TriadasMenoresPorQuintas-123-1): intento 2 medía un desfase de 84ms
+    // (ya muy bueno) pero, al seguir fuera de la tolerancia de 50ms, el bucle probaba un intento
+    // 3 — cuya lectura previa a corregir venía de un salto ruidoso del detector de cambio visual
+    // (~1s sin motivo real: el panel "AHORA" no se mueve de sitio, pero las animaciones de fondo
+    // del ejercicio de tríadas pueden confundirlo) — y aplicaba una corrección a ciegas sobre esa
+    // lectura mala, sin volver a medirla. El vídeo resultante quedaba con ~1,5s de desfase real
+    // (el panel "AHORA" aparecía antes de que sonara el audio real), peor que el intento 2 ya
+    // descartado. Quedarse con el MEJOR gap medido evita que un intento final más ruidoso
+    // empeore un resultado ya bueno.
+    let bestTrim = curTrim, bestGap = Infinity;
     for (let attempt = 1; attempt <= 3; attempt++) {
       const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
       const videoChange = audioOnset != null ? await detectContentChangeNear(outPath, expectedContentSec, 4, width, height) : null;
@@ -306,6 +317,7 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
       }
       const gap = audioOnset - videoChange;
       log(`comprobación de sync (intento ${attempt}): audio en ${audioOnset.toFixed(2)}s, vídeo cambia en ${videoChange.toFixed(2)}s (desfase ${(gap * 1000).toFixed(0)}ms)`);
+      if (Math.abs(gap) < Math.abs(bestGap)) { bestGap = gap; bestTrim = curTrim; }
       if (Math.abs(gap) <= SYNC_TOLERANCE_SEC) break;
       if (Math.abs(gap) >= SYNC_MAX_CORRECTION_SEC) {
         log('⚠ desfase medido demasiado grande para corregir automáticamente — revisar a mano');
@@ -318,6 +330,10 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
       log(`corrigiendo recorte de arranque: → ${curTrim.toFixed(3)}s…`);
       await mux(curTrim);
       if (attempt === 3) log('⚠ sigue fuera de tolerancia tras 3 intentos — revisar a mano');
+    }
+    if (bestTrim !== curTrim) {
+      log(`el último intento no fue el mejor medido — remezclando con el mejor recorte confirmado (${bestTrim.toFixed(3)}s, desfase ${(bestGap * 1000).toFixed(0)}ms)…`);
+      await mux(bestTrim);
     }
   }
 
