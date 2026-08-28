@@ -239,6 +239,14 @@ async function detectContentDurationSeconds(audioPath, containerDuration) {
 const SYNC_LONG_GAP_SEC = 0.22; // hueco típico del click de conteo; un silencio musical breve no llega a esto
 const SYNC_TOLERANCE_SEC = 0.05;
 const SYNC_MAX_CORRECTION_SEC = 2; // por seguridad: no aplicar una "corrección" descabellada si la medición falla
+// El recorte inicial (trimOffsetSec, medido en el navegador con el evento 'playing') solo tiene
+// el ruido documentado más arriba (±0.3-0.5s). Caso real, ago 2026 (Tríadas Menores por Quintas):
+// una corrección que se alejaba >1.5s de ese recorte inicial dejaba el vídeo con la claqueta
+// visualmente CORTADA (el primer fotograma ya mostraba el tercer tiempo del metrónomo en vez del
+// primero) aunque la comprobación automática "convergiera" — el detector había enganchado un
+// evento visual distinto al real. Una corrección que se aleja más de esto del recorte inicial
+// es más probable que sea ruido del detector que un desfase real, así que no se acepta.
+const SYNC_MAX_DRIFT_FROM_BASELINE_SEC = 0.8;
 
 // Busca, cerca de `nearSec` (el instante teórico en que debería acabar la claqueta, según
 // config), el hueco de silencio "largo" (>= SYNC_LONG_GAP_SEC) cuyo final está MÁS CERCA de
@@ -345,15 +353,18 @@ async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audi
   // más arriba). Solo aplica si hay claqueta (introBars>0) — sin ella no hay etiqueta que medir.
   if (expectedContentSec > 0) {
     let curTrim = trimOffsetSec;
-    // Mejor recorte CONFIRMADO por una medición (no un intento a ciegas todavía sin verificar).
-    // Caso real, ago 2026 (TriadasMenoresPorQuintas-123-1): intento 2 medía un desfase de 84ms
-    // (ya muy bueno) pero, al seguir fuera de la tolerancia de 50ms, el bucle probaba un intento
-    // 3 — cuya MEDICIÓN previa a corregir venía de una lectura ruidosa del detector (un salto de
-    // casi 1s sin motivo real, ver comentario de detectOverlayFadeNear/detectContentChangeNear) —
-    // y aplicaba una corrección a ciegas sobre esa lectura mala, sin volver a medirla. El vídeo
-    // resultante quedaba con ~1,5s de desfase real (el panel "AHORA" aparecía antes de que sonara
-    // el audio real), peor que el intento 2 ya descartado. Quedarse con el MEJOR gap medido evita
-    // que un intento final más ruidoso empeore un resultado ya bueno.
+    const baselineTrim = trimOffsetSec;
+    // Mejor recorte CONFIRMADO por una medición (no un intento a ciegas todavía sin verificar),
+    // y que además no se haya alejado más de SYNC_MAX_DRIFT_FROM_BASELINE_SEC del recorte inicial
+    // (ver comentario de esa constante). Caso real, ago 2026 (TriadasMenoresPorQuintas-123-1):
+    // intento 2 medía un desfase de 84ms (ya muy bueno) pero, al seguir fuera de la tolerancia de
+    // 50ms, el bucle probaba un intento 3 — cuya MEDICIÓN previa a corregir venía de una lectura
+    // ruidosa del detector (un salto de casi 1s sin motivo real, ver comentario de
+    // detectOverlayFadeNear/detectContentChangeNear) — y aplicaba una corrección a ciegas sobre
+    // esa lectura mala, sin volver a medirla. El vídeo resultante quedaba con ~1,5s de desfase
+    // real (el panel "AHORA" aparecía antes de que sonara el audio real), peor que el intento 2 ya
+    // descartado. Quedarse con el MEJOR gap medido evita que un intento final más ruidoso empeore
+    // un resultado ya bueno.
     let bestTrim = curTrim, bestGap = Infinity;
     for (let attempt = 1; attempt <= 3; attempt++) {
       const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
@@ -364,7 +375,8 @@ async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audi
       }
       const gap = audioOnset - videoChange;
       log(`comprobación de sync (intento ${attempt}): audio en ${audioOnset.toFixed(2)}s, vídeo cambia en ${videoChange.toFixed(2)}s (desfase ${(gap * 1000).toFixed(0)}ms)`);
-      if (Math.abs(gap) < Math.abs(bestGap)) { bestGap = gap; bestTrim = curTrim; }
+      const withinDrift = Math.abs(curTrim - baselineTrim) <= SYNC_MAX_DRIFT_FROM_BASELINE_SEC;
+      if (withinDrift && Math.abs(gap) < Math.abs(bestGap)) { bestGap = gap; bestTrim = curTrim; }
       if (Math.abs(gap) <= SYNC_TOLERANCE_SEC) break;
       if (Math.abs(gap) >= SYNC_MAX_CORRECTION_SEC) {
         log('⚠ desfase medido demasiado grande para corregir automáticamente — revisar a mano');
@@ -373,7 +385,12 @@ async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audi
       // trim=start=X desplaza el contenido a "raw_time - X" en la salida: recortar MÁS (subir X)
       // adelanta el contenido (tiempos de salida más pequeños), no lo retrasa — de ahí el signo
       // negativo. Con el signo cambiado (bug real, ago 2026) cada intento empeoraba el desfase.
-      curTrim = Math.max(0, curTrim - gap);
+      const candidateTrim = Math.max(0, curTrim - gap);
+      if (Math.abs(candidateTrim - baselineTrim) > SYNC_MAX_DRIFT_FROM_BASELINE_SEC) {
+        log(`⚠ la corrección se alejaría ${(candidateTrim - baselineTrim).toFixed(2)}s del recorte inicial — probablemente el detector está siguiendo ruido, no se aplica`);
+        break;
+      }
+      curTrim = candidateTrim;
       log(`corrigiendo recorte de arranque: → ${curTrim.toFixed(3)}s…`);
       await mux(curTrim);
       if (attempt === 3) log('⚠ sigue fuera de tolerancia tras 3 intentos — revisar a mano');
