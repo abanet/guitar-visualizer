@@ -46,6 +46,19 @@
  *   node scripts/render-rhythm-video.js --xml tema.xml --audio tema.m4a \
  *     --style ROCK --substyle "Pop Ballad" --color-preset rock
  *
+ * Para varios temas a la vez (--xml-dir): deja en la misma carpeta un par XML+audio por tema,
+ * con el MISMO NOMBRE BASE (tema1.xml + tema1.m4a, tema2.xml + tema2.m4a…) y opcionalmente un
+ * config.json compartido (mismas claves que arriba). Se generan de uno en uno, nunca en paralelo:
+ *   node scripts/render-rhythm-video.js --xml-dir ./mis-ritmos/progresivos --style ROCK
+ *
+ * Antes de grabar cada tema se comprueba que su mapa de tempo (XML) tenga una progresión
+ * coherente — mismo BPM de salto y mismo nº de compases entre saltos a lo largo del tema— y se
+ * avisa en el log si algún salto no encaja con el patrón del resto, típico de un escalón de tempo
+ * olvidado al montar el Tempo Track en BiaB. Por defecto solo AVISA y sigue generando el vídeo;
+ * con --strict, un aviso grave aborta ese vídeo ANTES de abrir el navegador (en --xml-dir se salta
+ * solo ese tema y sigue con el resto del lote; en --xml se aborta sin generar nada). Para revisar
+ * los XML ANTES de generar nada: node scripts/check-tempo-xml.js --dir <carpeta> (ver ese script).
+ *
  * Opciones propias de este modo (todas opcionales salvo --xml/--audio):
  *   --style/--substyle/--beats/--color-preset   Igual que en config.json (por defecto: los que
  *                                                traiga la app al cargar, p.ej. beats=4).
@@ -53,6 +66,8 @@
  *                                                (intro por el primer acorde, offset 0).
  *   --name <texto>                               Nombre base del archivo de salida (por defecto:
  *                                                se deriva del nombre del audio).
+ *   --strict                                     Aborta (ese vídeo, o todo en modo --xml) si el
+ *                                                XML tiene algún aviso grave de progresión de tempo.
  *
  * Opciones (ambos modos):
  *   --app <path>         Ruta al HTML de la app (por defecto: guitarvisualizer.html)
@@ -74,8 +89,26 @@ const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileP = promisify(execFile);
+const { parseTempoByMeasure, analyzeTempoProgression } = require('./lib/tempo-progression');
 
 const AUDIO_EXT_RE = /\.(m4a|mp3|wav|aac)$/i;
+const XML_EXT_RE = /\.xml$/i;
+
+// Avisa si la progresión de tempo del XML tiene algún salto de BPM o de compases que no encaja
+// con el patrón del resto del tema — ver scripts/lib/tempo-progression.js. Antes de grabar nada,
+// así el aviso queda arriba del todo del log y no se pierde entre el resto de líneas. Con
+// strict=true, un aviso "grave" (severity 'warn') aborta ANTES de abrir el navegador — nunca deja
+// generar un vídeo silenciosamente sobre un XML con la progresión rota.
+function checkTempoProgression(xmlPath, log, strict) {
+  const xmlText = fs.readFileSync(xmlPath, 'utf8');
+  const { issues, note } = analyzeTempoProgression(parseTempoByMeasure(xmlText));
+  if (note) { log(`tempo: ${note}`); return; }
+  issues.forEach((i) => log(`${i.severity === 'warn' ? '⚠ POSIBLE ERROR DE TEMPO' : 'ℹ tempo'}: ${i.message}`));
+  const grave = issues.filter((i) => i.severity === 'warn');
+  if (strict && grave.length) {
+    throw new Error(`--strict: ${grave.length} aviso(s) grave(s) de progresión de tempo — revisa el XML antes de generar el vídeo (usa check-tempo-xml.js para el detalle, o quita --strict para generarlo de todas formas).`);
+  }
+}
 
 function parseArgs(argv) {
   const out = {};
@@ -109,6 +142,28 @@ async function getAudioDurationSeconds(audioPath) {
     if (!m) throw new Error('No se pudo leer la duración de ' + audioPath);
     return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseFloat(m[3]);
   }
+}
+
+// Empareja un XML con su audio en modo --xml-dir. BiaB no siempre exporta ambos con el mismo
+// nombre exacto: lo habitual es que el audio lleve un sufijo extra, típicamente "_Render"
+// (PopBalladProgresivo40-70-incr2.XML + PopBalladProgresivo40-70-incr2_Render.m4a — caso real,
+// ago 2026). Primero se prueba el nombre exacto; si no, un prefijo compartido con el otro nombre
+// (en cualquiera de los dos sentidos), exigiendo que lo que sobra empiece por un separador
+// (_, -, espacio…) para no confundir "tema1" con "tema10".
+function findMatchingAudio(files, xmlBase) {
+  const candidates = files.filter((f) => AUDIO_EXT_RE.test(f));
+  const exact = candidates.find((f) => path.parse(f).name === xmlBase);
+  if (exact) return exact;
+  const boundaryOk = (rest) => rest === '' || !/^[a-z0-9]/i.test(rest);
+  const prefixMatches = candidates.filter((f) => {
+    const b = path.parse(f).name;
+    if (b.length > xmlBase.length && b.startsWith(xmlBase)) return boundaryOk(b.slice(xmlBase.length));
+    if (xmlBase.length > b.length && xmlBase.startsWith(b)) return boundaryOk(xmlBase.slice(b.length));
+    return false;
+  });
+  if (prefixMatches.length === 1) return prefixMatches[0];
+  if (prefixMatches.length > 1) console.warn(`⚠ ${xmlBase}: varios audios podrían corresponder (${prefixMatches.join(', ')}) — renómbralos sin ambigüedad.`);
+  return null;
 }
 
 // BPM = número final del nombre de archivo (sin extensión), ej. "Rock E12STSS_Render60" → 60.
@@ -405,7 +460,7 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
 // calculan aquí: se dejan en manos del propio motor (tvGetDuration(), tras cargar el XML), que
 // ya sabe seguir los cambios de tempo compás a compás — replicar esa matemática en Node sería la
 // forma más fácil de que este script y la app se desincronizaran entre sí con el tiempo.
-async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag }) {
+async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict }) {
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
   const audioDuration = await getAudioDurationSeconds(audioPath);
@@ -413,6 +468,7 @@ async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, hei
   if (contentDuration < audioDuration - 1) {
     log(`⚠ silencio final detectado: recorto ${(audioDuration - contentDuration).toFixed(1)}s (contenido real ${contentDuration.toFixed(1)}s de ${audioDuration.toFixed(1)}s)`);
   }
+  checkTempoProgression(xmlPath, log, strict);
 
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({
@@ -532,9 +588,10 @@ async function runPool(jobs, concurrency, worker) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.dir && !args.xml) {
+  if (!args.dir && !args.xml && !args['xml-dir']) {
     console.error('Uso: node scripts/render-rhythm-video.js --dir <carpeta-con-audios-y-config.json> [opciones]');
     console.error('  o (tempo progresivo): node scripts/render-rhythm-video.js --xml <archivo.xml> --audio <archivo.m4a> [opciones]');
+    console.error('  o (tempo progresivo, varios temas): node scripts/render-rhythm-video.js --xml-dir <carpeta-con-pares-xml+audio> [opciones]');
     process.exit(1);
   }
   await waitFfmpeg();
@@ -546,6 +603,69 @@ async function main() {
   const height = args.height ? parseInt(args.height, 10) : 1080;
 
   if (!fs.existsSync(appPath)) { console.error('No existe: ' + appPath); process.exit(1); }
+
+  // ---- Modo tempo progresivo POR LOTES (--xml-dir): una carpeta con varios pares XML+audio (el
+  // mismo nombre base, p.ej. tema1.xml + tema1.m4a, tema2.xml + tema2.m4a…) — un vídeo por par,
+  // generados DE UNO EN UNO. Nunca en paralelo: cada uno graba en tiempo real con Playwright,
+  // solaparlos no ahorra tiempo real y sí arriesga interferencias entre grabaciones (mismo motivo
+  // por el que --dir por defecto ya usa concurrency=1). config.json en la carpeta (opcional,
+  // mismas claves que el modo --xml de un único tema) se aplica a TODOS los pares; los flags de
+  // línea de comandos (--style/--substyle/…), si se pasan, pisan lo que traiga config.json.
+  if (args['xml-dir']) {
+    const dir = path.resolve(args['xml-dir']);
+    if (!fs.existsSync(dir)) { console.error('No existe: ' + dir); process.exit(1); }
+
+    const configPath = path.join(dir, 'config.json');
+    const fileCfg = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
+    const extraSec = args.extra !== undefined ? parseFloat(args.extra) : (fileCfg.extraSec != null ? fileCfg.extraSec : 2);
+    const cfg = {
+      style: args.style || fileCfg.style,
+      substyle: args.substyle || fileCfg.substyle,
+      beats: args.beats ? parseInt(args.beats, 10) : fileCfg.beats,
+      colorPreset: args['color-preset'] || fileCfg.colorPreset,
+      introBars: args['intro-bars'] !== undefined ? parseInt(args['intro-bars'], 10) : undefined,
+      offsetMs: args['offset-ms'] !== undefined ? parseFloat(args['offset-ms']) : undefined,
+    };
+
+    const files = fs.readdirSync(dir);
+    const xmlFiles = files.filter((f) => XML_EXT_RE.test(f)).sort();
+    if (!xmlFiles.length) { console.error('No hay ningún .xml en ' + dir); process.exit(1); }
+
+    const jobs = [];
+    for (const xf of xmlFiles) {
+      const base = path.parse(xf).name;
+      const af = findMatchingAudio(files, base);
+      if (!af) { console.warn(`⚠ ${xf}: no se encontró un audio a juego (${base}.m4a/.mp3/… o ${base}_Render.m4a/…) — se omite.`); continue; }
+      jobs.push({ xmlPath: path.join(dir, xf), audioPath: path.join(dir, af), tag: base });
+    }
+    if (!jobs.length) { console.error('Ningún XML tenía un audio emparejado en ' + dir); process.exit(1); }
+
+    fs.mkdirSync(outDir, { recursive: true });
+    const appUrl = 'file://' + appPath;
+
+    console.log(`Generando ${jobs.length} vídeo(s) de tempo progresivo, de uno en uno…`);
+    const t0 = Date.now();
+    let ok = 0;
+    const failed = [];
+    for (let i = 0; i < jobs.length; i++) {
+      const job = jobs[i];
+      console.log(`\n[${i + 1}/${jobs.length}] ${job.tag}`);
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gv-rhythm-'));
+      try {
+        await runOneXml({ appUrl, xmlPath: job.xmlPath, audioPath: job.audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag: job.tag, strict: !!args.strict });
+        ok++;
+      } catch (e) {
+        console.error(`✗ ${job.tag}: ${e.message}`);
+        failed.push(job.tag);
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    }
+    console.log(`\nHecho en ${((Date.now() - t0) / 1000).toFixed(1)}s: ${ok}/${jobs.length} vídeos generados en ${outDir}`);
+    if (failed.length) console.error(`  ✗ fallaron: ${failed.join(', ')}`);
+    process.exitCode = failed.length ? 1 : 0;
+    return;
+  }
 
   // ---- Modo tempo progresivo (--xml): un XML + un audio = un único vídeo. No toca nada del
   // modo --dir de abajo (BPM fijo por nombre de archivo) — son caminos totalmente separados. ----
@@ -574,7 +694,7 @@ async function main() {
     console.log(`Generando vídeo de tempo progresivo (${tag})…`);
     const t0 = Date.now();
     try {
-      const outPath = await runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag });
+      const outPath = await runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict: !!args.strict });
       console.log(`\nHecho en ${((Date.now() - t0) / 1000).toFixed(1)}s: ${outPath}`);
     } catch (e) {
       console.error(`✗ ${tag}: ${e.message}`);
