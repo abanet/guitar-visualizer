@@ -32,7 +32,7 @@
  *     "beats": 4, "introBars": 1, "offsetMs": 0, "extraSec": 2
  *   }
  * colorPreset es uno de los presets de TV_COLOR_PRESETS en guitarvisualizer.html (rock, funk,
- * jazz, blues, metal, pop) — controla el acento de color del diseño, no solo el texto.
+ * jazz, blues, metal, pop, reggae) — controla el acento de color del diseño, no solo el texto.
  *
  * ---- MODO TEMPO PROGRESIVO (--xml) --------------------------------------------------------
  * Para un tema con cambios de tempo (BiaB exportado con un <sound tempo> por compás — ver el
@@ -79,8 +79,18 @@
  * espectador puede saltar directamente a, por ejemplo, "cuando suena a 60 BPM". Para generarlo
  * suelto (sin renderizar nada): node scripts/generate-youtube-chapters.js --xml tema.xml.
  *
+ * Comprobación de audio (ambos modos, siempre activa): si el silencio final recortado (ver
+ * detectContentDurationSeconds) dura MÁS que el propio contenido real, se aborta ESE vídeo antes
+ * de abrir el navegador —típico de un export de BiaB cortado a medias (el nº de compases del
+ * proyecto no coincide con el audio realmente generado)— en vez de sacar en silencio un vídeo
+ * "correcto" en duración pero mudo casi entero. En --dir/--xml-dir se salta solo ese archivo y
+ * sigue con el resto del lote (igual que --strict); usa --allow-short-audio para generarlo de
+ * todas formas si el silencio final es intencionado.
+ *
  * Opciones (ambos modos):
  *   --app <path>         Ruta al HTML de la app (por defecto: guitarvisualizer.html)
+ *   --allow-short-audio   Genera el vídeo aunque el silencio final recortado sea mayor que el
+ *                         contenido real (ver "Comprobación de audio" arriba)
  *   --dir <path>          Carpeta con los audios + config.json (modo BPM fijo, ver arriba)
  *   --xml <path>          MusicXML con mapa de tempo (modo tempo progresivo, ver arriba)
  *   --audio <path>        Audio del tema (obligatorio junto a --xml)
@@ -229,24 +239,27 @@ async function detectContentDurationSeconds(audioPath, containerDuration) {
   return containerDuration;
 }
 
-// Corrección automática de sincronización (ago 2026): trimOffsetSec se basa en un timestamp
-// medido en el navegador (evento 'playing' de audioEl) que resultó tener ruido de ±0.3-0.5s de
-// una toma a otra —imperceptible a tempos bajos, pero muy visible a 160bpm, donde un solo tiempo
-// dura 375ms (caso reportado por Alberto: la claqueta seguía encendida en el último tiempo varios
-// cientos de ms después de que la música ya hubiera arrancado). En vez de fiarse solo de ese
-// timestamp, se mide el desfase real en el propio .mp4 ya generado y se corrige el recorte con
-// ese dato — ver SYNC_LONG_GAP_SEC/detectAudioOnsetNear/detectOverlayFadeNear más abajo.
+// Comprueba que el recorte de silencio final (arriba) no esconda un export de BiaB roto a
+// medias (caso real, ago 2026: un reggae a 200 compases donde el audio real solo llegaba al
+// compás ~35 y el resto —casi 7 minutos— era silencio digital puro; el vídeo salía "correcto"
+// pero con la inmensa mayoría del tema mudo). Una cola de silencio NORMAL es de pocos segundos;
+// si el silencio recortado dura MÁS que el propio contenido real, es mucho más probable que sea
+// un export truncado que una cola de verdad, así que se aborta ese vídeo por defecto —evita sacar
+// vídeos sin sonido por un error humano en BiaB que pasa desapercibido en un lote grande.
+function checkAudioContent(audioDuration, contentDuration, log, allowShortAudio) {
+  const trimmedSec = audioDuration - contentDuration;
+  if (trimmedSec <= 1) return;
+  log(`⚠ silencio final detectado: recorto ${trimmedSec.toFixed(1)}s (contenido real ${contentDuration.toFixed(1)}s de ${audioDuration.toFixed(1)}s)`);
+  if (trimmedSec > contentDuration && !allowShortAudio) {
+    throw new Error(`el silencio final recortado (${trimmedSec.toFixed(1)}s) dura más que el contenido real (${contentDuration.toFixed(1)}s) — probable export de BiaB cortado a medias. Revisa el audio antes de generar el vídeo (o usa --allow-short-audio para generarlo igualmente).`);
+  }
+}
+
+// Detección (solo informativa — ver el comentario grande en muxAndSync sobre por qué NO se
+// corrige automáticamente) del instante real en que acaba la claqueta en el audio, para comparar
+// contra el recorte inicial medido en el navegador (evento 'playing' de audioEl, ±0.3-0.5s de
+// ruido documentado de una toma a otra).
 const SYNC_LONG_GAP_SEC = 0.22; // hueco típico del click de conteo; un silencio musical breve no llega a esto
-const SYNC_TOLERANCE_SEC = 0.05;
-const SYNC_MAX_CORRECTION_SEC = 2; // por seguridad: no aplicar una "corrección" descabellada si la medición falla
-// El recorte inicial (trimOffsetSec, medido en el navegador con el evento 'playing') solo tiene
-// el ruido documentado más arriba (±0.3-0.5s). Caso real, ago 2026 (Tríadas Menores por Quintas):
-// una corrección que se alejaba >1.5s de ese recorte inicial dejaba el vídeo con la claqueta
-// visualmente CORTADA (el primer fotograma ya mostraba el tercer tiempo del metrónomo en vez del
-// primero) aunque la comprobación automática "convergiera" — el detector había enganchado un
-// evento visual distinto al real. Una corrección que se aleja más de esto del recorte inicial
-// es más probable que sea ruido del detector que un desfase real, así que no se acepta.
-const SYNC_MAX_DRIFT_FROM_BASELINE_SEC = 0.8;
 
 // Busca, cerca de `nearSec` (el instante teórico en que debería acabar la claqueta, según
 // config), el hueco de silencio "largo" (>= SYNC_LONG_GAP_SEC) cuyo final está MÁS CERCA de
@@ -323,9 +336,10 @@ async function detectOverlayFadeNear(mp4Path, nearSec, windowAfterSec) {
   return null;
 }
 
-// Mezcla el vídeo silencioso con el audio real y corrige la sincronización automáticamente
-// (ver detectAudioOnsetNear/detectOverlayFadeNear más arriba). Compartida por runOne (modo BPM
-// fijo) y runOneXml (modo tempo progresivo) — la única diferencia entre ambos es CÓMO se calcula
+// Mezcla el vídeo silencioso con el audio real (sin corrección automática de sync, ver comentario
+// más abajo — detectAudioOnsetNear se deja solo como referencia informativa en el log). Compartida
+// por runOne (modo BPM fijo) y runOneXml (modo tempo progresivo) — la única diferencia entre ambos
+// es CÓMO se calcula
 // expectedContentSec (el instante teórico en que debería acabar la claqueta), no qué se hace con
 // ese número una vez calculado.
 async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audioPath, extraSec, outDir, appVersion, expectedContentSec }) {
@@ -349,71 +363,40 @@ async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audi
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
   await mux(trimOffsetSec);
 
-  // Comprobación + corrección de sincronización (ver detectAudioOnsetNear/detectOverlayFadeNear
-  // más arriba). Solo aplica si hay claqueta (introBars>0) — sin ella no hay etiqueta que medir.
+  // Auto-corrección de sincronización DESACTIVADA (ago 2026, caso real: reggae a 65-160bpm) —
+  // mismo motivo que ya se aplicó en scripts/lib/batch-sessions.js: detectAudioOnsetNear busca el
+  // hueco de silencio ≥SYNC_LONG_GAP_SEC más cercano al instante teórico, asumiendo que solo la
+  // claqueta deja huecos así de largos. El reggae "one drop" dificulta esto: el groove real deja
+  // silencios de un TIEMPO ENTERO (el bajo/bombo callan en el 1), así que además del hueco real de
+  // la claqueta hay huecos parecidos un tiempo completo antes/después dentro de la propia canción.
+  // En el lote de 21 tempos generado esa noche, 65-160bpm "convergieron" dentro de tolerancia pero
+  // enganchados al hueco equivocado —los golpes fuertes de la reproducción (2 y 4) aparecían
+  // desplazados al 1 y al 3—, mientras que 60bpm, donde la corrección midió un desfase absurdo y
+  // fue rechazada por SYNC_MAX_CORRECTION_SEC, se quedó con el recorte inicial sin tocar y salió
+  // bien. Convergencia dentro de tolerancia no implica enganchar el evento correcto: no es un fallo
+  // exclusivo de detectContentChangeNear (sesiones) — detectAudioOnsetNear/detectOverlayFadeNear
+  // tienen el mismo problema de fondo con un groove que tiene sus propios silencios largos. Se deja
+  // solo la detección de audio como referencia informativa; el recorte real es siempre
+  // trimOffsetSec (medido en el navegador, ±0.3-0.5s de ruido documentado — más perceptible cuanto
+  // más corto es el tiempo, ver bpm altos). Si se quiere reactivar, hace falta antes acotar
+  // detectAudioOnsetNear a huecos MUY cercanos al instante teórico (no "el más cercano" de una
+  // ventana ancha) para no confundir el groove con la claqueta.
   if (expectedContentSec > 0) {
-    let curTrim = trimOffsetSec;
-    const baselineTrim = trimOffsetSec;
-    // Mejor recorte CONFIRMADO por una medición (no un intento a ciegas todavía sin verificar),
-    // y que además no se haya alejado más de SYNC_MAX_DRIFT_FROM_BASELINE_SEC del recorte inicial
-    // (ver comentario de esa constante). Caso real, ago 2026 (TriadasMenoresPorQuintas-123-1):
-    // intento 2 medía un desfase de 84ms (ya muy bueno) pero, al seguir fuera de la tolerancia de
-    // 50ms, el bucle probaba un intento 3 — cuya MEDICIÓN previa a corregir venía de una lectura
-    // ruidosa del detector (un salto de casi 1s sin motivo real, ver comentario de
-    // detectOverlayFadeNear/detectContentChangeNear) — y aplicaba una corrección a ciegas sobre
-    // esa lectura mala, sin volver a medirla. El vídeo resultante quedaba con ~1,5s de desfase
-    // real (el panel "AHORA" aparecía antes de que sonara el audio real), peor que el intento 2 ya
-    // descartado. Quedarse con el MEJOR gap medido evita que un intento final más ruidoso empeore
-    // un resultado ya bueno.
-    let bestTrim = curTrim, bestGap = Infinity;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
-      const videoChange = audioOnset != null ? await detectOverlayFadeNear(outPath, expectedContentSec, 4) : null;
-      if (audioOnset == null || videoChange == null) {
-        log('⚠ no se pudo medir la sincronización automáticamente — revisar a mano si hay dudas');
-        break;
-      }
-      const gap = audioOnset - videoChange;
-      log(`comprobación de sync (intento ${attempt}): audio en ${audioOnset.toFixed(2)}s, vídeo cambia en ${videoChange.toFixed(2)}s (desfase ${(gap * 1000).toFixed(0)}ms)`);
-      const withinDrift = Math.abs(curTrim - baselineTrim) <= SYNC_MAX_DRIFT_FROM_BASELINE_SEC;
-      if (withinDrift && Math.abs(gap) < Math.abs(bestGap)) { bestGap = gap; bestTrim = curTrim; }
-      if (Math.abs(gap) <= SYNC_TOLERANCE_SEC) break;
-      if (Math.abs(gap) >= SYNC_MAX_CORRECTION_SEC) {
-        log('⚠ desfase medido demasiado grande para corregir automáticamente — revisar a mano');
-        break;
-      }
-      // trim=start=X desplaza el contenido a "raw_time - X" en la salida: recortar MÁS (subir X)
-      // adelanta el contenido (tiempos de salida más pequeños), no lo retrasa — de ahí el signo
-      // negativo. Con el signo cambiado (bug real, ago 2026) cada intento empeoraba el desfase.
-      const candidateTrim = Math.max(0, curTrim - gap);
-      if (Math.abs(candidateTrim - baselineTrim) > SYNC_MAX_DRIFT_FROM_BASELINE_SEC) {
-        log(`⚠ la corrección se alejaría ${(candidateTrim - baselineTrim).toFixed(2)}s del recorte inicial — probablemente el detector está siguiendo ruido, no se aplica`);
-        break;
-      }
-      curTrim = candidateTrim;
-      log(`corrigiendo recorte de arranque: → ${curTrim.toFixed(3)}s…`);
-      await mux(curTrim);
-      if (attempt === 3) log('⚠ sigue fuera de tolerancia tras 3 intentos — revisar a mano');
-    }
-    if (bestTrim !== curTrim) {
-      log(`el último intento no fue el mejor medido — remezclando con el mejor recorte confirmado (${bestTrim.toFixed(3)}s, desfase ${(bestGap * 1000).toFixed(0)}ms)…`);
-      await mux(bestTrim);
-    }
+    const audioOnset = await detectAudioOnsetNear(outPath, expectedContentSec, 3);
+    if (audioOnset != null) log(`referencia: audio real a partir de ${audioOnset.toFixed(2)}s (teórico ${expectedContentSec.toFixed(2)}s) — sin corrección automática, ver comentario`);
   }
 
   log(`✓ ${outPath}`);
   return outPath;
 }
 
-async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, outDir, tmpDir }) {
+async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, outDir, tmpDir, allowShortAudio }) {
   const tag = path.parse(audioPath).name;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
   const audioDuration = await getAudioDurationSeconds(audioPath);
   const contentDuration = await detectContentDurationSeconds(audioPath, audioDuration);
-  if (contentDuration < audioDuration - 1) {
-    log(`⚠ silencio final detectado: recorto ${(audioDuration - contentDuration).toFixed(1)}s (contenido real ${contentDuration.toFixed(1)}s de ${audioDuration.toFixed(1)}s)`);
-  }
+  checkAudioContent(audioDuration, contentDuration, log, allowShortAudio);
   log(`bpm=${bpm} · compás=${cfg.beats || 4}/4 · audio ${contentDuration.toFixed(1)}s`);
 
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -521,14 +504,12 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
 // calculan aquí: se dejan en manos del propio motor (tvGetDuration(), tras cargar el XML), que
 // ya sabe seguir los cambios de tempo compás a compás — replicar esa matemática en Node sería la
 // forma más fácil de que este script y la app se desincronizaran entre sí con el tiempo.
-async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict }) {
+async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict, allowShortAudio }) {
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
   const audioDuration = await getAudioDurationSeconds(audioPath);
   const contentDuration = await detectContentDurationSeconds(audioPath, audioDuration);
-  if (contentDuration < audioDuration - 1) {
-    log(`⚠ silencio final detectado: recorto ${(audioDuration - contentDuration).toFixed(1)}s (contenido real ${contentDuration.toFixed(1)}s de ${audioDuration.toFixed(1)}s)`);
-  }
+  checkAudioContent(audioDuration, contentDuration, log, allowShortAudio);
   checkTempoProgression(xmlPath, log, strict);
 
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -715,7 +696,7 @@ async function main() {
       console.log(`\n[${i + 1}/${jobs.length}] ${job.tag}`);
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gv-rhythm-'));
       try {
-        await runOneXml({ appUrl, xmlPath: job.xmlPath, audioPath: job.audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag: job.tag, strict: !!args.strict });
+        await runOneXml({ appUrl, xmlPath: job.xmlPath, audioPath: job.audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag: job.tag, strict: !!args.strict, allowShortAudio: !!args['allow-short-audio'] });
         writeYoutubeChapters(job.xmlPath, cfg, path.join(outDir, `${job.tag}.txt`), (msg) => console.log(`[${job.tag}] ${msg}`));
         ok++;
       } catch (e) {
@@ -760,7 +741,7 @@ async function main() {
     console.log(`Generando vídeo de tempo progresivo (${tag})…`);
     const t0 = Date.now();
     try {
-      const outPath = await runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict: !!args.strict });
+      const outPath = await runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict: !!args.strict, allowShortAudio: !!args['allow-short-audio'] });
       writeYoutubeChapters(xmlPath, cfg, path.join(outDir, `${tag}.txt`), console.log);
       console.log(`\nHecho en ${((Date.now() - t0) / 1000).toFixed(1)}s: ${outPath}`);
     } catch (e) {
@@ -801,7 +782,7 @@ async function main() {
   console.log(`Generando ${jobs.length} vídeos (concurrencia=${concurrency})…`);
   const t0 = Date.now();
   const results = await runPool(jobs, concurrency, (job) =>
-    runOne({ appUrl, audioPath: job.audioPath, bpm: job.bpm, cfg, extraSec, width, height, outDir, tmpDir })
+    runOne({ appUrl, audioPath: job.audioPath, bpm: job.bpm, cfg, extraSec, width, height, outDir, tmpDir, allowShortAudio: !!args['allow-short-audio'] })
   );
 
   const ok = results.filter((r) => r.ok).length;
