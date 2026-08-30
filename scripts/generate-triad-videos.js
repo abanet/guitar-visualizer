@@ -26,7 +26,11 @@
  *   --out <dir>            Carpeta de salida (por defecto: ./video-out)
  *   --extra <seg>         Segundos extra al final de cada vídeo (por defecto: 2)
  *   --cycle-len <n>       Compases por ciclo (por defecto: el que traiga el campo, 12)
- *   --vis-config <path>   JSON con la configuración de "Elementos" a aplicar (opcional)
+ *   --vis-config <path>   JSON con la configuración de "Elementos" a aplicar (opcional). Puede
+ *                         incluir "bgAuto":{"mode":"figure"|"scale"|"off","root":"C","scale":"major"}
+ *                         para el fondo automático (notas fantasma en todo el mástil) — si no se
+ *                         indica, sale activo en modo "figure" por defecto (ver
+ *                         project_triads_color_regression en memoria).
  *   --groups <lista>      Índices de grupo de cuerdas a generar, coma-separados (por defecto: 0,1,2,3)
  *   --invs <lista>        Índices de inversión a generar, coma-separados (por defecto: 0,1,2)
  *   --concurrency <n>     Vídeos en paralelo (por defecto: 1 — más sube el riesgo de saltos en la animación en máquinas de pocos núcleos)
@@ -167,6 +171,26 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cyc
         if (cfg.followVoice2) document.getElementById('followVoice2').value = cfg.followVoice2;
       }, visConfig);
     }
+
+    // "Fondo automático" (bgAuto: notas fantasma en todo el mástil) — es estado de SESIÓN, no
+    // localStorage, así que no lo cubre el bloque de gv_vis/gv_colors de arriba (bug real, ago
+    // 2026: generado así siempre salía con bgAuto.mode='off', sin fondo — ver
+    // project_triads_color_regression). Por defecto activo ('figure': muestra el resto de notas
+    // de la tríada/acorde que suena), salvo que --vis-config indique otra cosa explícitamente.
+    await page.evaluate((cfg) => {
+      const bg = (cfg && cfg.bgAuto) || { mode: 'figure' };
+      const m = document.getElementById('bgAutoMode');
+      if (m) m.value = bg.mode || 'figure';
+      if (typeof bgAutoChanged === 'function') bgAutoChanged();
+      if (bg.root) {
+        const r = document.getElementById('bgAutoRoot');
+        if (r) { r.value = bg.root; if (typeof bgAutoChanged === 'function') bgAutoChanged(); }
+      }
+      if (bg.scale) {
+        const s = document.getElementById('bgAutoScale');
+        if (s) { s.value = bg.scale; if (typeof bgAutoChanged === 'function') bgAutoChanged(); }
+      }
+    }, visConfig);
 
     await page.evaluate(() => {
       showTab('player');
