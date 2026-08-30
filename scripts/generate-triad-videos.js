@@ -26,11 +26,12 @@
  *   --out <dir>            Carpeta de salida (por defecto: ./video-out)
  *   --extra <seg>         Segundos extra al final de cada vídeo (por defecto: 2)
  *   --cycle-len <n>       Compases por ciclo (por defecto: el que traiga el campo, 12)
- *   --vis-config <path>   JSON con la configuración de "Elementos" a aplicar (opcional). Puede
- *                         incluir "bgAuto":{"mode":"figure"|"scale"|"off","root":"C","scale":"major"}
- *                         para el fondo automático (notas fantasma en todo el mástil) — si no se
- *                         indica, sale activo en modo "figure" por defecto (ver
- *                         project_triads_color_regression en memoria).
+ *   --vis-config <path>   JSON con la configuración de "Elementos" a aplicar (opcional). Si no se
+ *                         indica, se usa scripts/lib/default-triad-vis-config.json (fondo
+ *                         automático activo, estilo propio de notas y mástil realista — vale
+ *                         para el 98% de los casos, ver project_triads_color_regression en
+ *                         memoria). Puede incluir "bgAuto":{"mode":"figure"|"scale"|"off",
+ *                         "root":"C","scale":"major"} para el fondo automático.
  *   --groups <lista>      Índices de grupo de cuerdas a generar, coma-separados (por defecto: 0,1,2,3)
  *   --invs <lista>        Índices de inversión a generar, coma-separados (por defecto: 0,1,2)
  *   --concurrency <n>     Vídeos en paralelo (por defecto: 1 — más sube el riesgo de saltos en la animación en máquinas de pocos núcleos)
@@ -283,8 +284,18 @@ async function main() {
   const concurrency = args.concurrency ? parseInt(args.concurrency, 10) : 1;
   const width = args.width ? parseInt(args.width, 10) : 1600;
   const height = args.height ? parseInt(args.height, 10) : 900;
-  let visConfig = null;
-  if (args['vis-config']) visConfig = JSON.parse(fs.readFileSync(path.resolve(args['vis-config']), 'utf8'));
+  // Sin --vis-config explícito, se usa la config por defecto del repo (scripts/lib/
+  // default-triad-vis-config.json — fondo activo, estilo propio de notas y mástil realista,
+  // el resultado validado con Alberto en ago 2026). Vale para el 98% de los casos; --vis-config
+  // sigue disponible para el resto.
+  const defaultVisConfigPath = path.resolve(repoRoot, 'scripts/lib/default-triad-vis-config.json');
+  let visConfig;
+  if (args['vis-config']) {
+    visConfig = JSON.parse(fs.readFileSync(path.resolve(args['vis-config']), 'utf8'));
+  } else {
+    visConfig = JSON.parse(fs.readFileSync(defaultVisConfigPath, 'utf8'));
+    console.log(`(usando configuración de vis por defecto: ${defaultVisConfigPath} — pasa --vis-config <archivo> para otra distinta)`);
+  }
 
   for (const p of [appPath, xmlPath, audioPath]) {
     if (!fs.existsSync(p)) { console.error('No existe: ' + p); process.exit(1); }
