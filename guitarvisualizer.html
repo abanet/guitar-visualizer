@@ -10222,11 +10222,15 @@ function getAutoMsg(slot, chord){
   return `${chord} — ${invName} · ${noteList}`;
 }
 
-function renderBarBeats(containerId, bar, activeBeat){
+// `beats` = tiempos reales de ESTE compás (ver getBeatsAtBar) — por defecto 4 para no romper
+// llamadas antiguas. Antes se pintaban siempre 4 puntos aunque el compás real tuviera menos
+// (ej. 3/4), dejando un punto de más sin sentido (reportado: "queda mal que se vean cuatro").
+function renderBarBeats(containerId, bar, activeBeat, beats){
+  beats=beats>0?beats:4;
   const el=document.getElementById(containerId);if(!el)return;
   el.innerHTML='';
   if(!bar){
-    for(let b=0;b<4;b++){const d=document.createElement('div');d.className='bar-beat';d.textContent='·';d.style.color='rgba(255,255,255,.08)';el.appendChild(d);}
+    for(let b=0;b<beats;b++){const d=document.createElement('div');d.className='bar-beat';d.textContent='·';d.style.color='rgba(255,255,255,.08)';el.appendChild(d);}
     return;
   }
   const key=getKey();
@@ -10237,7 +10241,7 @@ function renderBarBeats(containerId, bar, activeBeat){
   const chordAtBeat={};
   segs.forEach(s=>{chordAtBeat[Math.round((s.beat||1)-1)]=s.chord;});
 
-  for(let beat=0;beat<4;beat++){
+  for(let beat=0;beat<beats;beat++){
     const d=document.createElement('div');
     const isActive=activeBeat!==undefined&&beat===activeBeat;
     const chordHere=chordAtBeat[beat];
@@ -10261,8 +10265,8 @@ function renderBarBeats(containerId, bar, activeBeat){
 function updateBarsMinimal(curChord,nextChord,fn,allBars,bi,beatInBar){
   // Beat slots for current and next bar
   if(getChordDisplayMode()==='bars'){
-    renderBarBeats('bmCurBeats', allBars?allBars[bi]:null, beatInBar);
-    renderBarBeats('bmNextBeats', allBars?allBars[bi+1]||null:null, undefined);
+    renderBarBeats('bmCurBeats', allBars?allBars[bi]:null, beatInBar, getBeatsAtBar(bi));
+    renderBarBeats('bmNextBeats', allBars?allBars[bi+1]||null:null, undefined, getBeatsAtBar(bi+1));
   }
   // Minimal mode
   const mc=document.getElementById('vMinChord');
