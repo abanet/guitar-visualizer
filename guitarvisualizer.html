@@ -498,6 +498,7 @@ body.presentation #channelWatermark{display:flex;}
     <div class="tab" title="Genera posiciones de arpegio, una por acorde (ruta de arpegios: zoom, preview, crossfade)." onclick="showTab('generate')"><i class="ti ti-wand"></i> Arpegios</div>
     <div class="tab" title="Secuencia nota a nota sobre un fondo de escala (ruta propia, nota a nota)." onclick="showTab('sequence')"><i class="ti ti-arrow-bar-to-right"></i> Secuencias</div>
     <div class="tab" title="Chord tones: caja de escala de fondo + notas del acorde iluminadas en cada acorde." onclick="showTab('targets')"><i class="ti ti-target"></i> Chord tones</div>
+    <div class="tab" title="Progresión diatónica completa de una escala (tríadas o tétradas) sobre una posición CAGED, sin dibujar ninguna forma de arpegio: el arpegio es siempre un subconjunto de las notas de la escala." onclick="showTab('arpscale')"><i class="ti ti-guitar-pick"></i> Arpegios en escala</div>
     <div class="tab" title="Asigna una escala y su posición a cada rango de compases del ciclo." onclick="showTab('scales')"><i class="ti ti-timeline"></i> Escalas</div>
     <div class="tab" onclick="showTab('help')"><i class="ti ti-help"></i> Ayuda</div>
     <span id="exBadge" style="margin-left:auto;align-self:center;font-size:11px;font-weight:600;color:var(--text2);background:rgba(0,0,0,.06);border:1px solid var(--border);border-radius:999px;padding:3px 10px;white-space:nowrap;" title="Tipo de ejercicio que se está reproduciendo realmente (se deduce del contenido del frame activo, no del selector)"></span>
@@ -855,7 +856,7 @@ body.presentation #channelWatermark{display:flex;}
         <option value="both">Notas + intervalos</option><option value="off">Ocultar</option>
       </select>
       <label>Modo:</label>
-      <select id="chordDisplayMode" onchange="setChordDisplayMode(this.value)" data-tip="Carrusel: acorde grande. Compases: compás actual y siguiente. Minimalista: solo el acorde."><option value="carousel">Carrusel</option><option value="bars">Compases</option><option value="minimal">Minimalista</option></select>
+      <select id="chordDisplayMode" onchange="setChordDisplayMode(this.value)" data-tip="Carrusel: acorde grande. Compases: compás actual y siguiente. Minimalista: solo el acorde."><option value="carousel">Carrusel</option><option value="bars" selected>Compases</option><option value="minimal">Minimalista</option></select>
       <label>Voz 1:</label>
       <select id="followVoice" data-tip="Resalta este intervalo de la tétrada con un anillo de color"><option value="none">Ninguna</option><option value="R">Raíz</option><option value="3">3ª</option><option value="5">5ª</option><option value="b7">7ª menor</option><option value="7">7ª mayor</option><option value="9">9ª</option></select>
       <input type="color" id="followColor" value="#FFE033" style="width:28px;height:28px;padding:1px;border-radius:4px;border:1px solid var(--border2);cursor:pointer;" data-tip="Color del anillo Voz 1">
@@ -1606,6 +1607,73 @@ body.presentation #channelWatermark{display:flex;}
   </div>
 </div>
 
+<!-- ARPEGIOS EN ESCALA (progresión diatónica automática, sin dibujar formas a mano) -->
+<div class="panel" id="tab-arpscale" style="display:none;padding:20px;">
+  <div style="max-width:1100px;margin:0 auto;">
+    <h2 style="margin:0 0 6px;font-size:18px;"><i class="ti ti-guitar-pick"></i> Arpegios dentro de escala</h2>
+    <div class="tab-help"><div><span class="th-k">Qué genera</span>La <b>progresión diatónica completa</b> de una escala (un acorde por grado, tríada o tétrada) sobre una <b>posición CAGED</b>, resaltando en cada paso qué notas de esa misma posición son las del acorde — sin dibujar ninguna forma de arpegio: el arpegio es siempre un subconjunto de las notas de la escala.</div><div><span class="th-k">Si la posición no es correcta</span>Corrígela a mano en "2 · Corregir posición" — igual que el editor de caja personalizada de Escalas por tramos.</div><div><span class="th-k">"Ver en Visualizador" (paso 4)</span>Si ya cargaste un <b>tema (XML)</b> en Audio &amp; XML, respeta SUS compases/ciclos y coloca el fotograma allí donde el acorde real de cada compás encaje (el selector "Resaltar" no interviene: el acorde se lee tal cual está en el XML). Sin tema cargado, crea un ejercicio corto de un compás por grado ("modo diapositivas").</div><div><span class="th-k">Para generar en lote</span>Exporta el config.json (paso 4) y úsalo con <code>scripts/generate-scale-arpeggio-videos.js</code> (ese script siempre usa el modo diapositivas + un audio compartido, no el tema cargado).</div></div>
+
+    <div class="card">
+      <h3>1 · Escala y posición</h3>
+      <div class="field-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Tónica</label>
+          <select id="asRoot" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;">
+            <option>C</option><option>C#</option><option>Db</option><option>D</option><option>D#</option><option>Eb</option>
+            <option>E</option><option>F</option><option>F#</option><option>Gb</option><option>G</option><option>G#</option>
+            <option>Ab</option><option>A</option><option>A#</option><option>Bb</option><option>B</option>
+          </select></div>
+        <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Escala</label>
+          <select id="asScale" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;min-width:180px;"></select></div>
+        <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Posición (CAGED)</label>
+          <select id="asPos" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;">
+            <option value="2">Forma C</option><option value="3">Forma A</option><option value="4">Forma G</option>
+            <option value="0">Forma E</option><option value="1">Forma D</option>
+          </select></div>
+        <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Resaltar</label>
+          <select id="asQuality" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;">
+            <option value="sevenths">Tétradas (7ª)</option>
+            <option value="triads">Tríadas</option>
+          </select></div>
+        <button class="btn accent" onclick="asGenerate()"><i class="ti ti-bolt"></i> Generar posición</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3>2 · Corregir posición (opcional)</h3>
+      <p style="font-size:12px;color:var(--text2);margin:0 0 8px;">Si el digitado CAGED automático no es el que quieres tocar, ábrelo y haz click en las notas de la escala para añadirlas o quitarlas. Se guarda por posición (Forma E/D/C/A/G) dentro de esta escala/tónica.</p>
+      <div class="field-row" style="gap:10px;align-items:center;">
+        <button class="btn" id="asBoxToggleBtn" onclick="asBoxToggleOpen()"><i class="ti ti-pencil"></i> Editar posición</button>
+        <button class="btn sm" onclick="asBoxClear()"><i class="ti ti-eraser"></i> Restaurar automática</button>
+      </div>
+      <div id="asBoxEd" style="width:100%;margin-top:10px;"></div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3>3 · Previsualización por acorde</h3>
+      <div class="field-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+        <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Acorde</label>
+          <select id="asPreviewChord" onchange="asRenderPreview()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;min-width:110px;"></select></div>
+        <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Etiqueta</label>
+          <select id="asLabelMode" onchange="asRenderPreview()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;">
+            <option value="interval">Intervalo del acorde</option>
+            <option value="note">Nota</option>
+          </select></div>
+      </div>
+      <div id="asBoard" style="width:100%;background:#0d0d0d;border-radius:10px;overflow:hidden;"></div>
+      <div id="asStatus" style="margin-top:8px;font-size:12px;color:var(--text2);">Genera una posición (paso 1).</div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3>4 · Usar el ejercicio</h3>
+      <div class="field-row" style="gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn accent" onclick="asSendToEditor()"><i class="ti ti-send"></i> Ver en Visualizador</button>
+        <button class="btn" onclick="asExportConfigFile()"><i class="ti ti-download"></i> Exportar config.json (lote)</button>
+        <span id="asSendStatus" style="font-size:12px;color:var(--text2);"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ADAPT EXERCISE MODAL -->
 <div class="modal-overlay" id="adaptModal">
   <div class="modal" style="max-width:440px;">
@@ -1767,7 +1835,7 @@ function getBarIndexAt(elapsed){
     for(let i=0;i<totalBars;i++){
       if(elapsed<_barStartCache[i+1])return i;
     }
-    return totalBars-1;
+    return totalBars; // pasado el último compás — deja que el llamador (p.ej. tick()) lo detecte y pare
   }
   // Fallback without cache
   let t=introSec;
@@ -1776,7 +1844,7 @@ function getBarIndexAt(elapsed){
     if(elapsed<t+barDur)return i;
     t+=barDur;
   }
-  return totalBars-1;
+  return totalBars; // pasado el último compás — deja que el llamador (p.ej. tick()) lo detecte y pare
 }
 
 // Invalidate cache when session loads or tempo changes
@@ -4488,9 +4556,11 @@ function renderSVGStatic(parsed){
   const drawNotes=useUnified||!isGenerated;
   // tn frames: the per-note fills ARE the exercise (dim scale vs lit chord tones) —
   // forceOwnNoteStyle would repaint everything cyan/red and destroy the illumination.
-  // sp frames (escalas por tramos) are fully lit, so they DO honor the own style.
+  // sp frames (escalas por tramos) are fully lit, so they DO honor the own style. Same for
+  // as frames (Arpegios en escala): comparten el motor tn pero el usuario SÍ espera que
+  // "estilo propio" les aplique (a diferencia de Chord tones, donde la iluminación ES el punto).
   const isTNparsed=parsed.tnFrame===true && parsed.spFrame!==true;
-  const ownStyle=getVisConfig().forceOwnNoteStyle===true && !isTNparsed;
+  const ownStyle=getVisConfig().forceOwnNoteStyle===true && (!isTNparsed||parsed.asFrame===true);
   if(drawNotes){
   drawList.forEach((note,i)=>{
     const rr=useUnified?stdR:note.r;
@@ -4507,7 +4577,7 @@ function renderSVGStatic(parsed){
     g.appendChild(circle);
     const displayLabel=noteDisplayLabel(note,ndMode,chord);
     const t=document.createElementNS(NS,'text');t.setAttribute('x',note.cx);t.setAttribute('y',note.cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
-    const _dimTN=isTNparsed&&(note.fill||'').indexOf('255,255,255')>=0;
+    const _dimTN=isTNparsed&&!ownStyle&&(note.fill||'').indexOf('255,255,255')>=0;
     t.setAttribute('fill',_dimTN?'rgba(255,255,255,.45)':'white');
     const fs=displayLabel&&displayLabel.length>2?Math.round(rr*0.65):Math.round(rr*0.85);
     t.setAttribute('font-size',fs);t.setAttribute('font-weight',_dimTN?'normal':'bold');t.setAttribute('font-family','Helvetica,Arial,sans-serif');t.setAttribute('pointer-events','none');t.textContent=displayLabel;g.appendChild(t);
@@ -4628,7 +4698,8 @@ function animateVoiceLeading(fromNotes,toParsed,durationMs,explicitChord){
   const toNotes=relayoutNotes(toParsed.notes);
   const followIdx=follow==='none'?-1:getFollowIndex(toNotes,follow,targetChord);
   const isTNanim=toParsed.tnFrame===true;
-  const ownStyle=getVisConfig().forceOwnNoteStyle===true && !isTNanim;
+  // as frames (Arpegios en escala) sí admiten "estilo propio" — ver renderSVGStatic.
+  const ownStyle=getVisConfig().forceOwnNoteStyle===true && (!isTNanim||toParsed.asFrame===true);
 
   const noteGroups=Array.from(canvas.querySelectorAll('.vl-note'));
   const n=Math.min(fromNotes.length,toNotes.length,noteGroups.length);
@@ -4655,8 +4726,10 @@ function animateVoiceLeading(fromNotes,toParsed,durationMs,explicitChord){
         // actually changes between the two positions; otherwise leave the style untouched.
         const isRedFill=c=>{const x=(c||'').toLowerCase();return x.includes('229,57,53')||x==='#e53935'||x==='red';};
         const fromRoot=isRedFill(s.fill), toRoot=isRedFill(e.fill);
-        if(isTNanim && s.fill!==e.fill){
+        if(isTNanim && !ownStyle && s.fill!==e.fill){
           // tn illumination crossfade: blend ANY fill change (dim↔cyan↔red), alpha included.
+          // (skipped when ownStyle is active — falls through to the root/non-root branch below,
+          // which already respects "estilo propio".)
           const pc=c=>{const m=(c||'').match(/rgba?\(([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s]+([\d.]+))?\)/);
             if(m)return[+m[1],+m[2],+m[3],m[4]!==undefined?+m[4]:1];
             const h=(c||'').replace('#','');if(h.length===6){const nn=parseInt(h,16);return[(nn>>16)&255,(nn>>8)&255,nn&255,1];}
@@ -5175,6 +5248,9 @@ function svgStringToParsed(svgStr){
   // sp (escalas por tramos): todas las notas iluminadas → SÍ admiten el diseño propio,
   // a diferencia de los tn reales (donde los fills tenues/iluminados SON el ejercicio).
   if(doc.documentElement&&doc.documentElement.getAttribute('data-sp')==='1')out.spFrame=true;
+  // Arpegios en escala: mismo trato que sp — a diferencia de un tn real (Chord tones), SÍ
+  // admite "Aplicar estilo propio a las notas" (ver renderSVGStatic/animateVoiceLeading).
+  if(doc.documentElement&&doc.documentElement.getAttribute('data-as')==='1')out.asFrame=true;
   // "Todo el mástil": marca para que la fantasma de transición se omita (ver spSendToEditor).
   if(doc.documentElement&&doc.documentElement.getAttribute('data-fullneck')==='1')out.fullNeck=true;
   // Procedencia del frame (solo informativa, para el badge "Activo:" — no altera el routing):
@@ -6399,7 +6475,7 @@ const TN_GUIDE_IVS=['3','b3','7','b7'];
 
 // SVG del preview: mástil oscuro (mismo look que arpBuildZoneSVG), notas de escala
 // tenues, chord tones iluminados (tónica del acorde roja, guías con anillo dorado).
-function tnBuildSVG(notes,chordInfo,fretMin,fretMax,labelMode){
+function tnBuildSVG(notes,chordInfo,fretMin,fretMax,labelMode,asMode){
   const W=1001,H=394;
   const nFrets=Math.max(1,fretMax-fretMin);
   const leftPad=fretMin===0?40:60,rightPad=25,topPad=35,bottomPad=50;
@@ -6408,7 +6484,10 @@ function tnBuildSVG(notes,chordInfo,fretMin,fretMax,labelMode){
   const strY=s=>topPad+(5-s)*stringSpacing;
   const fretX=f=>leftPad+(f-fretMin)*fretW;
   const r=Math.min(22,fretW*0.38);
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-tn="1" data-gen="tn" data-fretrange="${fretMin},${fretMax}">`;
+  // data-as="1" (solo desde "Arpegios en escala"): a diferencia de un tn real (Chord tones),
+  // aquí SÍ debe admitir "Aplicar estilo propio a las notas" — ver renderSVGStatic/
+  // animateVoiceLeading (mismo trato que ya recibe data-sp="1" y por la misma razón).
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-tn="1"${asMode?' data-as="1"':''} data-gen="${asMode?'as':'tn'}" data-fretrange="${fretMin},${fretMax}">`;
   if(fretMin===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
   for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${0.45-si*0.04})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
@@ -7517,6 +7596,7 @@ const EX_BADGE_LABELS={
   sp:'Escalas por tramos',
   rhythm:'Ritmo',
   realrhythm:'Ritmos Reales',
+  as:'Arpegios en escala',
 };
 function exBadgeKind(parsed){
   if(typeof seqActive!=='undefined'&&seqActive)return 'sequence';
@@ -8477,6 +8557,382 @@ function spDiatonicTriadSteps(seg,box){
   });
   return steps;
 }
+
+// ── Arpegios dentro de escala: acordes diatónicos (tríadas y tétradas) ────────
+// Cualidad de tétrada según los semitonos de 3ª/5ª/7ª sobre la fundamental. Solo
+// cubre cualidades que CHORD_INTERVALS sabe interpretar después (maj7/7/m7/m7b5/
+// dim7/7b5/7#5) — se omiten a propósito m(maj7) y maj7#5 (armónica/melódica menor):
+// no existen en CHORD_INTERVALS y forzarlas rompería el parseo aguas abajo (tnChordToneMap).
+function spDiatonicSeventhQuality(t3,t5,t7){
+  if(t3===4&&t5===7&&t7===11)return'maj7';
+  if(t3===4&&t5===7&&t7===10)return'7';
+  if(t3===3&&t5===7&&t7===10)return'm7';
+  if(t3===3&&t5===6&&t7===10)return'm7b5';
+  if(t3===3&&t5===6&&t7===9)return'dim7';
+  if(t3===4&&t5===6&&t7===10)return'7b5';
+  if(t3===4&&t5===8&&t7===10)return'7#5';
+  return null;
+}
+// Progresión diatónica completa de una escala: un acorde por grado (I..VII), con la
+// cualidad calculada apilando terceras dentro de la propia escala — sin necesidad de
+// dibujar ninguna forma de arpegio (ver spDiatonicTriadSteps/tnChordToneMap: el
+// arpegio siempre es un subconjunto de las notas de la posición de escala). Grados sin
+// cualidad limpia (escalas no heptatónicas, apilamientos exóticos) se omiten.
+const ARP_IV_BY_SEMI={0:'R',1:'b2',2:'2',3:'b3',4:'3',5:'4',6:'b5',7:'5',8:'b6',9:'6',10:'b7',11:'7'};
+function arpDegreeNoteName(root,semi){
+  const s=((semi%12)+12)%12;
+  return spellNote(root,ARP_IV_BY_SEMI[s]||'R',s)||NTS[(noteToSt(root)+s)%12];
+}
+function arpBuildDiatonicChords(root,scale,quality){
+  const f=SEQ_SCALE_FORMULAS[scale];
+  if(!f||f.length<5)return[];
+  const n=f.length;
+  const rootPc=noteToSt(root);if(rootPc<0)return[];
+  const out=[];
+  for(let d=0;d<n;d++){
+    const int3=((f[(d+2)%n]-f[d])%12+12)%12;
+    const int5=((f[(d+4)%n]-f[d])%12+12)%12;
+    let q;
+    if(quality==='sevenths'){
+      const int7=((f[(d+6)%n]-f[d])%12+12)%12;
+      q=spDiatonicSeventhQuality(int3,int5,int7);
+    }else{
+      q=spTriadQuality(int3,int5);
+    }
+    if(q===null)continue;
+    out.push({deg:d,chord:arpDegreeNoteName(root,f[d])+q});
+  }
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ARPEGIOS DENTRO DE ESCALA — progresión diatónica automática sobre una posición
+// CAGED, sin dibujar ninguna forma de arpegio (ver arpBuildDiatonicChords arriba:
+// el arpegio siempre es un subconjunto de las notas de la posición de escala).
+// Reutiliza tnChordToneMap/tnBuildSVG para el resaltado (mismo look que "Chord
+// tones") y el patrón de caja editable de sp (spBoxEditorSVG) para poder corregir
+// a mano la posición CAGED si el digitado automático no es el que se quiere tocar.
+// AISLADO: no toca tnState, spSegments ni el motor de tríadas/arpegios existente.
+// ════════════════════════════════════════════════════════════════════════════
+let asState={root:'C',scale:'major',posIdx:4,quality:'sevenths',notes:[],chords:[],editingOpen:false};
+const AS_POS_LABELS=['E','D','C','A','G'];
+
+// ── Almacén persistente de correcciones de posición (localStorage) ─────────────
+// Indexado por tónica+escala+forma (no por sesión/ejercicio): la próxima vez que se
+// genere "C mayor, Forma G" en CUALQUIER ejercicio, la corrección reaparece sola —
+// es lo normal, esa posición se reutiliza. Deliberadamente independiente de la
+// Librería (gv_lib_v2, alimentada solo por "Crear arpegios desde una forma"): un
+// almacén pequeño y de un solo propósito, sin la inconsistencia de aquella.
+const AS_STORE_KEY='gv_arpscale_positions';
+let asCustomStore=null;
+function asLoadStore(){
+  if(asCustomStore)return asCustomStore;
+  try{const raw=localStorage.getItem(AS_STORE_KEY);asCustomStore=raw?JSON.parse(raw):{};}catch(e){asCustomStore={};}
+  return asCustomStore;
+}
+function asSaveStore(){try{localStorage.setItem(AS_STORE_KEY,JSON.stringify(asCustomStore||{}));}catch(e){}}
+function asPosKey(root,scale,posLabel){return root+'|'+scale+'|'+posLabel;}
+function asGetCustomNotes(root,scale,posLabel){return asLoadStore()[asPosKey(root,scale,posLabel)]||null;}
+function asSetCustomNotes(root,scale,posLabel,notesArr){
+  const store=asLoadStore();
+  const key=asPosKey(root,scale,posLabel);
+  if(notesArr&&notesArr.length)store[key]=notesArr;else delete store[key];
+  asSaveStore();
+}
+
+function asInit(){
+  const scaleSel=document.getElementById('asScale');
+  if(scaleSel&&!scaleSel.options.length){
+    Object.keys(SEQ_SCALE_FORMULAS).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=SEQ_SCALE_LABELS[k]||k;scaleSel.appendChild(o);});
+    scaleSel.value='major';
+  }
+}
+
+function asActiveNotes(){
+  const posLabel=AS_POS_LABELS[asState.posIdx];
+  const custom=asGetCustomNotes(asState.root,asState.scale,posLabel);
+  if(custom&&custom.length)return custom.map(k=>spMkNote(asState.root,k.string,k.fret));
+  return asState.notes;
+}
+
+function asGenerate(){
+  const root=document.getElementById('asRoot').value;
+  const scale=document.getElementById('asScale').value;
+  const posIdx=parseInt(document.getElementById('asPos').value)||0;
+  const quality=document.getElementById('asQuality').value;
+  const notes=seqBuildPosition(root,scale,'caged',posIdx);
+  const st=document.getElementById('asStatus');
+  if(!notes.length){if(st)st.textContent='No se pudo generar la posición.';return;}
+  const editingOpen=asState.editingOpen;
+  asState={root,scale,posIdx,quality,notes,chords:arpBuildDiatonicChords(root,scale,quality),editingOpen};
+  asFillChordSelect();
+  asRenderBoxEditor();
+  asRenderPreview();
+}
+
+function asFillChordSelect(){
+  const sel=document.getElementById('asPreviewChord');if(!sel)return;
+  const prev=sel.value;
+  sel.innerHTML='';
+  if(!asState.chords.length){
+    const o=document.createElement('option');o.value='';o.textContent='(sin acordes diatónicos limpios en esta escala)';sel.appendChild(o);
+    return;
+  }
+  asState.chords.forEach(c=>{const o=document.createElement('option');o.value=c.chord;o.textContent=c.chord;sel.appendChild(o);});
+  if(prev&&asState.chords.some(c=>c.chord===prev))sel.value=prev;
+}
+
+function asRenderPreview(){
+  const board=document.getElementById('asBoard'),st=document.getElementById('asStatus');
+  if(!board)return;
+  const notes=asActiveNotes();
+  if(!notes.length){board.innerHTML='';if(st)st.textContent='Genera una posición (paso 1).';return;}
+  const chord=document.getElementById('asPreviewChord')?.value||'';
+  const labelMode=document.getElementById('asLabelMode')?.value||'interval';
+  const chordInfo=chord?tnChordToneMap(chord):null;
+  const frets=notes.map(n=>n.fret);
+  const fretMin=Math.max(0,Math.min(...frets)-1);
+  const fretMax=Math.min(24,Math.max(...frets)+1);
+  board.innerHTML=tnBuildSVG(notes,chordInfo,fretMin,fretMax,labelMode,true);
+  if(st){
+    if(!asState.chords.length)st.textContent='Esta escala no tiene acordes diatónicos limpios de ese tipo en ningún grado (habitual en pentatónicas/blues) — prueba con tríadas o cambia de escala.';
+    else if(!chord)st.textContent=`Posición generada (${notes.length} notas, Forma ${AS_POS_LABELS[asState.posIdx]}). Elige un acorde para ver sus chord tones.`;
+    else st.textContent=`${chord}: rojo = tónica del acorde · anillo dorado = guías (3ª/7ª).`;
+  }
+}
+
+// ── Editor de caja (corrección manual de la posición) — mismo patrón que spBoxEditorSVG.
+function asBoxEditorSVG(){
+  const f=SEQ_SCALE_FORMULAS[asState.scale];if(!f)return'';
+  const rootPc=noteToSt(asState.root);
+  const pcs=new Set(f.map(s=>(rootPc+s)%12));
+  const posLabel=AS_POS_LABELS[asState.posIdx];
+  // Sin corrección guardada, la caja arranca mostrando la posición CAGED automática
+  // (no vacía) — el click siguiente parte de ahí, ver asBoxToggle.
+  const custom=asGetCustomNotes(asState.root,asState.scale,posLabel);
+  const activeKeys=(custom&&custom.length)?custom:asState.notes.map(n=>({string:n.string,fret:n.fret}));
+  const sel=new Set(activeKeys.map(k=>k.string+':'+k.fret));
+  const W=1001,H=394,fretMin=0,fretMax=15;
+  const nFrets=fretMax-fretMin;
+  const leftPad=40,rightPad=25,topPad=35,bottomPad=50;
+  const fretW=(W-leftPad-rightPad)/nFrets;
+  const stringSpacing=(H-topPad-bottomPad)/5;
+  const strY=s=>topPad+(5-s)*stringSpacing;
+  const fretX=fr=>leftPad+(fr-fretMin)*fretW;
+  const r=Math.min(22,fretW*0.38);
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:820px;background:#191c22;border-radius:8px;">`;
+  s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
+  for(let fr=1;fr<=fretMax;fr++){const x=fretX(fr);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
+  for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${0.45-si*0.04})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
+  [3,5,7,9,12,15].forEach(fr=>{const x=fretX(fr)-fretW/2;s+=`<circle cx="${x}" cy="${topPad+2.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;if(fr===12){s+=`<circle cx="${x}" cy="${topPad+1.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/><circle cx="${x}" cy="${topPad+3.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;}});
+  for(let fr=1;fr<=fretMax;fr++){const x=fretX(fr)-fretW/2;s+=`<text x="${x}" y="${H-10}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${fr}</text>`;}
+  for(let st2=0;st2<6;st2++)for(let fr=fretMin;fr<=fretMax;fr++){
+    const pc=((STRING_OPEN_ST[st2]+fr)%12+12)%12;
+    if(!pcs.has(pc))continue;
+    const n=spMkNote(asState.root,st2,fr);
+    const key=st2+':'+fr;
+    const on=sel.has(key);
+    const x=fr===0?Math.max(r+4,leftPad-r-4):fretX(fr)-fretW/2;
+    const y=strY(st2);
+    const fill=on?(n.isRoot?'#E53935':'#26C6DA'):'rgba(255,255,255,.08)';
+    const stroke=on?'rgba(255,255,255,.35)':'rgba(255,255,255,.22)';
+    s+=`<g style="cursor:pointer;" onclick="asBoxToggle(${st2},${fr})">`;
+    s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>`;
+    s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="${on?'white':'rgba(255,255,255,.4)'}" font-size="${Math.round(r*0.7)}" ${on?'font-weight="bold" ':''}font-family="Arial" pointer-events="none">${n.note}</text>`;
+    s+=`</g>`;
+  }
+  s+='</svg>';
+  return s;
+}
+function asRenderBoxEditor(){
+  const box=document.getElementById('asBoxEd');if(!box)return;
+  if(!asState.editingOpen){box.innerHTML='';return;}
+  const posLabel=AS_POS_LABELS[asState.posIdx];
+  const custom=asGetCustomNotes(asState.root,asState.scale,posLabel);
+  const count=custom?custom.length:0;
+  box.innerHTML='<div style="font-size:12px;color:var(--text2);margin:4px 0 6px;">Click para añadir/quitar notas de la Forma '+posLabel+' (solo notas de la escala). '
+    +(count?'Personalizada y guardada: <strong>'+count+' notas</strong> — se recordará la próxima vez que uses '+asState.root+' '+(SEQ_SCALE_LABELS[asState.scale]||asState.scale)+' Forma '+posLabel+'.':'Usando la posición CAGED automática')
+    +'</div>'+asBoxEditorSVG();
+}
+function asBoxToggle(string,fret){
+  const posLabel=AS_POS_LABELS[asState.posIdx];
+  const existing=asGetCustomNotes(asState.root,asState.scale,posLabel);
+  // Primer click sobre esta posición: parte de la CAGED automática (copia), no de vacío —
+  // así un click quita/añade UNA nota sobre lo que ya suena, sin reconstruir la forma entera.
+  const arr=(existing&&existing.length)?existing.slice():asState.notes.map(n=>({string:n.string,fret:n.fret}));
+  const idx=arr.findIndex(k=>k.string===string&&k.fret===fret);
+  if(idx>=0)arr.splice(idx,1);else arr.push({string,fret});
+  asSetCustomNotes(asState.root,asState.scale,posLabel,arr);
+  asRenderBoxEditor();asRenderPreview();
+}
+function asBoxClear(){
+  const posLabel=AS_POS_LABELS[asState.posIdx];
+  asSetCustomNotes(asState.root,asState.scale,posLabel,null);
+  asRenderBoxEditor();asRenderPreview();
+}
+function asBoxToggleOpen(){
+  asState.editingOpen=!asState.editingOpen;
+  const btn=document.getElementById('asBoxToggleBtn');
+  if(btn)btn.classList.toggle('btn-active',asState.editingOpen);
+  asRenderBoxEditor();
+}
+
+// Subconjunto REAL de notas del arpegio (no la caja completa con notas tenues de la escala):
+// filtra asActiveNotes() a solo las que son chord tones del acorde dado, y marca isRoot
+// relativo a ESE acorde (no a la tónica de la escala) — así noteDisplayLabel() calcula bien
+// los intervalos por acorde vía note.semi (ver svgStringToParsed). Se apoya en
+// arpBuildZoneSVG, el mismo dibujante que usa la pestaña "Arpegios" clásica, para que el
+// fotograma resultante sea indistinguible de un arpegio dibujado a mano — mismo look, mismo
+// data-gen="arpeggios", así exFor() lo enruta por la ruta REAL de arpegios (zoom a zona,
+// fantasma de la siguiente posición, crossfade) en vez de la ruta "targetNotes" (tríadas
+// sin zoom) que usan Chord tones/Escalas por tramos. Devuelve null si el acorde no se
+// pudo interpretar o no comparte ninguna nota con esta posición (nada que dibujar).
+function asBuildArpeggioSVG(notes,chordInfo,chordName,fretMin,fretMax){
+  if(!chordInfo)return null;
+  const tones=notes.filter(n=>chordInfo.map[((n.st%12)+12)%12]!==undefined)
+    .map(n=>({...n,isRoot:((n.st%12)+12)%12===chordInfo.rootPc}));
+  if(!tones.length)return null;
+  return arpBuildZoneSVG(tones,chordName,'',[],fretMin,fretMax);
+}
+
+// ── 4 · Usar el ejercicio ────────────────────────────────────────────────────
+// Dos modos, según si ya hay un tema (XML) cargado en Audio & XML:
+//  - MODO TEMA (cycles.length>0): respeta los compases/ciclos reales del tema — no
+//    reconstruye totalBars/cycles — y coloca el fotograma de arpegio allí donde el
+//    acorde REAL de ese compás encaja (mismo patrón que tnSendToEditor). Así el
+//    vídeo sigue el audio real completo, con sus repeticiones. El acorde se lee tal
+//    cual está escrito en el XML (tnChordToneMap), no de la lista de grados
+//    diatónicos — por eso el selector "Resaltar" del paso 1 no interviene aquí (sí
+//    en modo diapositivas).
+//  - MODO DIAPOSITIVAS (sin tema): progresión sintética de un compás por grado
+//    diatónico (comportamiento original, para probar/grabar sin XML real — ver
+//    createManualExercise).
+// En ambos casos cambia exerciseType a 'arpeggios': es literalmente una sucesión de
+// arpegios (un subconjunto de notas por acorde) dentro de la misma escala/posición,
+// así que usa el motor REAL de arpegios (zoom a zona, fantasma de la siguiente
+// posición, previsualización en miniatura, crossfade) — no el de tríadas.
+async function asSendToEditor(){
+  const st=document.getElementById('asSendStatus');
+  const say=t=>{if(st)st.textContent=t;};
+  const notes=asActiveNotes();
+  if(!notes.length){alert('Genera primero una posición (paso 1).');return;}
+  // Nota: a diferencia del preview (paso 3), aquí NO se hornea la etiqueta — arpBuildZoneSVG
+  // marca isRoot por ACORDE (no por tónica de la escala), así que noteDisplayLabel() calcula
+  // los intervalos correctos dinámicamente vía note.semi, siguiendo el selector "Mástil:" del
+  // visualizador como cualquier otro arpegio. El selector "Etiqueta" de este paso 3 solo
+  // afecta a esa previsualización.
+  const frets=notes.map(n=>n.fret);
+  const fretMin=Math.max(0,Math.min(...frets)-1);
+  const fretMax=Math.min(24,Math.max(...frets)+1);
+  const nameEl=document.getElementById('exerciseName');
+  const exName=`${asState.root} ${SEQ_SCALE_LABELS[asState.scale]||asState.scale} (Forma ${AS_POS_LABELS[asState.posIdx]}) — arpegios diatónicos`;
+
+  if(cycles.length){
+    // MODO TEMA
+    say('Generando fotogramas…');
+    const all=getAllBars();
+    const barLoc=[];
+    {let g=0;for(let ci=0;ci<cycles.length;ci++){const eb=getEffectiveBars(ci);for(let li=0;li<eb.length;li++){if(g<all.length){barLoc[g]={ci,local:li};g++;}}}}
+    const flat=[];
+    all.forEach((b,bi)=>{getBarSegments(b).forEach(s=>flat.push({bi,chord:s.chord,beat:s.beat||1}));});
+    const cache={};
+    let applied=0,unknown=[];
+    for(const f of flat){
+      const chord=(f.chord||'').trim();
+      if(!chord||chord==='—')continue;
+      if(!(chord in cache)){
+        const info=tnChordToneMap(chord);
+        const svg=asBuildArpeggioSVG(notes,info,chord,fretMin,fretMax);
+        if(!svg){if(!unknown.includes(chord))unknown.push(chord);cache[chord]=null;}
+        else{
+          const parsed=svgStringToParsed(svg);
+          let thumb=null;try{thumb=await svgToThumb(svg,320,116);}catch(e){}
+          cache[chord]={svg,parsed,thumb};
+        }
+      }
+      const c=cache[chord];if(!c)continue;
+      const slotIdx=Math.round((f.beat||1)-1);
+      const loc=barLoc[f.bi];if(!loc)continue;
+      const target=getTargetBars(loc.ci);
+      if(target&&target[loc.local]){
+        target[loc.local].imgs[slotIdx]={type:'svg',data:c.svg,name:chord+' arpegio (en escala)',thumb:c.thumb,svgParsed:JSON.parse(JSON.stringify(c.parsed))};
+        applied++;
+      }
+    }
+    if(nameEl)nameEl.value=exName;
+    renderEditor();if(typeof renderBank==='function')renderBank();if(typeof checkReady==='function')checkReady();
+    if(typeof setExerciseType==='function'){
+      const sel=document.getElementById('exerciseType');if(sel)sel.value='arpeggios';
+      setExerciseType('arpeggios');
+    }
+    let msg='✓ '+applied+' fotogramas colocados sobre los compases del tema cargado ('+all.length+' compases).';
+    if(unknown.length)msg+='\nAcordes sin ninguna nota en común con esta posición (salen sin fotograma): '+unknown.join(', ')+'.';
+    msg+='\nModo cambiado a Arpegios para la reproducción.';
+    say(applied+' fotogramas sobre '+all.length+' compases del tema'+(unknown.length?' · sin generar: '+unknown.join(', '):''));
+    alert(msg);
+  }else{
+    // MODO DIAPOSITIVAS
+    if(!asState.chords.length){alert('Esta escala no tiene acordes diatónicos limpios de ese tipo — prueba con tríadas o cambia de escala.');return;}
+    const parsed=asState.chords.map(c=>({chord:c.chord}));
+    totalBars=parsed.length;
+    buildCycles(parsed,parsed.length);
+    manualExercise=true;
+    if(nameEl)nameEl.value=exName;
+    renderEditor();
+
+    const barLoc=[];
+    {let g=0;const all0=getAllBars();for(let ci=0;ci<cycles.length;ci++){const eb=getEffectiveBars(ci);for(let li=0;li<eb.length;li++){if(g<all0.length){barLoc[g]={ci,local:li};g++;}}}}
+    const all=getAllBars();
+    say('Generando fotogramas…');
+    let applied=0;
+    all.forEach((b,bi)=>{
+      const chord=(b.chord||'').trim();if(!chord)return;
+      const info=tnChordToneMap(chord);
+      const svg=asBuildArpeggioSVG(notes,info,chord,fretMin,fretMax);
+      if(!svg)return;
+      const loc=barLoc[bi];if(!loc)return;
+      const target=getTargetBars(loc.ci);
+      if(target&&target[loc.local]){
+        target[loc.local].imgs[0]={type:'svg',data:svg,name:chord+' arpegio (en escala)',svgParsed:svgStringToParsed(svg)};
+        applied++;
+      }
+    });
+    renderEditor();if(typeof renderBank==='function')renderBank();if(typeof checkReady==='function')checkReady();
+    if(typeof setExerciseType==='function'){
+      const sel=document.getElementById('exerciseType');if(sel)sel.value='arpeggios';
+      setExerciseType('arpeggios');
+    }
+    say(applied+' fotogramas colocados · modo cambiado a Arpegios para la reproducción.');
+  }
+  // Fondo automático = escala fija: las notas de la escala quedan FIJAS en gris tenue de
+  // fondo (Editor → "Fondo automático"), mientras el frame de arriba solo dibuja —y anima
+  // con zoom/fantasma/crossfade— las que son del arpegio en cada acorde. Sin esto el frame
+  // (ahora un subconjunto, no la caja completa) se vería "pelado" sin referencia de escala.
+  bgAuto={mode:'scale',root:asState.root,scale:asState.scale};
+  bgAutoSyncUI();
+  rebuildBgMapIfVisible();
+  showTab('player');
+}
+
+// Config para scripts/generate-scale-arpeggio-videos.js (lote): una escala/tónica,
+// las 5 posiciones CAGED y las correcciones manuales de cada una, si las hay.
+function asExportConfigFile(){
+  const customNotesByPosition={};
+  AS_POS_LABELS.forEach(p=>{
+    const c=asGetCustomNotes(asState.root,asState.scale,p);
+    if(c&&c.length)customNotesByPosition[p]=c;
+  });
+  const cfg={
+    root:asState.root,scale:asState.scale,quality:asState.quality,
+    positions:AS_POS_LABELS,
+    customNotesByPosition,
+  };
+  const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='arpegios-escala-config.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
+  const st=document.getElementById('asSendStatus');if(st)st.textContent='✓ config.json exportado.';
+}
+
 // SVG de escala (look oscuro de tnBuildSVG). Sin `lit`: TODAS las notas iluminadas
 // (tónica roja #E53935, resto cian #26C6DA) y data-sp="1". Con `lit` ({keys:Set('string:fret'),
 // rootKey}): solo esas notas iluminadas (rootKey roja), resto tenue como tnBuildSVG, y SIN
@@ -8894,6 +9350,16 @@ function tick(){
       document.getElementById('vNotes').innerHTML='';
       const curEl0=document.getElementById('vChord');
       if(curEl0){curEl0.classList.add('intro-num');curEl0.style.opacity='1';curEl0.style.color='#7B9FE8';curEl0.style.textShadow='0 0 30px rgba(123,159,232,.6),0 0 60px rgba(123,159,232,.3)';}
+      // #vChord vive dentro de #slotCur, cuyo opacity lo controla setChordDisplayMode() según el
+      // modo (Compases/Minimalista lo dejan en 0) — sin esto la cuenta atrás queda invisible en
+      // cualquier modo que no sea Carrusel, aunque su texto se actualice bien por debajo. Y el
+      // panel de Compases/Minimalista (.bars-mode/.minimal-mode) es OTRO overlay independiente
+      // en el mismo contenedor: si se deja "active" durante la intro, la cuenta atrás (grande,
+      // centrada) queda superpuesta encima — hay que ocultarlo también mientras dura la cuenta
+      // atrás (la intención original era "durante la intro solo se ve el número", ver abajo).
+      const slotCur0=document.getElementById('slotCur');if(slotCur0)slotCur0.style.opacity='1';
+      document.getElementById('barsMode')?.classList.remove('active');
+      document.getElementById('minimalMode')?.classList.remove('active');
       document.querySelectorAll('.chord-center,.chord-carousel').forEach(e=>e.classList.add('intro-open'));
       if(seqActive){
         // During intro in sequence mode: show the scale background (no notes lit yet)
@@ -8940,7 +9406,11 @@ function tick(){
   }
   // Leaving intro: remove intro styling so chord shows normally
   {const c0=document.getElementById('vChord');if(c0)c0.classList.remove('intro-num','intro-pulse','intro-pulse-strong');
-   document.querySelectorAll('.chord-center.intro-open,.chord-carousel.intro-open').forEach(e=>e.classList.remove('intro-open'));}
+   document.querySelectorAll('.chord-center.intro-open,.chord-carousel.intro-open').forEach(e=>e.classList.remove('intro-open'));
+   // Restaura #slotCur y el panel de Compases/Minimalista al estado que le corresponde según el
+   // modo actual (los forzamos/ocultamos durante la cuenta atrás, ver comentarios más arriba) —
+   // reutiliza setChordDisplayMode() en vez de repetir su lógica a mano.
+   setChordDisplayMode(getChordDisplayMode());}
 
   const prog=elapsed-introSec;
   // Use variable tempo if XML has tempo changes or manual incr is set
@@ -9854,7 +10324,7 @@ function seekClick(e){if(!audioEl||!audioEl.duration)return;const p=e.offsetX/e.
 
 function showTab(name){
   try{
-    const panels=['editor','library','audio','player','video','settings','help','generate','sequence','targets','scales','triads','ritmos'];
+    const panels=['editor','library','audio','player','video','settings','help','generate','sequence','targets','scales','triads','ritmos','arpscale'];
     panels.forEach(t=>{
       const p=document.getElementById('tab-'+t);
       if(!p)return;
@@ -9888,6 +10358,7 @@ function showTab(name){
     if(name==='generate')initGenerateTab();
     if(name==='sequence')initSequenceTab();
     if(name==='scales')try{spRenderPanel();}catch(e2){console.error(e2);}
+    if(name==='arpscale')try{asInit();}catch(e3){console.error(e3);}
     {const _p2=getCurrentParsedForBadge();if(_p2)updateExerciseBadge(_p2);}
   }catch(e){console.error('showTab error:',e);}
 }
@@ -9968,19 +10439,19 @@ const VIS_ELEMENTS=[
   {id:'showKey',      label:'Tonalidad',            def:true, group:'Información en pantalla'},
   {id:'showBpm',      label:'BPM',                  def:true, group:'Información en pantalla'},
   {id:'showMetro',    label:'Metrónomo',             def:true, group:'Información en pantalla'},
-  {id:'showCarousel', label:'Zona de acorde (carrusel + notas)', def:true, group:'Información en pantalla'},
-  {id:'showFnBadge',  label:'Badge de función (I/IV/V)', def:true, group:'Información en pantalla'},
-  {id:'showScaleHint',label:'Escala/arpegio sugerido',def:true, group:'Información en pantalla'},
-  {id:'showNotes',    label:'Notas del acorde',       def:true, group:'Información en pantalla'},
+  {id:'showCarousel', label:'Zona de acorde (carrusel + notas)', def:false, group:'Información en pantalla'},
+  {id:'showFnBadge',  label:'Badge de función (I/IV/V)', def:false, group:'Información en pantalla'},
+  {id:'showScaleHint',label:'Escala/arpegio sugerido',def:false, group:'Información en pantalla'},
+  {id:'showNotes',    label:'Notas del acorde',       def:false, group:'Información en pantalla'},
   {id:'showLap',      label:'Contador de vuelta', def:true, group:'Información en pantalla'},
-  {id:'showMsg',      label:'Mensajes/consejos',        def:true, group:'Información en pantalla'},
-  {id:'showScaleRow', label:'Franja de escala',       def:true, group:'Franjas y elementos del mástil'},
+  {id:'showMsg',      label:'Mensajes/consejos',        def:false, group:'Información en pantalla'},
+  {id:'showScaleRow', label:'Franja de escala',       def:false, group:'Franjas y elementos del mástil'},
   {id:'showStrip',    label:'Tira de compases',       def:true, group:'Franjas y elementos del mástil'},
   {id:'showBgMap',    label:'Mapa de posiciones (fondo)', def:true, group:'Franjas y elementos del mástil'},
   {id:'mastilOnly',label:'Solo mástil: oculta franjas accesorias para que el diapasón ocupe toda la pantalla', def:false, group:'Franjas y elementos del mástil'},
   {id:'darkFretboard',label:'Estilo del mástil: oscuro integrado (desactiva para respetar el estilo del SVG original)', def:true, group:'Franjas y elementos del mástil'},
   {id:'realisticNeck',label:'Mástil realista: cuerdas metálicas con volumen y trastes con brillo', def:false, group:'Franjas y elementos del mástil'},
-  {id:'forceOwnNoteStyle',label:'Aplicar estilo propio a las notas: usa siempre rojo (tónica) y azul (resto), ignorando los colores del SVG', def:false, group:'Franjas y elementos del mástil'},
+  {id:'forceOwnNoteStyle',label:'Aplicar estilo propio a las notas: usa siempre rojo (tónica) y azul (resto), ignorando los colores del SVG', def:true, group:'Franjas y elementos del mástil'},
   {id:'scaleFromChord',label:'Escala del acorde que suena (ignora tonalidad)', def:false, group:'Escala y notas'},
   // ── TRIADS: transition between positions ──
   {id:'triadShowGhost',label:'Mostrar notas fantasma de la siguiente posición antes del cambio', def:true, group:'Transición · Tríadas', xtype:'triads'},
@@ -10295,6 +10766,10 @@ loadLibFromStorage();
 renderLibInline();
 initColors();
 applyVisConfig();
+// Sincroniza el estado visual (clases .active, opacidad del carrusel) con el <select> — si no,
+// el modo por defecto del HTML (p.ej. "Compases") queda seleccionado pero no se ve: solo se
+// aplica en el evento onchange, que nunca dispara si el usuario no toca el desplegable.
+try{setChordDisplayMode(document.getElementById('chordDisplayMode').value);}catch(e){}
 // Restore saved exercise type
 try{const xt=localStorage.getItem('gv_exerciseType');if(xt){exerciseType=xt;const sel=document.getElementById('exerciseType');if(sel)sel.value=xt;}}catch(e){}
 showTab('editor');
