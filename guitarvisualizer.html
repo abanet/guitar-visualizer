@@ -1374,6 +1374,8 @@ body.presentation #channelWatermark{display:flex;}
             <option value="maj7">maj7</option><option value="m7">m7</option><option value="7">dom7</option>
             <option value="m">menor (tríada)</option><option value="">mayor (tríada)</option><option value="dim">dim</option><option value="m7b5">m7b5</option>
           </select></div>
+        <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">…u otra cualidad</label>
+          <input type="text" id="ashQualityCustom" oninput="ashRender()" placeholder="ej. 9, sus4, m9" title="Si se rellena, gana sobre el desplegable de Cualidad — para cargar/corregir acordes del tema que no estén en esa lista." style="width:110px;padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;"></div>
         <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Forma (CAGED)</label>
           <select id="ashPos" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;">
             <option value="E">Forma E</option><option value="D">Forma D</option><option value="C">Forma C</option>
@@ -1383,6 +1385,8 @@ body.presentation #channelWatermark{display:flex;}
           <input type="number" id="ashFretMin" value="0" min="0" max="20" onchange="ashRender()" style="width:52px;padding:6px;border-radius:6px;border:1px solid var(--border2);font-size:13px;"></div>
         <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Traste max</label>
           <input type="number" id="ashFretMax" value="15" min="3" max="24" onchange="ashRender()" style="width:52px;padding:6px;border-radius:6px;border:1px solid var(--border2);font-size:13px;"></div>
+        <button class="btn sm" onclick="ashLoadExistingShape()" title="Carga en el tablero la forma ya generada (o si no existe, la automática) para Acorde base + Cualidad + Forma — para corregirla a mano y volver a generar."><i class="ti ti-download"></i> Cargar forma existente/auto</button>
+        <button class="btn sm" onclick="ashClearPatternForCurrent()" title="Olvida el patrón corregido de Cualidad+Forma actuales — vuelve a calcularse por geometría automática la próxima vez."><i class="ti ti-eraser"></i> Olvidar patrón corregido</button>
         <button class="btn sm danger" onclick="ashClear()"><i class="ti ti-trash"></i> Vaciar notas</button>
       </div>
       <div id="ashBoard" style="width:100%;background:#0d0d0d;border-radius:10px;overflow:hidden;margin-top:10px;"></div>
@@ -1394,6 +1398,22 @@ body.presentation #channelWatermark{display:flex;}
       <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
         <button class="btn accent" onclick="ashGenerate()"><i class="ti ti-bolt"></i> Generar arpegios a la librería</button>
         <span id="ashStatus" style="font-size:12px;color:var(--text2);"></span>
+      </div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <h3 style="margin:0 0 8px;font-size:13px;"><i class="ti ti-wand"></i> Generar automáticamente para el tema</h3>
+        <p style="font-size:12px;color:var(--text2);margin:0 0 10px;">
+          Calcula las 5 formas CAGED de cada acorde REAL del tema cargado (geometría automática, como una caja CAGED de
+          escala pero con solo las notas del acorde) y las genera todas a la librería de una vez — no hace falta
+          dibujarlas a mano. Si alguna forma sale con muy pocas notas, se avisa aquí abajo para que la corrijas con
+          "Cargar forma existente/auto" de arriba. <strong>Corregir una forma la convierte en la plantilla de esa
+          Cualidad+Forma</strong>: si arreglas, por ejemplo, "7" Forma A con un A7 del tema, cualquier otro acorde de
+          séptima (B7, D7, G7…) en Forma A usará esa misma estructura a partir de ahí — pulsa este botón otra vez
+          después de corregir para aplicarlo a todo el tema de golpe.
+        </p>
+        <div class="field-row" style="gap:10px;align-items:center;">
+          <button class="btn accent" onclick="ashAutoGenerateForTheme()"><i class="ti ti-bolt"></i> Generar automáticamente para el tema</button>
+          <span id="ashAutoStatus" style="font-size:12px;color:var(--text2);"></span>
+        </div>
       </div>
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
         <h3 style="margin:0 0 8px;font-size:13px;"><i class="ti ti-send"></i> Editor (automático)</h3>
@@ -1809,6 +1829,34 @@ function getBpmAtBar(barIdx){
   return baseBPM+Math.min(vuelta,vueltas-1)*step;
 }
 
+// Tiempos por compás en un compás dado — mismo patrón/formato que getBpmAtBar, pero para el
+// compás (numerador del time signature) en vez del tempo: window._timeSigMap ({barIdx: beats},
+// construido en loadXML desde <attributes><time><beats>, ver ahí) es disperso, así que se toma
+// la última entrada con barIdx<=target. A diferencia de getBpmAtBar (que exige >1 entradas para
+// activar el mapa, porque con 1 sola cae al sistema de aceleración manual), aquí CUALQUIER mapa
+// no vacío se respeta — incluso un tema con compás constante pero distinto de 4/4 (ej. 3/4 todo
+// el tema) es exactamente el caso que hay que arreglar, y solo genera 1 entrada (bar 0).
+// Sin mapa (ejercicios manuales, XML sin <time>, o compás no leído), 4 — mismo comportamiento
+// que siempre tuvo la app.
+function getBeatsAtBar(barIdx){
+  if(window._timeSigMap&&Object.keys(window._timeSigMap).length){
+    const entries=Object.entries(window._timeSigMap)
+      .map(([k,v])=>[parseInt(k),v])
+      .sort((a,b)=>a[0]-b[0]);
+    let beats=4;
+    for(const [bi,b] of entries){
+      if(bi<=barIdx)beats=b;
+      else break;
+    }
+    return beats;
+  }
+  return 4;
+}
+// Suma de tiempos de todos los compases ANTERIORES a barIdx (0-based) — para convertir un índice
+// de compás en una posición absoluta en tiempos cuando el compás puede variar (ver
+// seqNoteIndexAt). Con compás constante equivale simplemente a barIdx*getBeatsAtBar(0).
+function getBeatsBeforeBar(barIdx){let sum=0;for(let i=0;i<barIdx;i++)sum+=getBeatsAtBar(i);return sum;}
+
 // Cache bar start times for performance
 let _barStartCache=null;
 let _barStartCacheTotal=-1;
@@ -1820,7 +1868,7 @@ function getBarStartTime(barIdx){
     let t=introSec;
     for(let i=0;i<=totalBars;i++){
       _barStartCache[i]=t;
-      if(i<totalBars)t+=(60/getBpmAtBar(i))*4;
+      if(i<totalBars)t+=(60/getBpmAtBar(i))*getBeatsAtBar(i);
     }
     _barStartCacheTotal=totalBars;
   }
@@ -1840,7 +1888,7 @@ function getBarIndexAt(elapsed){
   // Fallback without cache
   let t=introSec;
   for(let i=0;i<totalBars;i++){
-    const barDur=(60/getBpmAtBar(i))*4;
+    const barDur=(60/getBpmAtBar(i))*getBeatsAtBar(i);
     if(elapsed<t+barDur)return i;
     t+=barDur;
   }
@@ -1851,8 +1899,8 @@ function getBarIndexAt(elapsed){
 function invalidateBarCache(){_barStartCache=null;_barStartCacheTotal=-1;}
 
 function getBarSecAt(elapsed){
-  const bi=getBarIndexAt(elapsed);
-  return (60/getBpmAtBar(Math.max(0,bi)))*4;
+  const bi=Math.max(0,getBarIndexAt(elapsed));
+  return (60/getBpmAtBar(bi))*getBeatsAtBar(bi);
 }
 
 function getCurrentBPM(elapsed){
@@ -1892,7 +1940,7 @@ function setCycleToWholeTheme(){
   const tag=document.getElementById('audioStatus');
   // small confirmation via the cycle field; no intrusive alert
 }
-function getBarSec(){const b=getBPM();return b>0?(60/b)*4:2;} // audio seconds per bar, independent of playback speed
+function getBarSec(){const b=getBPM();return b>0?(60/b)*getBeatsAtBar(0):2;} // audio seconds per bar, independent of playback speed
 function getIntroBPM(){
   // The intro plays at the tempo of the first musical bar. If the XML has a tempo map,
   // use bar 0's tempo (not the manual BPM field, which may be stale and cause desync).
@@ -1902,7 +1950,10 @@ function getIntroBPM(){
   }
   return getBPM();
 }
-function getIntroSec(){const b=getIntroBPM();return b>0?getIntro()*(60/b)*4:0;} // audio seconds
+// La entrada usa el compás del PRIMER compás real (bar 0) — igual que ya usa su tempo vía
+// getIntroBPM()/getBpmAtBar(0) — así una entrada de 2 compases en un tema de 3/4 dura lo mismo
+// que sonarán esos 2 compases reales en el audio (6 tiempos), no 8 como asumía el *4 fijo.
+function getIntroSec(){const b=getIntroBPM();return b>0?getIntro()*(60/b)*getBeatsAtBar(0):0;} // audio seconds
 function isMinorChord(chord){
   // Minor if contains 'm' but not 'maj', and not dominant (no bare '7' after root without 'm')
   return /^[A-G][b#]?m/.test(chord)&&!/^[A-G][b#]?maj/.test(chord);
@@ -1930,7 +1981,7 @@ function fmt(s){return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,
 function syncKey(key){document.getElementById('keySelect').value=key;document.getElementById('keySelect2').value=key;document.getElementById('vKey').textContent='Tonalidad: '+key;renderEditor();if(currentChordData)renderScaleRow(currentChordData.chord,currentChordData.fn);}
 function syncKey2(){const k=document.getElementById('keySelect2').value;document.getElementById('keySelect').value=k;document.getElementById('vKey').textContent='Tonalidad: '+k;renderEditor();}
 function onBpmChange(v){document.getElementById('vBpm').textContent=(v||'—')+' bpm';updateIntroLbl();checkReady();}
-function updateIntroLbl(){const b=getBPM(),i=getIntro(),el=document.getElementById('introLbl');if(b>0&&i>0)el.textContent='= '+((60/b)*4*i).toFixed(1)+'s';else if(i===0)el.textContent='sin intro';else el.textContent='BPM necesario';}
+function updateIntroLbl(){const b=getBPM(),i=getIntro(),el=document.getElementById('introLbl');if(b>0&&i>0)el.textContent='= '+((60/b)*getBeatsAtBar(0)*i).toFixed(1)+'s';else if(i===0)el.textContent='sin intro';else el.textContent='BPM necesario';}
 
 // ── CYCLES ────────────────────────────────────────────────────────────────
 function getEffectiveBars(ci){
@@ -2963,10 +3014,19 @@ function loadXML(input){
       // Read full tempo map: {measure_index: bpm}
       const tempoMap={}; // measure index (0-based from first chord) -> bpm
       let currentTempo=bpm||120;
+      // Read full compás map: {measure_index: tiempos por compás} — mismo patrón que tempoMap,
+      // en la misma pasada, para que la app deje de asumir 4/4 en todo el motor de tiempo (ver
+      // getBeatsAtBar). Solo se guarda el numerador (<beats>): el denominador (<beat-type>) no
+      // afecta a la duración real en segundos de cada compás.
+      const timeSigMapRaw={};
+      let currentBeats=4;
       measures.forEach((m,mi)=>{
         const s=m.querySelector('sound[tempo]');
         if(s)currentTempo=parseFloat(s.getAttribute('tempo'));
         tempoMap[mi]=currentTempo;
+        const beatsEl=m.querySelector('time>beats');
+        if(beatsEl){const nb=parseInt(beatsEl.textContent);if(nb>0)currentBeats=nb;}
+        timeSigMapRaw[mi]=currentBeats;
       });
       // Convert to bar-index based (subtract intro)
       window._tempoMap={};
@@ -2975,7 +3035,12 @@ function loadXML(input){
         const barIdx=parseInt(mi)-intro;
         if(barIdx>=0)window._tempoMap[barIdx]=t;
       });
-      invalidateBarCache(); // invalidate AFTER tempoMap is built
+      window._timeSigMap={};
+      Object.entries(timeSigMapRaw).forEach(([mi,b])=>{
+        const barIdx=parseInt(mi)-intro;
+        if(barIdx>=0)window._timeSigMap[barIdx]=b;
+      });
+      invalidateBarCache(); // invalidate AFTER tempoMap/timeSigMap are built
       // Check if there are multiple tempos
       const uniqueTempos=[...new Set(Object.values(window._tempoMap))];
       const hasTempoChanges=uniqueTempos.length>1;
@@ -3099,6 +3164,7 @@ function buildSession(){
     offset:parseFloat(document.getElementById('offsetMs').value)||0,
     cycleLen:getCycleLen(),totalBars,
     tempoMap:window._tempoMap||null,tempoMapIntro:window._introOffset||0,
+    timeSigMap:window._timeSigMap||null,
     masterBars:masterBars.map(b=>({chord:b.chord,chords:b.chords?b.chords.map(c=>({...c})):undefined,scaleText:b.scaleText||'',msgText:b.msgText||'',msgDuration:b.msgDuration||0,imgs:b.imgs.map(slotToJSON)})),
     cycles:cycles.map(c=>({mode:c.mode,noteDisplay:c.noteDisplay||'auto',bgMapFolder:c.bgMapFolder||'',_bgMapName:c._bgMapName||'',refCycle:c.refCycle,bars:c.bars?c.bars.map(b=>({chord:b.chord,chords:b.chords?b.chords.map(c=>({...c})):undefined,scaleText:b.scaleText||'',msgText:b.msgText||'',msgDuration:b.msgDuration||0,imgs:b.imgs.map(slotToJSON)})):null})),
     bank:bankImgs.map(b=>({id:b.id,name:b.name,type:b.type,data:b.data,thumb:b.thumb||null})),
@@ -3194,6 +3260,15 @@ async function applySession(s){
         if(b0>0){const bi2=document.getElementById('bpmInput');if(bi2)bi2.value=Math.round(b0);const vb=document.getElementById('vBpm');if(vb)vb.textContent=Math.round(b0)+' bpm';updateIntroLbl();}
       }
       // (if the session has no tempoMap, leave any in-memory map untouched)
+      // Restore XML time-signature map (compás real, ej. 3/4) — mismo patrón que tempoMap justo
+      // arriba, para que las sesiones guardadas (incluidas las que graban los scripts de vídeo
+      // de Tríadas/Arpegios vía batch-sessions.js) hereden el compás real sin cambiar esos
+      // scripts: ya delegan toda la temporización en la propia página.
+      if(s.timeSigMap&&Object.keys(s.timeSigMap).length){
+        window._timeSigMap={};
+        Object.entries(s.timeSigMap).forEach(([k,v])=>{window._timeSigMap[parseInt(k)]=v;});
+        invalidateBarCache();
+      }
       updateTempoIncrLbl();
       if(s.bank){bankImgs=[];for(const b of s.bank){const e={id:b.id||rid(),name:b.name,type:b.type||'png',data:b.data,thumb:b.thumb||null,svgParsed:null};if(e.type==='svg'&&e.data)e.svgParsed=parseSVG(e.data);if(!e.thumb)await ensureThumb(e);bankImgs.push(e);}}
       // Load library from session (merges with existing localStorage library)
@@ -6092,12 +6167,19 @@ function ashOnRootOrQualityChange(){
   ashRender();
 }
 
+// La cualidad "real" a usar: el texto libre (ashQualityCustom) si tiene contenido, si no el
+// desplegable — así se puede dibujar/cargar/corregir un acorde del tema (ej. "9", "sus4") que
+// no está en la lista fija del desplegable, sin tocar el resto del flujo de ashGenerate.
+function ashGetQuality(){
+  const custom=(document.getElementById('ashQualityCustom')?.value||'').trim();
+  return custom||document.getElementById('ashQuality').value;
+}
 function ashRender(){
   ashRenderKeys();
   const board=document.getElementById('ashBoard');if(!board)return;
   const g=ashGeom();
   const rootRaw=document.getElementById('ashRoot').value;
-  const quality=document.getElementById('ashQuality').value;
+  const quality=ashGetQuality();
   const rootSt=noteToSt(rootRaw);
   let s=`<svg viewBox="0 0 ${g.W} ${g.H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;cursor:pointer;">`;
   if(g.fretMin===0)s+=`<line x1="${g.leftPad}" y1="${g.topPad}" x2="${g.leftPad}" y2="${g.topPad+5*g.stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
@@ -6137,7 +6219,7 @@ function ashGenerate(){
   const status=document.getElementById('ashStatus');
   if(!ashNotes.length){status.textContent='Clica las notas de la forma primero.';return;}
   const baseRootRaw=document.getElementById('ashRoot').value;
-  const quality=document.getElementById('ashQuality').value;
+  const quality=ashGetQuality();
   const baseRootSt=noteToSt(baseRootRaw);
   // chosen target keys
   const keys=ASH_KEYS.filter(k=>{const el=document.getElementById('ashkey_'+k.replace('#','s'));return el&&el.checked;});
@@ -6149,12 +6231,20 @@ function ashGenerate(){
     const iv=ashIntervalAt(n.string,n.fret,baseRootSt,quality);
     return{string:n.string,fret:n.fret,semi,iv};
   });
-  const suffix=ASH_QUAL_SUFFIX[quality]??'';
+  // Fallback = la propia cualidad (no ''): ASH_QUAL_SUFFIX es un mapa identidad para las
+  // cualidades del desplegable; para una cualidad libre (ashQualityCustom, ej. "9", "sus4")
+  // que no está ahí, el sufijo correcto sigue siendo el texto tal cual.
+  const suffix=ASH_QUAL_SUFFIX[quality]??quality;
   // Posición CAGED de esta forma (E/D/C/A/G) — permite guardar hasta 5 formas del mismo
   // acorde sin que se sobreescriban entre sí (antes solo cabía una forma por tonalidad+
   // cualidad: generar una 2ª posición borraba la 1ª). Ver ashSendToEditor para cómo se
   // elige entre varias al enviar al editor.
   const posLabel=document.getElementById('ashPos')?.value||'E';
+  // Esta forma se convierte en la PLANTILLA de cualidad+forma (ver ashAutoBoxNotes): cualquier
+  // otro acorde de la misma cualidad en esta forma CAGED usará esta misma estructura relativa a
+  // partir de ahora (transportada a su propia tónica) en vez de la geometría automática — así
+  // corregir una vez (ej. C7 Forma A) arregla también D7/G7/A7… Forma A sin tocarlos uno a uno.
+  ashSavePattern(quality,posLabel,baseRootSt,shapeNotes);
   // ensure parent "Arpegios" folder
   const parentId=getOrCreateSubFolder('Arpegios',null);
   let made=0;
@@ -6199,13 +6289,172 @@ function ashGenerate(){
   // aviso de esta generación se confundía fácilmente con el del envío, y sin ese segundo clic
   // el editor seguía mostrando lo que hubiera antes (bug real reportado: "dice que lo ha
   // generado pero no lo veo"). Silencioso: solo actualiza el estado, sin ventana de alerta.
+  const patternNote=` Patrón ${suffix||'(mayor)'} Forma ${posLabel} guardado — se usará para cualquier otro acorde de esta cualidad en esta forma (pulsa "Generar automáticamente para el tema" para aplicarlo a los ya generados).`;
   if(cycles.length){
     ashSendToEditor(true);
     const sendStatus=document.getElementById('ashSendStatus');
-    status.textContent=`✓ ${made} arpegios generados. Editor: ${sendStatus?sendStatus.textContent:'sincronizado'}.`;
+    status.textContent=`✓ ${made} arpegios generados. Editor: ${sendStatus?sendStatus.textContent:'sincronizado'}.${patternNote}`;
   }else{
-    status.textContent=`✓ ${made} arpegios generados en Librería → Arpegios.`;
+    status.textContent=`✓ ${made} arpegios generados en Librería → Arpegios.${patternNote}`;
   }
+}
+
+// ── Generación automática de formas (sin dibujar a mano) ───────────────────────
+// Ventana CAGED de arpegio para un ACORDE arbitrario: mismo principio que
+// seqBuildCagedPosition (ver más abajo, generador de cajas CAGED de ESCALA) — ancla cada forma
+// en el traste donde cae la TÓNICA DEL ACORDE en la 6ª cuerda, con los mismos 5 offsets fijos
+// por forma, pero filtrando solo las notas que son del acorde (resolveChordDefs) en vez de las
+// de una escala. Si la ventana de 4 trastes deja muy pocas notas (acorde disperso en ese tramo),
+// la ensancha hasta 2 veces antes de rendirse. Es solo un PUNTO DE PARTIDA — igual que el
+// digitado CAGED automático de "Arpegios en escala"/"Escalas por tramos": se corrige a mano con
+// "Cargar forma existente/auto" si el resultado no es el que se quiere tocar.
+const ASH_CAGED_SHAPES=[{name:'E',off:-1},{name:'D',off:1},{name:'C',off:4},{name:'A',off:6},{name:'G',off:9}];
+const ASH_AUTO_MIN_NOTES=4;
+// Traste (0-11) donde la tónica cae en la 6ª cuerda — el mismo anclaje que ya usa
+// seqBuildCagedPosition para escalas, reutilizado aquí como referencia común entre la geometría
+// automática (ashAutoBoxNotes) y el almacén de patrones corregidos a mano (ashPatternStore):
+// así ambos hablan el mismo "traste 0" relativo, sea cual sea la tónica real.
+function ashRootFretE(rootSt){for(let f=0;f<=11;f++){if(getNoteStAtFret(0,f)===rootSt)return f;}return 0;}
+
+// ── Patrones corregidos a mano, reutilizables por cualquier tónica ─────────────────────────
+// Cuando se genera una forma a mano (ashGenerate, ver más abajo) para una cualidad+forma CAGED
+// dadas (ej. "7" Forma A), esa forma se guarda aquí — no solo la entrada de librería del acorde
+// concreto — porque la ESTRUCTURA relativa a la tónica es siempre la misma para cualquier acorde
+// de esa cualidad en esa forma (pedido real: "si corrijo C7 en forma A, que sepas dibujar
+// cualquier acorde de 7 en forma A"). ashAutoBoxNotes consulta este almacén ANTES de calcular la
+// caja por geometría — si hay un patrón guardado, se usa siempre (transportado a la tónica que
+// toque), y la geometría solo es el punto de partida para cualidades+formas aún no corregidas.
+const ASH_PATTERN_KEY='gv_ashPatternStore';
+let ashPatternStore=null;
+function ashLoadPatternStore(){if(ashPatternStore)return ashPatternStore;try{const r=localStorage.getItem(ASH_PATTERN_KEY);ashPatternStore=r?JSON.parse(r):{};}catch(e){ashPatternStore={};}return ashPatternStore;}
+function ashSavePatternStoreToDisk(){try{localStorage.setItem(ASH_PATTERN_KEY,JSON.stringify(ashPatternStore||{}));}catch(e){}}
+function ashPatternKey(qualityText,posLabel){return(qualityText||'').trim().toLowerCase()+'|'+posLabel;}
+function ashSavePattern(qualityText,posLabel,baseRootSt,shapeNotes){
+  const store=ashLoadPatternStore();
+  store[ashPatternKey(qualityText,posLabel)]={anchorFret:ashRootFretE(baseRootSt),notes:shapeNotes.map(n=>({string:n.string,fret:n.fret,iv:n.iv}))};
+  ashSavePatternStoreToDisk();
+}
+function ashClearPattern(qualityText,posLabel){
+  const store=ashLoadPatternStore();
+  delete store[ashPatternKey(qualityText,posLabel)];
+  ashSavePatternStoreToDisk();
+}
+function ashAutoBoxNotes(rootRaw,qualityText,posLabel){
+  const rootSt=noteToSt(rootRaw);if(rootSt<0)return[];
+  const anchorFret=ashRootFretE(rootSt);
+  const saved=ashLoadPatternStore()[ashPatternKey(qualityText,posLabel)];
+  if(saved&&saved.notes&&saved.notes.length){
+    const baseFrets=saved.notes.map(n=>n.fret);
+    let shift=anchorFret-saved.anchorFret;
+    while(Math.min(...baseFrets)+shift<0)shift+=12;
+    while(Math.max(...baseFrets)+shift>24)shift-=12;
+    return saved.notes.map(n=>{const fret=n.fret+shift;return{string:n.string,fret,st:getNoteStAtFret(n.string,fret),iv:n.iv};});
+  }
+  const defs=resolveChordDefs(qualityText||'');
+  if(!defs||!defs.length)return[];
+  const ivBySemi={};
+  defs.forEach(d=>{ivBySemi[((rootSt+d.st)%12+12)%12]=d.n;});
+  const sh=ASH_CAGED_SHAPES.find(s=>s.name===posLabel)||ASH_CAGED_SHAPES[0];
+  let lo=anchorFret+sh.off;while(lo>=12)lo-=12;if(lo<0)lo=0;
+  const collect=(lo,hi)=>{
+    const out=[];
+    for(let string=0;string<6;string++)for(let f=lo;f<=hi;f++){
+      const st=getNoteStAtFret(string,f);
+      const iv=ivBySemi[st];
+      if(iv!==undefined)out.push({string,fret:f,st,iv});
+    }
+    return out;
+  };
+  let hi=lo+3,notes=collect(lo,hi),widened=0;
+  while(notes.length<ASH_AUTO_MIN_NOTES&&widened<2&&hi<24){hi++;widened++;notes=collect(lo,hi);}
+  return notes;
+}
+
+// Genera, para TODOS los acordes reales distintos del tema cargado, las 5 formas CAGED con
+// ashAutoBoxNotes y las escribe/actualiza en la librería exactamente con el mismo formato que
+// ashGenerate (mismo nombre de entrada, mismos campos arpPos/arpAvgFret/notes) — así
+// ashSendToEditor (encadenado por cercanía de traste, forma de partida, override manual) las usa
+// sin ningún cambio, igual que si se hubieran dibujado a mano.
+function ashAutoGenerateForTheme(){
+  const status=document.getElementById('ashAutoStatus');
+  const say=t=>{if(status)status.textContent=t;};
+  if(!cycles.length){alert('Carga primero un tema (XML con acordes) en Audio & XML.');return;}
+  const chords=tnThemeChords();
+  if(!chords.length){say('El tema cargado no tiene acordes.');return;}
+  const parentId=getOrCreateSubFolder('Arpegios',null);
+  let made=0;const weak=[];
+  chords.forEach(chordStr=>{
+    const cm=chordStr.match(/^([A-G][b#]?)(.*)$/);if(!cm)return;
+    const rootRaw=cm[1],qualityText=cm[2].trim();
+    const rootSt=noteToSt(rootRaw);
+    ASH_CAGED_SHAPES.forEach(shDef=>{
+      const posLabel=shDef.name;
+      const boxNotes=ashAutoBoxNotes(rootRaw,qualityText,posLabel);
+      if(!boxNotes.length)return; // nada que dibujar en esta forma para este acorde
+      if(boxNotes.length<ASH_AUTO_MIN_NOTES)weak.push(chordStr+' ('+posLabel+')');
+      const tnotes=boxNotes.map(n=>({string:n.string,fret:n.fret,st:n.st,
+        note:spellNote(rootRaw,n.iv,((n.st-rootSt)%12+12)%12)||NTS[n.st],interval:n.iv,isRoot:n.iv==='R'}));
+      const avgFret=tnotes.reduce((a,n)=>a+n.fret,0)/tnotes.length;
+      const svgStr=arpBuildZoneSVG(tnotes,chordStr,'',[],0,15);
+      const sub=getOrCreateSubFolder(chordStr,parentId);
+      const entryName=chordStr+' arpegio ('+posLabel+')';
+      const existing=library.find(e=>e.name===entryName);
+      if(existing){
+        existing.data=svgStr;existing.folder=sub;existing.svgParsed=svgStringToParsed(svgStr);
+        existing.arpPos=posLabel;existing.arpAvgFret=avgFret;existing.chordName=chordStr;existing.notes=tnotes;
+      }else{
+        library.push({id:rid(),type:'svg',data:svgStr,name:entryName,folder:sub,svgParsed:svgStringToParsed(svgStr),
+          arpPos:posLabel,arpAvgFret:avgFret,chordName:chordStr,notes:tnotes});
+      }
+      made++;
+    });
+  });
+  saveLibToStorage();
+  renderLibInline();
+  if(typeof ashRenderPosPicker==='function')ashRenderPosPicker();
+  ashSendToEditor(true);
+  const sendStatus=document.getElementById('ashSendStatus');
+  let msg=`✓ ${made} formas generadas para ${chords.length} acorde(s) del tema.`;
+  if(weak.length)msg+=` ⚠ pocas notas en: ${weak.join(', ')} — revísalas con "Cargar forma existente/auto".`;
+  msg+=` Editor: ${sendStatus?sendStatus.textContent:'sincronizado'}.`;
+  say(msg);
+}
+
+// "Cargar forma existente/auto": parte del mismo tablero de dibujo de arriba pero, en vez de
+// arrancar vacío, arranca con la forma ya generada en la librería para Acorde base + Cualidad +
+// Forma (o, si aún no existe, con la geometría automática de ashAutoBoxNotes) — así corregir una
+// posición mal generada es solo clicar encima y volver a pulsar "Generar arpegios a la
+// librería" (que sobreescribe esa misma entrada, ver ashGenerate).
+function ashLoadExistingShape(){
+  const status=document.getElementById('ashStatus');
+  const rootRaw=document.getElementById('ashRoot').value;
+  const quality=ashGetQuality();
+  const posLabel=document.getElementById('ashPos')?.value||'E';
+  const suffix=ASH_QUAL_SUFFIX[quality]??quality;
+  const entryName=rootRaw+suffix+' arpegio ('+posLabel+')';
+  const existing=library.find(e=>e.name===entryName);
+  if(existing&&existing.notes&&existing.notes.length){
+    ashNotes=existing.notes.map(n=>({string:n.string,fret:n.fret}));
+    if(status)status.textContent=`Cargada la forma ya generada de ${entryName}.`;
+  }else{
+    const auto=ashAutoBoxNotes(rootRaw,quality,posLabel);
+    if(!auto.length){if(status)status.textContent=`No se pudo generar automáticamente ${rootRaw}${suffix} Forma ${posLabel} — dibújala a mano.`;return;}
+    ashNotes=auto.map(n=>({string:n.string,fret:n.fret}));
+    if(status)status.textContent=`Cargada la forma automática de ${rootRaw}${suffix} Forma ${posLabel} (aún no estaba en la librería) — corrígela y genera.`;
+  }
+  ashRender();
+}
+
+// Olvida el patrón corregido guardado para Cualidad+Forma actuales (vuelve a la geometría
+// automática de ashAutoBoxNotes) — no toca las entradas ya generadas en la librería, solo lo que
+// se usará la PRÓXIMA vez que se auto-genere o cargue esa cualidad+forma.
+function ashClearPatternForCurrent(){
+  const status=document.getElementById('ashStatus');
+  const quality=ashGetQuality();
+  const posLabel=document.getElementById('ashPos')?.value||'E';
+  const suffix=ASH_QUAL_SUFFIX[quality]??quality;
+  ashClearPattern(quality,posLabel);
+  if(status)status.textContent=`Patrón corregido de ${suffix||'(mayor)'} Forma ${posLabel} olvidado — se volverá a calcular por geometría automática.`;
 }
 
 function ashToggleAllKeys(){
@@ -9260,8 +9509,9 @@ function seqNoteIndexAt(elapsed,introSec){
   const d=seqPlayData;
   if(elapsed<introSec)return -1;
   // Notes per beat = spb. We need cumulative beats since intro.
-  // Beats elapsed = integrate tempo. Reuse bar timing: beat = bar/4.
-  const hasTempoVar=(window._tempoMap&&Object.keys(window._tempoMap).length>1);
+  // Beats elapsed = integrate tempo (y compás, ver getBeatsAtBar/getBeatsBeforeBar).
+  const hasTempoVar=(window._tempoMap&&Object.keys(window._tempoMap).length>1)
+    ||(window._timeSigMap&&Object.keys(window._timeSigMap).length>1);
   let beatsElapsed;
   if(hasTempoVar){
     // Find bar and fraction
@@ -9269,10 +9519,10 @@ function seqNoteIndexAt(elapsed,introSec){
     const barStart=getBarStartTime(bi);
     const barSec=getBarSecAt(elapsed);
     const intoBar=Math.max(0,elapsed-barStart);
-    beatsElapsed=bi*4+(intoBar/(barSec/4));
+    beatsElapsed=getBeatsBeforeBar(bi)+(intoBar/(barSec/getBeatsAtBar(bi)));
   }else{
     const barSec=getBarSec();
-    beatsElapsed=(elapsed-introSec)/(barSec/4);
+    beatsElapsed=(elapsed-introSec)/(barSec/getBeatsAtBar(0));
   }
   const noteIdx=Math.floor(beatsElapsed*d.spb);
   return noteIdx;
@@ -9339,7 +9589,8 @@ function tick(){
   const allBars=getAllBars();
 
   if(elapsed<introSec){
-    const introBarSec=(60/getIntroBPM())*4;
+    const introBeats=getBeatsAtBar(0);
+    const introBarSec=(60/getIntroBPM())*introBeats;
     const bl=Math.max(1,Math.ceil((introSec-elapsed)/introBarSec));
     if(lastBar!==-1){lastBar=-1;currentChordData=null;vlCurrentNotes=null;animPending=-1;_introBeatLast=-1;_lapLast=-1;
       const lapEl=document.getElementById('vLap');if(lapEl)lapEl.style.display='none';
@@ -9389,17 +9640,17 @@ function tick(){
     const curEl=document.getElementById('vChord');
     if(curEl)curEl.textContent=String(bl);
     // Beat pulse on the count-in number
-    const globalBeat=Math.floor(elapsed/(introBarSec/4));
+    const globalBeat=Math.floor(elapsed/(introBarSec/introBeats));
     if(globalBeat!==_introBeatLast){
       _introBeatLast=globalBeat;
       if(curEl){
-        const cls=(globalBeat%4===0)?'intro-pulse-strong':'intro-pulse';
+        const cls=(globalBeat%introBeats===0)?'intro-pulse-strong':'intro-pulse';
         curEl.classList.remove('intro-pulse','intro-pulse-strong');
         void curEl.offsetWidth; // restart animation
         curEl.classList.add(cls);
       }
     }
-    tickBeats(elapsed%introBarSec,introBarSec);
+    tickBeats(elapsed%introBarSec,introBarSec,introBeats);
     // show the intro tempo (first bar's tempo) on screen, not a stale value
     {const vb=document.getElementById('vBpm');if(vb){const ib=Math.round(getIntroBPM());if(ib>0)vb.textContent=ib+' bpm';}}
     rafId=requestAnimationFrame(tick);return;
@@ -9413,22 +9664,25 @@ function tick(){
    setChordDisplayMode(getChordDisplayMode());}
 
   const prog=elapsed-introSec;
-  // Use variable tempo if XML has tempo changes or manual incr is set
-  const hasTempoVar=(window._tempoMap&&Object.keys(window._tempoMap).length>1)||getTempoIncrVueltas()>0;
+  // Use variable tempo/compás if XML has tempo changes, manual incr is set, or the compás
+  // cambia a lo largo del tema (window._timeSigMap con más de una entrada, ver getBeatsAtBar).
+  const hasTempoVar=(window._tempoMap&&Object.keys(window._tempoMap).length>1)||getTempoIncrVueltas()>0
+    ||(window._timeSigMap&&Object.keys(window._timeSigMap).length>1);
   const varBi=hasTempoVar?getBarIndexAt(elapsed):null;
   const bi=varBi!==null?varBi:Math.floor(prog/barSec);
   const currentBarSec=hasTempoVar?getBarSecAt(elapsed):barSec;
   if(bi>=allBars.length){stopAll();return;}
   const bar=allBars[bi];
   const imgs=bar.imgs||[null,null,null,null];
-  const beatSec=currentBarSec/4; // duration of one beat
+  const barBeats=getBeatsAtBar(bi); // tiempos reales de ESTE compás (4 si no hay <time> en el XML)
+  const beatSec=currentBarSec/barBeats; // duration of one beat
   // Update on-screen BPM from the same source as the metronome (always runs each frame)
   {
     const vBpmEl=document.getElementById('vBpm');
-    if(vBpmEl){const b=currentBarSec>0?Math.round(60/(currentBarSec/4)):0;if(b>0)vBpmEl.textContent=b+' bpm';}
+    if(vBpmEl){const b=currentBarSec>0?Math.round(60/beatSec):0;if(b>0)vBpmEl.textContent=b+' bpm';}
   }
 
-  // Current beat within bar (0-3)
+  // Current beat within bar (0..barBeats-1)
   // Time within current bar
   let timeInBar;
   if(hasTempoVar){
@@ -9437,7 +9691,7 @@ function tick(){
   } else {
     timeInBar=prog-(bi*barSec);
   }
-  const beatInBar=Math.min(Math.floor(timeInBar/beatSec),3);
+  const beatInBar=Math.min(Math.floor(timeInBar/beatSec),barBeats-1);
   // Which chord segment is active within this bar (supports 2+ chords per bar).
   const segIdx=getSegmentIndexAtBeat(bar,beatInBar);
   const barChordNow=getChordAtBeat(bar,beatInBar); // chord sounding right now
@@ -9610,7 +9864,7 @@ function tick(){
   }
   if(getChordDisplayMode()==='bars') updateBarsMinimal(barChordNow,allBars[bi+1]?.chord||'',getFn(barChordNow),allBars,bi,beatInBar);
   if(seqActive)seqPaintPlayer(elapsed,introSec);
-  tickBeats(timeInBar,currentBarSec);
+  tickBeats(timeInBar,currentBarSec,barBeats);
   rafId=requestAnimationFrame(tick);
 }
 
@@ -10295,15 +10549,19 @@ function renderStrip(active,allBars){
   }
 }
 
-function tickBeats(elapsed,barSec){
-  const beat=Math.floor((elapsed%barSec)/(barSec/4));
+// beats = tiempos reales del compás actual (3 para 3/4, etc. — ver getBeatsAtBar); por defecto 4
+// para no romper ninguna llamada antigua. Solo se pintan `beats` puntos (no siempre 4): así el
+// metrónomo visual deja de "sobrar" un punto sin sentido en compases distintos de 4/4. Reutiliza
+// las 4 clases CSS .bdot.beat1-4 de forma cíclica para cualquier `beats` (incluido >4, raro).
+function tickBeats(elapsed,barSec,beats){
+  beats=beats>0?beats:4;
+  const beat=Math.floor((elapsed%barSec)/(barSec/beats));
   const el=document.getElementById('vBeats');
-  const beatClasses=['beat1','beat2','beat3','beat4'];
-  if(el.children.length!==4){
+  if(el.children.length!==beats){
     el.innerHTML='';
-    beatClasses.forEach(cls=>{const d=document.createElement('div');d.className='bdot '+cls;el.appendChild(d);});
+    for(let i=0;i<beats;i++){const d=document.createElement('div');d.className='bdot beat'+((i%4)+1);el.appendChild(d);}
   }
-  Array.from(el.children).forEach((d,i)=>{d.className='bdot '+beatClasses[i]+(i===beat?' on':'');});
+  Array.from(el.children).forEach((d,i)=>{d.className='bdot beat'+((i%4)+1)+(i===beat?' on':'');});
 }
 function clearVis(){
   updateCarousel('','—','',null);
