@@ -307,12 +307,17 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
 
   const outPath = path.join(outDir, `arpegios_${tag}.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
+  // Recorte EXACTO por timestamp de fotograma (filtro trim+setpts), no por keyframe: "-ss" ANTES
+  // de "-i" busca al keyframe más cercano y puede desviarse del punto real hasta un GOP entero —
+  // eso se notaba como el vídeo ligeramente desfasado del metrónomo/cambio de acorde (mismo fix
+  // que ya lleva scripts/lib/batch-sessions.js, portado aquí — ver bug reportado: "el metrónomo y
+  // los compases cambian... en el tiempo 'y'").
   await execFileP('ffmpeg', [
     '-y',
-    '-ss', trimOffsetSec.toFixed(3), '-i', silentPath,
+    '-i', silentPath,
     '-i', audioPath,
-    '-filter_complex', `[1:a]apad=pad_dur=${extraSec}[a]`,
-    '-map', '0:v:0', '-map', '[a]',
+    '-filter_complex', `[0:v]trim=start=${trimOffsetSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',
     '-shortest',
