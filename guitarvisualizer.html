@@ -499,6 +499,7 @@ body.presentation #channelWatermark{display:flex;}
     <div class="tab" title="Secuencia nota a nota sobre un fondo de escala (ruta propia, nota a nota)." onclick="showTab('sequence')"><i class="ti ti-arrow-bar-to-right"></i> Secuencias</div>
     <div class="tab" title="Chord tones: caja de escala de fondo + notas del acorde iluminadas en cada acorde." onclick="showTab('targets')"><i class="ti ti-target"></i> Chord tones</div>
     <div class="tab" title="Progresión diatónica completa de una escala (tríadas o tétradas) sobre una posición CAGED, sin dibujar ninguna forma de arpegio: el arpegio es siempre un subconjunto de las notas de la escala." onclick="showTab('arpscale')"><i class="ti ti-guitar-pick"></i> Arpegios en escala</div>
+    <div class="tab" title="Build-up narrado: revela una caja pentatónica CAGED en pasos (tríada por grupos de cuerdas → +7ª → +4ª → caja completa), sincronizado a un backing track, con texto de apoyo." onclick="showTab('scalestory')"><i class="ti ti-stack-2"></i> Historia de escala</div>
     <div class="tab" title="Asigna una escala y su posición a cada rango de compases del ciclo." onclick="showTab('scales')"><i class="ti ti-timeline"></i> Escalas</div>
     <div class="tab" onclick="showTab('help')"><i class="ti ti-help"></i> Ayuda</div>
     <span id="exBadge" style="margin-left:auto;align-self:center;font-size:11px;font-weight:600;color:var(--text2);background:rgba(0,0,0,.06);border:1px solid var(--border);border-radius:999px;padding:3px 10px;white-space:nowrap;" title="Tipo de ejercicio que se está reproduciendo realmente (se deduce del contenido del frame activo, no del selector)"></span>
@@ -825,6 +826,14 @@ body.presentation #channelWatermark{display:flex;}
           <svg id="svgCanvas" viewBox="0 0 1001 394" preserveAspectRatio="xMidYMid meet"></svg>
           <svg id="bgMapCanvas" viewBox="0 0 1001 394" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;overflow:visible;"></svg>
           <svg id="ghostCanvas" viewBox="0 0 1001 394" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;overflow:visible;z-index:7;"></svg>
+          <!-- Texto de apoyo de "Historia de escala" (módulo scaleStory, ver final del archivo) -->
+          <div id="ssCaption" style="position:absolute;left:0;right:0;bottom:0;display:none;pointer-events:none;z-index:9;background:linear-gradient(0deg,rgba(0,0,0,.72),transparent);padding:16px 18px 12px;text-align:center;">
+            <div id="ssCaptionText" style="color:#fff;font:600 16px/1.3 Helvetica,Arial,sans-serif;letter-spacing:.02em;text-shadow:0 1px 3px rgba(0,0,0,.6);"></div>
+          </div>
+          <!-- Título durante los compases de entrada (introCount) — se difumina justo antes de que empiece la narración -->
+          <div id="ssTitleOverlay" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:10;pointer-events:none;background:rgba(0,0,0,.55);">
+            <div id="ssTitleText" style="color:#fff;font:700 clamp(20px,4vw,38px)/1.35 Helvetica,Arial,sans-serif;text-align:center;text-shadow:0 2px 10px rgba(0,0,0,.65);padding:0 6%;"></div>
+          </div>
           <!-- Next-arpeggio preview (forma completa de la siguiente posición) -->
           <div id="nextPreview" style="position:absolute;top:2%;right:1.5%;width:26%;max-width:340px;display:none;pointer-events:none;z-index:8;background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px 6px;backdrop-filter:blur(3px);">
             <div id="nextPreviewLabel" style="font:600 12px Helvetica,Arial,sans-serif;color:rgba(255,255,255,.75);letter-spacing:.05em;margin-bottom:4px;text-align:center;"><span style="text-transform:uppercase;">Siguiente</span></div>
@@ -955,6 +964,7 @@ body.presentation #channelWatermark{display:flex;}
           <option value="sequence">Secuencias — reproducción nota a nota</option>
           <option value="rhythm">Ritmo — vídeo de tempo (solo batería, sin acordes)</option>
           <option value="realrhythm">Ritmos Reales — vídeo informativo (título/autor/BPM + fondo animado)</option>
+          <option value="scaleStory">Historia de escala — build-up narrado de pentatónica sobre backing track</option>
         </select>
         <div id="arpTimingRow" style="margin-top:12px;display:none;gap:18px;flex-wrap:wrap;align-items:center;">
           <label style="font-size:13px;display:flex;align-items:center;gap:8px;">
@@ -1690,6 +1700,51 @@ body.presentation #channelWatermark{display:flex;}
         <button class="btn" onclick="asExportConfigFile()"><i class="ti ti-download"></i> Exportar config.json (lote)</button>
         <span id="asSendStatus" style="font-size:12px;color:var(--text2);"></span>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORIA DE ESCALA -->
+<div class="panel" id="tab-scalestory" style="display:none;padding:20px;">
+  <div style="max-width:900px;margin:0 auto;">
+    <h2 style="margin:0 0 6px;font-size:18px;"><i class="ti ti-stack-2"></i> Historia de escala</h2>
+    <div class="tab-help"><div><span class="th-k">Qué genera</span>Un build-up narrado sobre el mástil completo, montado como una secuencia de <b>pasos</b> que tú compones: cada paso revela o ilumina un conjunto de notas (una posición CAGED, un grado, unas cuerdas...) durante los compases que le des. Cada nota nueva aparece y las anteriores quedan en fantasma, con texto de apoyo sincronizado.</div><div><span class="th-k">Backing track</span>Carga el audio (con su BPM) en la pestaña "Audio &amp; XML" antes de darle a Play — este ejercicio no lee acordes reales del tema, solo usa el tempo para marcar cuándo pasa cada paso.</div></div>
+    <div class="card">
+      <h3>1 · Tónica y escala</h3>
+      <div class="field-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Tónica</label>
+          <select id="ssRoot" onchange="ssRenderSteps()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;">
+            <option>C</option><option>C#</option><option>Db</option><option>D</option><option>D#</option><option>Eb</option>
+            <option>E</option><option>F</option><option>F#</option><option>Gb</option><option>G</option><option>G#</option>
+            <option>Ab</option><option selected>A</option><option>A#</option><option>Bb</option><option>B</option>
+          </select></div>
+        <div><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Escala</label>
+          <select id="ssScale" onchange="ssRenderSteps()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;min-width:180px;">
+            <option value="penta_minor">Pentatónica menor</option>
+            <option value="penta_major">Pentatónica mayor</option>
+          </select></div>
+        <div style="flex:1;min-width:220px;"><label style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;">Título (se muestra durante los compases de entrada)</label>
+          <input type="text" id="ssTitle" placeholder="(auto: tónica + escala)" style="width:100%;padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;"></div>
+      </div>
+      <p style="font-size:12px;color:var(--text2);margin:8px 0 0;">Los <b>compases de intro</b> (campo "Compases de intro" en Audio &amp; XML → Sincronización) se respetan: durante ellos no arranca ningún paso — se ve el título con fundido sobre el mástil vacío, que se revela justo antes de que empiece la narración.</p>
+    </div>
+    <div class="card" style="margin-top:12px;">
+      <h3>2 · Pasos de la narración</h3>
+      <p style="font-size:12px;color:var(--text2);margin:0 0 10px;">Cada paso: de qué notas parte (posición/es CAGED + filtro opcional de grado/cuerdas), cómo se trocea (todas juntas, en grupos de cuerdas, o una a una) y qué verbo aplica — <b>revelar</b> (de invisible a fantasma/sólida) o <b>iluminar</b> (notas ya visibles reciben un golpe de brillo y vuelven a fantasma/sólida).</p>
+      <div id="ssStepsList"></div>
+      <div class="field-row" style="gap:10px;margin-top:10px;">
+        <button class="btn" onclick="ssAddStep()"><i class="ti ti-plus"></i> Añadir paso</button>
+        <button class="btn" onclick="ssLoadTemplate()"><i class="ti ti-template"></i> Cargar plantilla (tríada → 7ª → 4ª → caja completa)</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px;">
+      <h3>3 · Usar el ejercicio</h3>
+      <div class="field-row" style="gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn" onclick="ssGenerate()"><i class="ti ti-bolt"></i> Generar guion (previsualizar)</button>
+        <button class="btn accent" onclick="ssSendToEditor()"><i class="ti ti-send"></i> Ver en Visualizador</button>
+        <span style="font-size:12px;color:var(--text2);">Genera el guion, cambia el tipo de ejercicio a "Historia de escala" y abre el Visualizador — dale a Play ahí con el backing track ya cargado.</span>
+      </div>
+      <div id="ssStatus" style="margin-top:8px;font-size:12px;color:var(--text2);"></div>
     </div>
   </div>
 </div>
@@ -7467,7 +7522,7 @@ function videoGenSetStatus(msg,cls){
 async function generateVideo(){
   if(videoGenState)return; // ya en marcha
   if(!audioEl||!audioEl.duration){alert('Carga primero un audio en la pestaña "Audio & XML".');showTab('audio');return;}
-  if(!cycles.length&&getExerciseType()!=='rhythm'&&getExerciseType()!=='realrhythm'){alert('Carga primero un ejercicio (acordes) antes de generar el vídeo.');showTab('audio');return;}
+  if(!cycles.length&&getExerciseType()!=='rhythm'&&getExerciseType()!=='realrhythm'&&getExerciseType()!=='scaleStory'){alert('Carga primero un ejercicio (acordes) antes de generar el vídeo.');showTab('audio');return;}
   if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){
     alert('Tu navegador no soporta la captura de pantalla necesaria (getDisplayMedia). Prueba con Chrome o Edge.');
     return;
@@ -7846,6 +7901,7 @@ const EX_BADGE_LABELS={
   rhythm:'Ritmo',
   realrhythm:'Ritmos Reales',
   as:'Arpegios en escala',
+  scaleStory:'Historia de escala',
 };
 function exBadgeKind(parsed){
   if(typeof seqActive!=='undefined'&&seqActive)return 'sequence';
@@ -10586,7 +10642,7 @@ function seekClick(e){if(!audioEl||!audioEl.duration)return;const p=e.offsetX/e.
 
 function showTab(name){
   try{
-    const panels=['editor','library','audio','player','video','settings','help','generate','sequence','targets','scales','triads','ritmos','arpscale'];
+    const panels=['editor','library','audio','player','video','settings','help','generate','sequence','targets','scales','triads','ritmos','arpscale','scalestory'];
     panels.forEach(t=>{
       const p=document.getElementById('tab-'+t);
       if(!p)return;
@@ -12105,6 +12161,565 @@ if(document.readyState==='complete'||document.readyState==='interactive') setTim
 else window.addEventListener('DOMContentLoaded',()=>setTimeout(rrInit,300));
 
 }catch(err){ console.error('[Ritmos Reales] módulo deshabilitado por error:',err); }
+})();
+</script>
+
+<script>
+/* =========================================================================
+ *  MÓDULO HISTORIA DE ESCALA (nuevo tipo de ejercicio 'scaleStory') — v2
+ *  Build-up narrado sobre backing track. En vez de un guion de fases fijo,
+ *  una NARRACIÓN es un array de ACCIONES compuestas a partir de dos verbos
+ *  genéricos (revelar/iluminar) aplicados a selectores de notas — así se
+ *  pueden construir narraciones tan complejas como haga falta sin tocar el
+ *  motor: añadir vocabulario nuevo es añadir un selector o un verbo, no
+ *  reescribir el reproductor. Ver ssSelect* (selectores) y ssBuildNarration
+ *  (la narración concreta que se genera hoy desde la pestaña).
+ *  Por ahora, mástil COMPLETO (0-15) siempre — sin recorte por posición.
+ *  Aislado, mismo patrón que el módulo Ritmo: sobreescribe startIt/pauseIt/
+ *  stopAll cuando getExerciseType()==='scaleStory', con su propio bucle
+ *  requestAnimationFrame — no toca tick()/triads/arpeggios/rhythm.
+ *  A diferencia de Ritmo (que oculta el mástil bajo #tvOverlay), este módulo
+ *  SÍ necesita el mástil: pinta el fondo con drawUnifiedFretboard() en
+ *  #svgCanvas y las notas en #ghostCanvas (misma geometría — neckGeo — que
+ *  el resto de generadores, así todo queda alineado).
+ * ========================================================================= */
+(function(){
+"use strict";
+try{
+
+// ════════ SELECTORES DE NOTAS (el "qué", sin decir cómo se muestra) ════════
+// Todos trabajan sobre/devuelven arrays de notas {string,fret,st,note,degree,isRoot}
+// (formato de seqBuildCagedPosition). ssKey identifica una nota por su celda física —
+// sirve para deduplicar uniones y para no repetir una nota ya usada en un trozo anterior.
+function ssKey(n){return n.string+'_'+n.fret;}
+function ssSelectPos(root,scaleKey,posIndex){
+  return(typeof seqBuildCagedPosition==='function')?seqBuildCagedPosition(root,scaleKey,posIndex):[];
+}
+function ssSelectPositions(root,scaleKey,posIndexes){
+  const seen=new Set(),out=[];
+  (posIndexes||[]).forEach(i=>ssSelectPos(root,scaleKey,i).forEach(n=>{const k=ssKey(n);if(!seen.has(k)){seen.add(k);out.push(n);}}));
+  return out;
+}
+function ssByDegree(notes,degrees){return notes.filter(n=>degrees.includes(n.degree));}
+function ssByStrings(notes,strings){return notes.filter(n=>strings.includes(n.string));}
+// Parte `notes` en trozos ordenados de N cuerdas consecutivas (0=Mi grave...5=Mi agudo,
+// igual que seqBuildCagedPosition). Cada nota aparece en su PRIMER trozo posible, así
+// recorrer todos los trozos cubre el conjunto entero sin repetir ninguna nota.
+function ssGroupsOfStrings(notes,n){
+  const chunks=[],used=new Set();
+  for(let w=0;w<=6-n;w++){
+    const strs=Array.from({length:n},(_,k)=>w+k);
+    const chunk=notes.filter(x=>strs.includes(x.string)&&!used.has(ssKey(x)));
+    chunk.forEach(x=>used.add(ssKey(x)));
+    if(chunk.length)chunks.push(chunk);
+  }
+  return chunks;
+}
+// Cada nota en su propio trozo, ordenadas de grave a agudo (para "de una en una").
+function ssEachNote(notes){
+  return notes.slice().sort((a,b)=>a.string-b.string||a.fret-b.fret).map(n=>[n]);
+}
+// Tríada REAL (una nota por cuerda, inversión correcta) reutilizando el motor ya existente
+// de la pestaña Tríadas — getChordVoicing()/TRIAD_STRING_GROUPS (definidos en el script
+// principal). A diferencia de ssSelectPos, esto NO viene de la caja pentatónica: busca su
+// propio traste más cómodo para esa cuerda+inversión, así que puede no coincidir con los
+// trastes que dibuja la caja pentatónica de fondo (mismo tono, quizás otra octava/posición).
+const SS_TRIAD_STRING_GROUPS=(typeof TRIAD_STRING_GROUPS!=='undefined')?TRIAD_STRING_GROUPS:[[2,3,4],[1,2,3],[0,1,2],[3,4,5]];
+const SS_TRIAD_GROUP_LABELS=SS_TRIAD_STRING_GROUPS.map(g=>g.map(s=>(6-s)+'ª').join('-'));
+function ssSelectTriad(chord,groupIdx,inversion){
+  const group=SS_TRIAD_STRING_GROUPS[groupIdx];
+  if(!group||typeof getChordVoicing!=='function')return[];
+  const v=getChordVoicing(chord,group,inversion);
+  if(!v)return[];
+  return v.strings.map((st,i)=>{
+    const ivName=v.intervals[i],degree=ivName==='R'?'1':ivName;
+    return{string:st,fret:v.frets[i],note:v.notes[i],degree,isRoot:ivName==='R'};
+  });
+}
+
+const SS_DEGREE_LABELS={'1':'tónica','b2':'b2ª','2':'2ª','b3':'3ª menor','3':'3ª mayor','4':'4ª','b5':'b5ª','5':'5ª','b6':'b6ª','6':'6ª','b7':'7ª menor','7':'7ª mayor'};
+const SS_DEGREE_ORDER=['1','b2','2','b3','3','4','b5','5','b6','6','b7','7'];
+// Grados que forman la tríada y, en orden, qué se va añadiendo después en la plantilla —
+// la única parte que depende de la escala concreta.
+const SS_DEGREE_GROUPS={
+  penta_minor:[['1','b3','5'],['b7'],['4']],
+  penta_major:[['1','3','5'],['6'],['2']],
+};
+function ssAvailableDegrees(scaleKey){
+  const set=new Set((SS_DEGREE_GROUPS[scaleKey]||SS_DEGREE_GROUPS.penta_minor).flat());
+  return SS_DEGREE_ORDER.filter(d=>set.has(d));
+}
+const SS_CAGED_LABELS=['Forma E','Forma D','Forma C','Forma A','Forma G'];
+const SS_STRING_LABELS=['6ª (grave)','5ª','4ª','3ª','2ª','1ª (aguda)']; // string 0..5
+
+// ════════ NARRACIÓN: array de ACCIONES construidas con dos verbos ════════
+// Acción = {op:'revelar'|'iluminar', trozos, bars, flash, quedaComo|vuelveA, caption}
+//   revelar(...,{trozos,bars,flash,quedaComo})  — las notas pasan de invisibles a
+//     quedaComo ('fantasma'|'solida'); si hay trozos, aparecen uno a uno repartiendo
+//     `bars` entre ellos; flash=true añade un brillo de pico antes de asentarse.
+//   iluminar(...,{trozos,bars,vuelveA})         — notas YA visibles reciben un golpe
+//     de brillo (mismo pico que flash, siempre activo) y al acabar cada trozo vuelven
+//     a vuelveA.
+// Las ACCIONES ya NO se hardcodean: se derivan de ssStepDefs (editable desde la UI, ver
+// más abajo) pasando cada paso por el mismo pipeline de selectores.
+function ssTriadChordFor(root,scaleKey){return root+(scaleKey==='penta_major'?'':'m');}
+function ssInversionsFor(step){return(step.inversions&&step.inversions.length)?step.inversions:[0,1,2];}
+function ssNotesForStep(step,root,scaleKey){
+  if(step.source==='triada'){
+    const chord=ssTriadChordFor(root,scaleKey),seen=new Set(),out=[];
+    ssInversionsFor(step).forEach(inv=>ssSelectTriad(chord,step.stringGroupIdx,inv).forEach(n=>{
+      const k=ssKey(n);if(!seen.has(k)){seen.add(k);out.push(n);}
+    }));
+    return out;
+  }
+  let notes=ssSelectPositions(root,scaleKey,(step.basePositions&&step.basePositions.length)?step.basePositions:[0]);
+  if(step.degrees&&step.degrees.length)notes=ssByDegree(notes,step.degrees);
+  if(step.strings&&step.strings.length)notes=ssByStrings(notes,step.strings);
+  return notes;
+}
+function ssChunksForStep(step,notes,root,scaleKey){
+  if(step.source==='triada'){
+    if(step.chunkMode==='porInversion'){
+      const chord=ssTriadChordFor(root,scaleKey);
+      return ssInversionsFor(step).map(inv=>ssSelectTriad(chord,step.stringGroupIdx,inv)).filter(c=>c.length);
+    }
+    return notes.length?[notes]:[];
+  }
+  if(step.chunkMode==='grupos')return ssGroupsOfStrings(notes,Math.max(1,Math.min(6,step.chunkSize||3)));
+  if(step.chunkMode==='unaAUna')return ssEachNote(notes);
+  return notes.length?[notes]:[];
+}
+function ssDefaultCaption(step){
+  const verbo=step.op==='revelar'?'Revela':'Ilumina';
+  if(step.source==='triada'){
+    const invLbl={0:'fundamental',1:'1ª inv.',2:'2ª inv.'};
+    return`${verbo} tríada (${SS_TRIAD_GROUP_LABELS[step.stringGroupIdx]||'?'}) — ${ssInversionsFor(step).map(i=>invLbl[i]).join('/')}`;
+  }
+  const que=(step.degrees&&step.degrees.length)?step.degrees.map(d=>SS_DEGREE_LABELS[d]||d).join('/'):'la posición';
+  return`${verbo} ${que}`;
+}
+function ssStepToAction(step,root,scaleKey){
+  const notes=ssNotesForStep(step,root,scaleKey);
+  const trozos=ssChunksForStep(step,notes,root,scaleKey);
+  const action={op:step.op,trozos,bars:Math.max(0.25,step.bars||1),caption:step.caption||ssDefaultCaption(step)};
+  if(step.op==='revelar'){action.flash=!!step.flash;action.quedaComo=step.endState;}
+  else{action.flash=true;action.vuelveA=step.endState;}
+  return action;
+}
+
+// ---- Reloj de compases ----
+// Si hay un XML cargado con mapa de tempo real (progresivo, >1 valor — mismo criterio que
+// tvHasTempoMap() del módulo Ritmo), la narración sigue ESE tempo/compás real compás a compás,
+// reutilizando el motor compartido (getBarIndexAt/getBarStartTime/getBpmAtBar/getBeatsAtBar,
+// el mismo que ya usan Tríadas y Ritmo — así no hay una tercera implementación del cálculo de
+// tempo). Sin mapa (audio suelto sin XML, caso normal de este ejercicio), cae al reloj simple
+// de BPM fijo + 4 tiempos/compás, igual que Ritmo en su modo sin tema.
+function ssGetBPM(){try{return(typeof getBPM==='function'&&getBPM()>0)?getBPM():85;}catch(e){return 85;}}
+function ssGetBeatsPerBar(){return 4;}
+function ssBarSeconds(){return ssGetBeatsPerBar()*(60/ssGetBPM());}
+function ssHasTempoMap(){try{return!!(window._tempoMap&&Object.keys(window._tempoMap).length>1);}catch(e){return false;}}
+// Compases de intro: #introCount ("Compases de intro" en Audio & XML → Sincronización) +
+// desfase fino (#offsetMs) — mismos campos compartidos que usan Tríadas/Ritmo. getIntroSec()
+// ya calcula la duración real (tempo y compás del bar 0, no un *4 fijo) — se reutiliza tal cual.
+function ssIntroSec(){
+  try{return(typeof getIntroSec==='function'?getIntroSec():0)+(typeof getOffSec==='function'?getOffSec():0);}
+  catch(e){return 0;}
+}
+// elapsed (segundos desde el arranque del audio, con intro incluida) → nº de compases
+// transcurridos DESDE EL FIN DE LA INTRO (fraccionario, para animar dentro del compás actual).
+function ssElapsedBars(elapsed){
+  if(ssHasTempoMap()){
+    const barIdx=getBarIndexAt(elapsed); // ya resta intro+offset internamente
+    if(barIdx<0)return null; // todavía en la intro
+    const barStart=getBarStartTime(barIdx);
+    const barDur=(60/getBpmAtBar(barIdx))*getBeatsAtBar(barIdx);
+    return barIdx+(barDur>0?(elapsed-barStart)/barDur:0);
+  }
+  const introSec=ssIntroSec();
+  if(elapsed<introSec)return null;
+  return(elapsed-introSec)/ssBarSeconds();
+}
+
+// ---- Estado de la narración generada. Mástil completo, siempre (por ahora) ----
+let ssActions=[],ssRafId=null;
+const SS_FRET_MIN=0,SS_FRET_MAX=15;
+
+// ════════ PASOS EDITABLES (ssStepDefs) — la UI de "2 · Pasos de la narración" ════════
+let ssStepDefs=[],ssStepSeq=0;
+function ssNewStep(overrides){
+  return Object.assign({id:'st'+(++ssStepSeq),op:'revelar',source:'pentatonica',basePositions:[0],degrees:[],strings:[],
+    chunkMode:'todas',chunkSize:3,stringGroupIdx:2,inversions:[0,1,2],bars:1,flash:false,endState:'fantasma',caption:''},overrides||{});
+}
+function ssAddStep(){ssStepDefs.push(ssNewStep());ssRenderSteps();}
+function ssRemoveStep(id){ssStepDefs=ssStepDefs.filter(s=>s.id!==id);ssRenderSteps();}
+function ssMoveStep(id,dir){
+  const i=ssStepDefs.findIndex(s=>s.id===id),j=i+dir;
+  if(i<0||j<0||j>=ssStepDefs.length)return;
+  const[s]=ssStepDefs.splice(i,1);ssStepDefs.splice(j,0,s);
+  ssRenderSteps();
+}
+function ssCollectChecks(stepId,cls){return[...document.querySelectorAll(`.${cls}[data-step="${stepId}"]:checked`)].map(el=>el.value);}
+const SS_STRUCTURAL_FIELDS=['op','chunkMode','source']; // cambian qué campos se ven en la fila → re-render completo
+function ssUpdateStep(id,field,value){
+  const s=ssStepDefs.find(x=>x.id===id);if(!s)return;
+  if(field==='bars'||field==='chunkSize'||field==='stringGroupIdx')s[field]=parseFloat(value)||(field==='bars'?1:field==='chunkSize'?3:0);
+  else if(field==='flash')s[field]=!!value;
+  else if(field==='basePositions'||field==='strings'||field==='inversions')s[field]=value.map(v=>parseInt(v,10));
+  else if(field==='source'&&value==='triada'&&(s.chunkMode==='grupos'||s.chunkMode==='unaAUna')){s[field]=value;s.chunkMode='todas';}
+  else s[field]=value;
+  if(SS_STRUCTURAL_FIELDS.includes(field))ssRenderSteps();
+  else ssRenderStepPreview(s.id);
+}
+function ssOnStepCheck(id,field,cls){ssUpdateStep(id,field,ssCollectChecks(id,cls));}
+function ssRenderStepPreview(id){
+  const el=document.getElementById('ssPreview_'+id);if(!el)return;
+  const s=ssStepDefs.find(x=>x.id===id);if(!s)return;
+  const root=document.getElementById('ssRoot').value,scaleKey=document.getElementById('ssScale').value;
+  const notes=ssNotesForStep(s,root,scaleKey),chunks=ssChunksForStep(s,notes,root,scaleKey);
+  el.textContent=notes.length?`→ ${notes.length} nota(s) en ${chunks.length} trozo(s), ${s.bars} compás/es cada acción`:'→ sin notas (revisa posición/filtros/acorde)';
+  el.style.color=notes.length?'var(--text2)':'#c0392b';
+}
+function ssLoadTemplate(){
+  const scaleKey=document.getElementById('ssScale').value;
+  const groups=SS_DEGREE_GROUPS[scaleKey]||SS_DEGREE_GROUPS.penta_minor;
+  ssStepDefs=[
+    ssNewStep({op:'revelar',degrees:groups[0].slice(),chunkMode:'grupos',chunkSize:3,bars:1,flash:false,endState:'fantasma',caption:'Tríada — fantasma por grupos de cuerdas'}),
+    ssNewStep({op:'iluminar',degrees:groups[0].slice(),chunkMode:'grupos',chunkSize:3,bars:1,endState:'fantasma',caption:'Tríada — brillo de presentación'}),
+  ];
+  for(let g=1;g<groups.length;g++){
+    ssStepDefs.push(ssNewStep({op:'revelar',degrees:groups[g].slice(),chunkMode:'unaAUna',bars:1,flash:true,endState:'fantasma',caption:`Se añade ${SS_DEGREE_LABELS[groups[g][0]]||groups[g][0]}`}));
+  }
+  ssStepDefs.push(ssNewStep({op:'iluminar',degrees:[],chunkMode:'todas',bars:1.5,endState:'solida',caption:'Caja completa — improvisa sobre el backing track'}));
+  ssRenderSteps();
+}
+function ssCheckboxGroup(stepId,field,cls,options,checkedVals){
+  return options.map(([val,label])=>{
+    const checked=checkedVals.includes(val)?'checked':'';
+    return`<label style="display:inline-flex;align-items:center;gap:3px;margin:0 8px 4px 0;font-size:12px;white-space:nowrap;"><input type="checkbox" class="${cls}" data-step="${stepId}" value="${val}" ${checked} onchange="ssOnStepCheck('${stepId}','${field}','${cls}')">${label}</label>`;
+  }).join('');
+}
+function ssSourceFieldsHtml(s,scaleKey){
+  if(s.source==='triada'){
+    const grpOpts=SS_TRIAD_GROUP_LABELS.map((l,idx)=>[String(idx),l]);
+    const invOpts=[['0','Fundamental'],['1','1ª inversión'],['2','2ª inversión']];
+    const chord=ssTriadChordFor(document.getElementById('ssRoot')?.value||'A',scaleKey);
+    return`<div style="font-size:11px;color:var(--text2);margin-bottom:2px;">Acorde (de la tónica+escala): <b>${chord}</b> · Grupo de cuerdas</div>
+    <select onchange="ssUpdateStep('${s.id}','stringGroupIdx',this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border2);font-size:12px;margin-bottom:6px;">
+      ${grpOpts.map(([v,l])=>`<option value="${v}" ${String(s.stringGroupIdx)===v?'selected':''}>${l}</option>`).join('')}
+    </select>
+    <div style="font-size:11px;color:var(--text2);margin:6px 0 2px;">Inversiones incluidas</div>
+    <div>${ssCheckboxGroup(s.id,'inversions','ssChkInv',invOpts,s.inversions.map(String))}</div>`;
+  }
+  const posOpts=SS_CAGED_LABELS.map((l,idx)=>[String(idx),l]);
+  const degOpts=ssAvailableDegrees(scaleKey).map(d=>[d,SS_DEGREE_LABELS[d]||d]);
+  const strOpts=SS_STRING_LABELS.map((l,idx)=>[String(idx),l]);
+  return`<div style="font-size:11px;color:var(--text2);margin-bottom:2px;">Posición(es) CAGED (pentatónica)</div>
+    <div>${ssCheckboxGroup(s.id,'basePositions','ssChkPos',posOpts,s.basePositions.map(String))}</div>
+    <div style="font-size:11px;color:var(--text2);margin:6px 0 2px;">Filtrar por grado (vacío = todos)</div>
+    <div>${ssCheckboxGroup(s.id,'degrees','ssChkDeg',degOpts,s.degrees)}</div>
+    <div style="font-size:11px;color:var(--text2);margin:6px 0 2px;">Filtrar por cuerdas (vacío = todas)</div>
+    <div>${ssCheckboxGroup(s.id,'strings','ssChkStr',strOpts,s.strings.map(String))}</div>`;
+}
+function ssChunkOptsHtml(s){
+  if(s.source==='triada')return`<option value="todas" ${s.chunkMode==='todas'?'selected':''}>Todas las inversiones juntas</option>
+    <option value="porInversion" ${s.chunkMode==='porInversion'?'selected':''}>Una inversión a la vez</option>`;
+  return`<option value="todas" ${s.chunkMode==='todas'?'selected':''}>Todas juntas</option>
+    <option value="grupos" ${s.chunkMode==='grupos'?'selected':''}>Grupos de cuerdas</option>
+    <option value="unaAUna" ${s.chunkMode==='unaAUna'?'selected':''}>Una a una</option>`;
+}
+function ssStepRowHtml(s,i,total,scaleKey){
+  const endLabel=s.op==='revelar'?'Queda como':'Vuelve a';
+  return`<div style="border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+    <div class="field-row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+      <b style="font-size:12px;color:var(--text2);">Paso ${i+1}</b>
+      <select onchange="ssUpdateStep('${s.id}','op',this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border2);font-size:12px;">
+        <option value="revelar" ${s.op==='revelar'?'selected':''}>Revelar</option>
+        <option value="iluminar" ${s.op==='iluminar'?'selected':''}>Iluminar</option>
+      </select>
+      <label style="font-size:11px;color:var(--text2);">Origen
+        <select onchange="ssUpdateStep('${s.id}','source',this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border2);font-size:12px;margin-left:4px;">
+          <option value="pentatonica" ${s.source==='pentatonica'?'selected':''}>Posición pentatónica</option>
+          <option value="triada" ${s.source==='triada'?'selected':''}>Tríada (grupo de cuerdas + inversión)</option>
+        </select></label>
+      <span style="margin-left:auto;"></span>
+      <button class="btn sm" ${i===0?'disabled':''} onclick="ssMoveStep('${s.id}',-1)" title="Subir">↑</button>
+      <button class="btn sm" ${i===total-1?'disabled':''} onclick="ssMoveStep('${s.id}',1)" title="Bajar">↓</button>
+      <button class="btn sm" onclick="ssRemoveStep('${s.id}')" title="Eliminar">🗑</button>
+    </div>
+    ${ssSourceFieldsHtml(s,scaleKey)}
+    <div class="field-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:6px;">
+      <div><label style="display:block;font-size:11px;color:var(--text2);">Trocear</label>
+        <select onchange="ssUpdateStep('${s.id}','chunkMode',this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border2);font-size:12px;">
+          ${ssChunkOptsHtml(s)}
+        </select></div>
+      ${s.source!=='triada'&&s.chunkMode==='grupos'?`<div><label style="display:block;font-size:11px;color:var(--text2);">Tamaño de grupo</label>
+        <input type="number" min="1" max="6" value="${s.chunkSize}" onchange="ssUpdateStep('${s.id}','chunkSize',this.value)" style="width:50px;padding:4px 6px;border-radius:6px;border:1px solid var(--border2);font-size:12px;"></div>`:''}
+      <div><label style="display:block;font-size:11px;color:var(--text2);">Compases</label>
+        <input type="number" min="0.25" step="0.25" value="${s.bars}" onchange="ssUpdateStep('${s.id}','bars',this.value)" style="width:60px;padding:4px 6px;border-radius:6px;border:1px solid var(--border2);font-size:12px;"></div>
+      ${s.op==='revelar'?`<div><label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="checkbox" ${s.flash?'checked':''} onchange="ssUpdateStep('${s.id}','flash',this.checked)"> Brillo al aparecer</label></div>`:'<div style="font-size:11px;color:var(--text2);align-self:center;">(iluminar siempre brilla)</div>'}
+      <div><label style="display:block;font-size:11px;color:var(--text2);">${endLabel}</label>
+        <select onchange="ssUpdateStep('${s.id}','endState',this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border2);font-size:12px;">
+          <option value="fantasma" ${s.endState==='fantasma'?'selected':''}>Fantasma</option>
+          <option value="solida" ${s.endState==='solida'?'selected':''}>Sólida</option>
+        </select></div>
+      <div style="flex:1;min-width:160px;"><label style="display:block;font-size:11px;color:var(--text2);">Texto de apoyo</label>
+        <input type="text" value="${(s.caption||'').replace(/"/g,'&quot;')}" placeholder="${ssDefaultCaption(s)}" onchange="ssUpdateStep('${s.id}','caption',this.value)" style="width:100%;padding:4px 8px;border-radius:6px;border:1px solid var(--border2);font-size:12px;"></div>
+    </div>
+    <div id="ssPreview_${s.id}" style="font-size:11px;color:var(--text2);margin-top:6px;"></div>
+  </div>`;
+}
+function ssRenderSteps(){
+  const box=document.getElementById('ssStepsList');if(!box)return;
+  const scaleKey=document.getElementById('ssScale').value;
+  box.innerHTML=ssStepDefs.length?ssStepDefs.map((s,i)=>ssStepRowHtml(s,i,ssStepDefs.length,scaleKey)).join(''):
+    '<p style="font-size:12px;color:var(--text2);">Sin pasos todavía — pulsa "Añadir paso" o "Cargar plantilla".</p>';
+  ssStepDefs.forEach(s=>ssRenderStepPreview(s.id));
+}
+
+function ssGenerate(){
+  const root=document.getElementById('ssRoot').value;
+  const scaleKey=document.getElementById('ssScale').value;
+  ssActions=ssStepDefs.map(s=>ssStepToAction(s,root,scaleKey)).filter(a=>a.trozos.length);
+  const st=document.getElementById('ssStatus');
+  if(!st)return;
+  if(!ssStepDefs.length)st.textContent='Añade al menos un paso (o carga la plantilla) antes de generar.';
+  else st.textContent=ssActions.length?`Guion generado: ${ssActions.length} de ${ssStepDefs.length} paso(s) con notas.`:'Ningún paso tiene notas — revisa posición/filtros.';
+}
+
+function ssSendToEditor(){
+  ssGenerate();
+  if(!ssActions.length){alert('No se pudo generar el guion. Revisa tónica/escala/posición.');return;}
+  if(typeof setExerciseType==='function'){
+    const sel=document.getElementById('exerciseType');if(sel)sel.value='scaleStory';
+    setExerciseType('scaleStory');
+  }
+  if(typeof showTab==='function')showTab('player');
+}
+
+// ---- Fondo del mástil: MISMA geometría (neckGeo) que el resto de generadores ----
+function ssShowBackground(){
+  const canvas=document.getElementById('svgCanvas');
+  if(!canvas)return;
+  canvas.innerHTML='';canvas.style.display='block';
+  const a=document.getElementById('layerA'),b=document.getElementById('layerB');
+  if(a)a.style.display='none'; if(b)b.style.display='none';
+  if(typeof drawUnifiedFretboard==='function')drawUnifiedFretboard(canvas,SS_FRET_MIN,SS_FRET_MAX);
+}
+
+// Convención de color del proyecto: tónica #E53935, no-tónica #26C6DA.
+const SS_COL_ROOT='#E53935',SS_COL_OTHER='#26C6DA';
+const SS_GHOST_RGB=[255,255,255]; // gris-fantasma de partida del fundido (mismo criterio que drawGhostNotes)
+function ssHexToRgb(hex){const v=parseInt(hex.slice(1),16);return[(v>>16)&255,(v>>8)&255,v&255];}
+function ssNoteXY(n,geo){
+  const cx=n.fret===0?(geo.leftPad-geo.r-4):(geo.leftPad+(n.fret-geo.fretMin)*geo.fretW-geo.fretW/2);
+  const cy=NECK_TOP+(5-n.string)*NECK_STRING_SPACING;
+  return{cx,cy,r:geo.r};
+}
+
+// ── Motor de la narración ───────────────────────────────────────────────────
+// Estado por nota, un único par (opacity, colorMix 0=fantasma..1=color sólido) que cubre
+// TANTO revelar (opacity sube de 0) COMO iluminar (opacity ya es 1, solo cambia colorMix):
+//  - sin flash, queda fantasma:  colorMix se queda en 0 (nunca se colorea, solo aparece)
+//  - sin flash, queda sólida:    colorMix sube en línea recta 0→1 junto con la opacidad
+//  - con flash, queda fantasma:  colorMix sube y BAJA otra vez (triángulo: pico a mitad)
+//  - con flash, queda sólida:    colorMix sube hasta 1 a mitad y se queda ahí
+function ssNoteVisual(isReveal,p,flash,endSolid){
+  p=Math.max(0,Math.min(1,p));
+  // La opacidad ocupa TODO el hueco del trozo (no un pico rápido al principio) — así una nota
+  // asignada a "1 compás por tríada" tarda el compás entero en aparecer del todo, en vez de
+  // saltar ya visible al 30% y quedarse quieta el resto (eso es lo que se veía "seguido").
+  const opacity=isReveal?p:1;
+  let colorMix;
+  if(!flash)colorMix=endSolid?p:0;
+  else colorMix=endSolid?Math.min(1,p/0.5):(p<0.5?p*2:2*(1-p));
+  return{opacity,colorMix};
+}
+// Aplica UNA acción al mapa de estado compartido, para el instante `elapsedBars`.
+// state: Map ssKey(nota) -> {note,opacity,colorMix}. Los trozos ya pasados (localP>=1)
+// quedan fijados en su estado final; el trozo en curso se anima; los futuros no tocan
+// el mapa (así una nota conserva el estado que le dejó la ÚLTIMA acción que la tocó).
+function ssApplyAction(state,action,elapsedBars,actionStartBar){
+  if(elapsedBars<=actionStartBar)return;
+  const isReveal=action.op==='revelar';
+  const endSolid=(action.quedaComo||action.vuelveA)==='solida';
+  const chunks=action.trozos&&action.trozos.length?action.trozos:[];
+  // TODO (feedback de Alberto, pendiente para la próxima sesión): `action.bars` hoy es el total
+  // de la ACCIÓN repartido entre trozos (unitDur=bars/trozos) — con "1 compás por tríada" y 4
+  // trozos, cada uno solo tiene 1/4 de compás y salen todos seguidos. Alberto espera que
+  // "compases" sea POR TROZO (unitDur=bars directamente, duración total=bars*trozos.length) —
+  // cambiar esto implica actualizar también ssComputeState (que usa act.bars para avanzar
+  // `cursor`) y el texto de la vista previa del editor (que ya lo llama "compás/es cada acción").
+  const unitDur=chunks.length?action.bars/chunks.length:0;
+  chunks.forEach((chunk,i)=>{
+    const chunkStart=actionStartBar+i*unitDur;
+    const localP=unitDur>0?(elapsedBars-chunkStart)/unitDur:1;
+    if(localP<=0)return;
+    if(localP>=1){
+      chunk.forEach(n=>state.set(ssKey(n),{note:n,opacity:1,colorMix:endSolid?1:0}));
+      return;
+    }
+    const vis=ssNoteVisual(isReveal,localP,!!action.flash,endSolid);
+    chunk.forEach(n=>state.set(ssKey(n),{note:n,...vis}));
+  });
+}
+// Recorre TODA la narración hasta `elapsedBars` acumulando estado (las acciones ya
+// pasadas quedan asentadas, la actual se anima) y devuelve también el texto de apoyo
+// vigente (el de la última acción cuyo inicio ya se alcanzó).
+function ssComputeState(actions,elapsedBars){
+  const state=new Map();
+  let cursor=0,caption=actions.length?actions[0].caption:'';
+  actions.forEach(act=>{
+    const actStart=cursor;
+    if(elapsedBars>=actStart)caption=act.caption;
+    ssApplyAction(state,act,elapsedBars,actStart);
+    cursor=actStart+act.bars;
+  });
+  return{state,caption};
+}
+
+function ssPaintState(state){
+  const overlay=document.getElementById('ghostCanvas');
+  if(!overlay)return;
+  overlay.innerHTML='';overlay.style.display='block';
+  const geo=neckGeo(SS_FRET_MIN,SS_FRET_MAX);
+  state.forEach(({note:n,opacity,colorMix:e})=>{
+    const{cx,cy,r}=ssNoteXY(n,geo);
+    const target=ssHexToRgb(n.isRoot?SS_COL_ROOT:SS_COL_OTHER);
+    const rgb=SS_GHOST_RGB.map((g0,i)=>Math.round(g0+(target[i]-g0)*e));
+    const fill=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${((0.35+0.65*e)*opacity).toFixed(2)})`;
+    const stroke=e<0.85?`rgba(255,255,255,${(0.55+0.05*opacity).toFixed(2)})`:`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    const g=document.createElementNS(NS,'g');
+    g.style.opacity=String(Math.max(0.001,opacity));
+    const c=document.createElementNS(NS,'circle');
+    c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r',r);
+    c.setAttribute('fill',fill);c.setAttribute('stroke',stroke);c.setAttribute('stroke-width','2');
+    if(e<0.85)c.setAttribute('stroke-dasharray',`5,${(3*(1-e)+0.001).toFixed(2)}`);
+    g.appendChild(c);
+    const t=document.createElementNS(NS,'text');
+    t.setAttribute('x',cx);t.setAttribute('y',cy);
+    t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
+    t.setAttribute('fill',e<0.6?'rgba(255,255,255,.8)':'white');
+    t.setAttribute('font-size','18');t.setAttribute('font-weight','bold');
+    t.setAttribute('font-family','Helvetica,Arial,sans-serif');
+    t.textContent=n.note;
+    g.appendChild(t);
+    overlay.appendChild(g);
+  });
+}
+
+function ssSetCaption(text){
+  const box=document.getElementById('ssCaption'),t=document.getElementById('ssCaptionText');
+  if(!box||!t)return;
+  if(text){box.style.display='block';t.textContent=text;}else{box.style.display='none';}
+}
+
+function ssGetTitle(){
+  const v=(document.getElementById('ssTitle')?.value||'').trim();
+  if(v)return v;
+  const root=document.getElementById('ssRoot')?.value||'',scaleKey=document.getElementById('ssScale')?.value||'';
+  const scaleLbl=scaleKey==='penta_major'?'Pentatónica mayor':'Pentatónica menor';
+  return root?`${root} — ${scaleLbl}`:'Historia de escala';
+}
+function ssShowTitle(opacity){
+  const box=document.getElementById('ssTitleOverlay'),t=document.getElementById('ssTitleText');
+  if(!box||!t)return;
+  if(opacity<=0){box.style.display='none';return;}
+  box.style.display='flex';box.style.opacity=String(Math.min(1,opacity));
+  t.textContent=ssGetTitle();
+}
+
+function ssPaintAtElapsed(elapsed){
+  if(!ssActions.length)return;
+  const elapsedBars=ssElapsedBars(elapsed);
+  if(elapsedBars===null){
+    // Compases de intro: mástil vacío + título con fundido — la narración todavía no arranca.
+    ssPaintState(new Map());
+    ssSetCaption(null);
+    const introSec=ssIntroSec();
+    const barSec=ssHasTempoMap()?(60/getBpmAtBar(0))*getBeatsAtBar(0):ssBarSeconds();
+    const fadeDur=Math.min(barSec,introSec)||0.6; // se difumina en el último compás de intro
+    ssShowTitle((introSec-elapsed)/fadeDur);
+    return;
+  }
+  ssShowTitle(0);
+  const{state,caption}=ssComputeState(ssActions,elapsedBars);
+  ssPaintState(state);
+  ssSetCaption(caption);
+}
+
+function ssFrame(){
+  if(!audioEl||getExerciseType()!=='scaleStory'){ssRafId=null;return;}
+  ssPaintAtElapsed(Math.max(0,audioEl.currentTime||0));
+  ssRafId=requestAnimationFrame(ssFrame);
+}
+
+function ssStart(){
+  if(!audioEl){alert('Carga primero el backing track (pestaña "Audio & XML") antes de darle a Play.');if(typeof showTab==='function')showTab('audio');return;}
+  if(!ssActions.length){alert('Genera primero el guion en la pestaña "Historia de escala".');if(typeof showTab==='function')showTab('scalestory');return;}
+  isPlaying=true;if(typeof setBtns==='function')setBtns(true);
+  audioEl.playbackRate=(typeof speed!=='undefined'&&speed)||1;
+  audioEl.play();
+  if(!ssRafId)ssRafId=requestAnimationFrame(ssFrame);
+}
+function ssPauseFn(){
+  isPlaying=false;if(typeof setBtns==='function')setBtns(false);
+  if(audioEl)audioEl.pause();
+}
+function ssStopFn(){
+  isPlaying=false;if(typeof setBtns==='function')setBtns(false);
+  if(audioEl){audioEl.pause();audioEl.currentTime=0;}
+  ssPaintAtElapsed(0);
+}
+
+(function wirePlayback(){
+  const _origStartIt=window.startIt,_origPauseIt=window.pauseIt,_origStopAll=window.stopAll;
+  if(typeof _origStartIt==='function')window.startIt=function(){if(getExerciseType()==='scaleStory'){ssStart();return;}return _origStartIt.apply(this,arguments);};
+  if(typeof _origPauseIt==='function')window.pauseIt=function(){if(getExerciseType()==='scaleStory'){ssPauseFn();return;}return _origPauseIt.apply(this,arguments);};
+  if(typeof _origStopAll==='function')window.stopAll=function(){if(getExerciseType()==='scaleStory'){ssStopFn();return;}return _origStopAll.apply(this,arguments);};
+})();
+
+function ssShow(){
+  ssShowBackground();
+  ssPaintAtElapsed(0);
+}
+function ssHide(){
+  const overlay=document.getElementById('ghostCanvas');
+  if(overlay){overlay.innerHTML='';overlay.style.display='none';}
+  ssSetCaption(null);
+  ssShowTitle(0);
+  if(typeof hideSVGCanvas==='function')hideSVGCanvas();
+  if(ssRafId){cancelAnimationFrame(ssRafId);ssRafId=null;}
+}
+/* ---- Enganche con el tipo de ejercicio (sin editar setExerciseType) ---- */
+window.ssOnExerciseType=function(t){
+  try{
+    if(t==='scaleStory'){ssShow();}
+    else{if(typeof isPlaying!=='undefined'&&isPlaying)pauseIt();ssHide();}
+  }catch(e){console.warn('ssOnExerciseType',e);}
+};
+if(typeof window.setExerciseType==='function'){
+  const _orig=window.setExerciseType;
+  window.setExerciseType=function(t){_orig(t);window.ssOnExerciseType(t);};
+}
+
+window.ssSendToEditor=ssSendToEditor;
+window.ssGenerate=ssGenerate;
+window.ssAddStep=ssAddStep;
+window.ssRemoveStep=ssRemoveStep;
+window.ssMoveStep=ssMoveStep;
+window.ssUpdateStep=ssUpdateStep;
+window.ssOnStepCheck=ssOnStepCheck;
+window.ssLoadTemplate=ssLoadTemplate;
+window.ssRenderSteps=ssRenderSteps;
+
+/* ---- Init: carga la plantilla de ejemplo la primera vez que se pinta la pestaña ---- */
+function ssInit(){
+  if(!ssStepDefs.length)ssLoadTemplate();
+}
+if(document.readyState==='complete'||document.readyState==='interactive')setTimeout(ssInit,300);
+else window.addEventListener('DOMContentLoaded',()=>setTimeout(ssInit,300));
+
+}catch(err){ console.error('[Historia de escala] módulo deshabilitado por error:',err); }
 })();
 </script>
 
