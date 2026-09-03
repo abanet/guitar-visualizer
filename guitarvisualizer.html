@@ -3212,6 +3212,7 @@ function buildSession(){
   return{
     version:6,name:exerciseName,manualExercise:manualExercise,noteDisplayGlobal:getGlobalNoteDisplay(),tempoIncrVueltas:getTempoIncrVueltas(),tempoIncrStep:getTempoIncrStep(),
     sequence:seqBuildSaveData(),
+    scaleStory:(typeof ssBuildSaveData==='function')?ssBuildSaveData():null,
     spConfigs:spConfigs.map(c=>({fromLap:c.fromLap,toLap:c.toLap,segments:c.segments.map(({_split,...x})=>({...x}))})),
     spSegments:spConfigs[0].segments.map(({_split,...x})=>({...x})), // legado: sesiones abiertas en versiones previas
     bgAuto:{...bgAuto},
@@ -3272,6 +3273,15 @@ async function applySession(s){
       if(s.name){const ni=document.getElementById('exerciseName');if(ni)ni.value=s.name;}
       seqActive=false;seqPlayData=null; // reset; re-armed below if session has active sequence
       if(s.sequence)seqApplySaveData(s.sequence);
+      // El módulo scaleStory vive al FINAL del archivo (aislado a propósito) y todavía no se
+      // ha ejecutado la primera vez que se restaura una sesión al cargar la página (el
+      // recover-autosave de checkAutosaveRecovery() se dispara antes de llegar a esa parte
+      // del script) — si ssApplySaveData aún no existe, se deja aparcado en
+      // window._ssPendingSession y el propio módulo lo recoge en su init diferido (ver ssInit).
+      if(s.scaleStory){
+        if(typeof ssApplySaveData==='function')ssApplySaveData(s.scaleStory);
+        else window._ssPendingSession=s.scaleStory;
+      }
       if(s.key)syncKey(s.key);
       if(s.bpm){document.getElementById('bpmInput').value=s.bpm;onBpmChange(s.bpm);invalidateBarCache();}
       if(s.intro!=null){document.getElementById('introCount').value=s.intro;updateIntroLbl();}
@@ -3379,7 +3389,10 @@ console.log('%cGuitar Visualizer v'+APP_VERSION,'font-weight:bold');
 try{const _vb=document.getElementById('appVersionBadge');if(_vb)_vb.textContent='v'+APP_VERSION;}catch(e){}
 let _autosaveLast='';
 function autosaveTick(){
-  if(!cycles.length)return;
+  // Historia de escala no necesita acordes/XML ("audio suelto sin XML, caso normal de este
+  // ejercicio" — ver módulo scaleStory), así que cycles.length===0 no debe bloquear su
+  // autoguardado como bloquearía el de un ejercicio de acordes vacío.
+  if(!cycles.length&&getExerciseType()!=='scaleStory')return;
   try{
     const s=buildSession();
     delete s.library; // library persists separately in localStorage
@@ -12376,7 +12389,8 @@ function ssRenderStepPreview(id){
   const s=ssStepDefs.find(x=>x.id===id);if(!s)return;
   const root=document.getElementById('ssRoot').value,scaleKey=document.getElementById('ssScale').value;
   const notes=ssNotesForStep(s,root,scaleKey),chunks=ssChunksForStep(s,notes,root,scaleKey);
-  el.textContent=notes.length?`→ ${notes.length} nota(s) en ${chunks.length} trozo(s), ${s.bars} compás/es cada acción`:'→ sin notas (revisa posición/filtros/acorde)';
+  const totalBars=s.bars*(chunks.length||1);
+  el.textContent=notes.length?`→ ${notes.length} nota(s) en ${chunks.length} trozo(s), ${s.bars} compás/es por trozo (${totalBars} compás/es en total)`:'→ sin notas (revisa posición/filtros/acorde)';
   el.style.color=notes.length?'var(--text2)':'#c0392b';
 }
 function ssLoadTemplate(){
@@ -12454,7 +12468,7 @@ function ssStepRowHtml(s,i,total,scaleKey){
         </select></div>
       ${s.source!=='triada'&&s.chunkMode==='grupos'?`<div><label style="display:block;font-size:11px;color:var(--text2);">Tamaño de grupo</label>
         <input type="number" min="1" max="6" value="${s.chunkSize}" onchange="ssUpdateStep('${s.id}','chunkSize',this.value)" style="width:50px;padding:4px 6px;border-radius:6px;border:1px solid var(--border2);font-size:12px;"></div>`:''}
-      <div><label style="display:block;font-size:11px;color:var(--text2);">Compases</label>
+      <div><label style="display:block;font-size:11px;color:var(--text2);">Compases por trozo</label>
         <input type="number" min="0.25" step="0.25" value="${s.bars}" onchange="ssUpdateStep('${s.id}','bars',this.value)" style="width:60px;padding:4px 6px;border-radius:6px;border:1px solid var(--border2);font-size:12px;"></div>
       ${s.op==='revelar'?`<div><label style="display:flex;align-items:center;gap:4px;font-size:12px;"><input type="checkbox" ${s.flash?'checked':''} onchange="ssUpdateStep('${s.id}','flash',this.checked)"> Brillo al aparecer</label></div>`:'<div style="font-size:11px;color:var(--text2);align-self:center;">(iluminar siempre brilla)</div>'}
       <div><label style="display:block;font-size:11px;color:var(--text2);">${endLabel}</label>
@@ -12475,6 +12489,31 @@ function ssRenderSteps(){
     '<p style="font-size:12px;color:var(--text2);">Sin pasos todavía — pulsa "Añadir paso" o "Cargar plantilla".</p>';
   ssStepDefs.forEach(s=>ssRenderStepPreview(s.id));
 }
+
+// Guardado/restauración de sesión (mismo patrón que seqBuildSaveData/seqApplySaveData del
+// módulo de Secuencias) — sin esto, buildSession()/applySession() (usadas tanto por "Guardar
+// sesión" como por el autoguardado) no sabían nada de Historia de escala: los pasos, tónica,
+// escala y título se perdían siempre al recargar, aunque el resto del ejercicio sí persistiera.
+function ssBuildSaveData(){
+  if(!ssStepDefs.length)return null;
+  return{
+    stepDefs:ssStepDefs.map(s=>({...s})),
+    root:document.getElementById('ssRoot')?.value||'A',
+    scale:document.getElementById('ssScale')?.value||'penta_minor',
+    title:document.getElementById('ssTitle')?.value||'',
+  };
+}
+function ssApplySaveData(sd){
+  if(!sd)return;
+  const set=(id,val)=>{const el=document.getElementById(id);if(el&&val!=null)el.value=val;};
+  set('ssRoot',sd.root);set('ssScale',sd.scale);set('ssTitle',sd.title||'');
+  ssStepDefs=(sd.stepDefs||[]).map(s=>({...s}));
+  // Evita colisiones de id si se añaden pasos nuevos tras restaurar (ver ssNewStep).
+  ssStepSeq=ssStepDefs.reduce((mx,s)=>{const n=parseInt(String(s.id).replace('st',''),10);return isNaN(n)?mx:Math.max(mx,n);},ssStepSeq);
+  ssRenderSteps();
+}
+window.ssBuildSaveData=ssBuildSaveData;
+window.ssApplySaveData=ssApplySaveData;
 
 function ssGenerate(){
   const root=document.getElementById('ssRoot').value;
@@ -12506,10 +12545,9 @@ function ssShowBackground(){
   if(typeof drawUnifiedFretboard==='function')drawUnifiedFretboard(canvas,SS_FRET_MIN,SS_FRET_MAX);
 }
 
-// Convención de color del proyecto: tónica #E53935, no-tónica #26C6DA.
+// Convención de color del proyecto: tónica #E53935, no-tónica #26C6DA (usado tal cual solo si
+// "Aplicar estilo propio" está desactivado — ver ssColorOf).
 const SS_COL_ROOT='#E53935',SS_COL_OTHER='#26C6DA';
-const SS_GHOST_RGB=[255,255,255]; // gris-fantasma de partida del fundido (mismo criterio que drawGhostNotes)
-function ssHexToRgb(hex){const v=parseInt(hex.slice(1),16);return[(v>>16)&255,(v>>8)&255,v&255];}
 function ssNoteXY(n,geo){
   const cx=n.fret===0?(geo.leftPad-geo.r-4):(geo.leftPad+(n.fret-geo.fretMin)*geo.fretW-geo.fretW/2);
   const cy=NECK_TOP+(5-n.string)*NECK_STRING_SPACING;
@@ -12523,15 +12561,18 @@ function ssNoteXY(n,geo){
 //  - sin flash, queda sólida:    colorMix sube en línea recta 0→1 junto con la opacidad
 //  - con flash, queda fantasma:  colorMix sube y BAJA otra vez (triángulo: pico a mitad)
 //  - con flash, queda sólida:    colorMix sube hasta 1 a mitad y se queda ahí
+// Sin transiciones lentas (feedback de Alberto): la nota aparece DE GOLPE en cuanto le toca su
+// trozo — nada de fundido de opacidad, que tardaba en verse dónde hay que poner la mano y
+// dificultaba tocar sobre el backing track. Mientras es el trozo ACTUAL se colorea (si el paso
+// tiene brillo o queda sólida); en cuanto se pasa al siguiente trozo, ssApplyAction ya la asienta
+// en fantasma sola (ver la rama localP>=1 más abajo) — aquí solo hace falta el estado "activo".
 function ssNoteVisual(isReveal,p,flash,endSolid){
-  p=Math.max(0,Math.min(1,p));
-  // La opacidad ocupa TODO el hueco del trozo (no un pico rápido al principio) — así una nota
-  // asignada a "1 compás por tríada" tarda el compás entero en aparecer del todo, en vez de
-  // saltar ya visible al 30% y quedarse quieta el resto (eso es lo que se veía "seguido").
-  const opacity=isReveal?p:1;
-  let colorMix;
-  if(!flash)colorMix=endSolid?p:0;
-  else colorMix=endSolid?Math.min(1,p/0.5):(p<0.5?p*2:2*(1-p));
+  const opacity=1; // aparece de golpe — sin fundido de opacidad
+  // El COLOR sí se anima a lo largo de TODO el hueco asignado (los "x compases" que se
+  // mantiene el trozo) — de fantasma a color. Al pasar al siguiente trozo, ssApplyAction
+  // (rama localP>=1, más abajo) la asienta instantáneamente en su estado final — eso da el
+  // efecto de "al cambiar de compás, vuelve a fantasma sola y empieza a animarse la siguiente".
+  const colorMix=(flash||endSolid)?Math.max(0,Math.min(1,p)):0;
   return{opacity,colorMix};
 }
 // Aplica UNA acción al mapa de estado compartido, para el instante `elapsedBars`.
@@ -12543,13 +12584,10 @@ function ssApplyAction(state,action,elapsedBars,actionStartBar){
   const isReveal=action.op==='revelar';
   const endSolid=(action.quedaComo||action.vuelveA)==='solida';
   const chunks=action.trozos&&action.trozos.length?action.trozos:[];
-  // TODO (feedback de Alberto, pendiente para la próxima sesión): `action.bars` hoy es el total
-  // de la ACCIÓN repartido entre trozos (unitDur=bars/trozos) — con "1 compás por tríada" y 4
-  // trozos, cada uno solo tiene 1/4 de compás y salen todos seguidos. Alberto espera que
-  // "compases" sea POR TROZO (unitDur=bars directamente, duración total=bars*trozos.length) —
-  // cambiar esto implica actualizar también ssComputeState (que usa act.bars para avanzar
-  // `cursor`) y el texto de la vista previa del editor (que ya lo llama "compás/es cada acción").
-  const unitDur=chunks.length?action.bars/chunks.length:0;
+  // `action.bars` es la duración POR TROZO (no el total repartido entre trozos) — con "1 compás
+  // por tríada" y 4 trozos, cada uno tarda 1 compás entero en aparecer, no 1/4. La duración total
+  // de la acción es bars*trozos.length (ver ssComputeState, que avanza `cursor` con esa cuenta).
+  const unitDur=action.bars;
   chunks.forEach((chunk,i)=>{
     const chunkStart=actionStartBar+i*unitDur;
     const localP=unitDur>0?(elapsedBars-chunkStart)/unitDur:1;
@@ -12572,33 +12610,57 @@ function ssComputeState(actions,elapsedBars){
     const actStart=cursor;
     if(elapsedBars>=actStart)caption=act.caption;
     ssApplyAction(state,act,elapsedBars,actStart);
-    cursor=actStart+act.bars;
+    cursor=actStart+act.bars*(act.trozos.length||1);
   });
   return{state,caption};
 }
 
+// Mismo criterio de color que el resto de la app ("Aplicar estilo propio a las notas" — ver
+// colorOf()/own en animateVoiceLeading, mkVlNote, paintArpeggioGhosts…): rojo/azul SEMI-
+// TRANSPARENTES (.45/.5 alfa) que se funden con el mástil, con contorno blanco tenue — no un
+// círculo opaco plano, que es justo lo que desentonaba con el resto de ejercicios.
+function ssColorOf(n){
+  const own=getVisConfig().forceOwnNoteStyle===true;
+  if(own)return n.isRoot?'rgba(229,57,53,.45)':'rgba(38,198,218,.5)';
+  return n.isRoot?SS_COL_ROOT:SS_COL_OTHER; // sin SVG propio del que tomar un color alternativo
+}
+function ssParseRGBA(str){
+  const m=str.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+))?\)/);
+  if(m)return[+m[1],+m[2],+m[3],m[4]!=null?+m[4]:1];
+  const v=parseInt(str.replace('#',''),16);
+  return[(v>>16)&255,(v>>8)&255,v&255,1];
+}
 function ssPaintState(state){
   const overlay=document.getElementById('ghostCanvas');
   if(!overlay)return;
   overlay.innerHTML='';overlay.style.display='block';
   const geo=neckGeo(SS_FRET_MIN,SS_FRET_MAX);
-  state.forEach(({note:n,opacity,colorMix:e})=>{
+  const own=getVisConfig().forceOwnNoteStyle===true;
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  state.forEach(({note:n,opacity,colorMix:cpRaw})=>{
     const{cx,cy,r}=ssNoteXY(n,geo);
-    const target=ssHexToRgb(n.isRoot?SS_COL_ROOT:SS_COL_OTHER);
-    const rgb=SS_GHOST_RGB.map((g0,i)=>Math.round(g0+(target[i]-g0)*e));
-    const fill=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${((0.35+0.65*e)*opacity).toFixed(2)})`;
-    const stroke=e<0.85?`rgba(255,255,255,${(0.55+0.05*opacity).toFixed(2)})`:`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    const cp=Math.max(0,Math.min(1,cpRaw));
+    const cm=cp*cp*(3-2*cp); // smoothstep fantasma→color, mismo criterio que paintArpeggioGhosts
+    const[fr,fg,fb,fa]=ssParseRGBA(ssColorOf(n));
+    const[sr,sg,sb,sa]=own?[255,255,255,.25]:[fr,fg,fb,fa];
+    const cr=Math.round(lerp(255,fr,cm)),cg=Math.round(lerp(255,fg,cm)),cb=Math.round(lerp(255,fb,cm));
+    const fillA=lerp(0.14,fa,cm);
+    const kr=Math.round(lerp(255,sr,cm)),kg=Math.round(lerp(255,sg,cm)),kb=Math.round(lerp(255,sb,cm));
+    const strokeA=lerp(0.6,sa,cm);
+    const strokeW=lerp(2,own?1:2,cm);
     const g=document.createElementNS(NS,'g');
     g.style.opacity=String(Math.max(0.001,opacity));
     const c=document.createElementNS(NS,'circle');
     c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r',r);
-    c.setAttribute('fill',fill);c.setAttribute('stroke',stroke);c.setAttribute('stroke-width','2');
-    if(e<0.85)c.setAttribute('stroke-dasharray',`5,${(3*(1-e)+0.001).toFixed(2)}`);
+    c.setAttribute('fill',`rgba(${cr},${cg},${cb},${fillA.toFixed(3)})`);
+    c.setAttribute('stroke',`rgba(${kr},${kg},${kb},${strokeA.toFixed(3)})`);
+    c.setAttribute('stroke-width',strokeW.toFixed(2));
+    if(cm<0.7)c.setAttribute('stroke-dasharray','5,3'); else c.removeAttribute('stroke-dasharray');
     g.appendChild(c);
     const t=document.createElementNS(NS,'text');
     t.setAttribute('x',cx);t.setAttribute('y',cy);
     t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
-    t.setAttribute('fill',e<0.6?'rgba(255,255,255,.8)':'white');
+    t.setAttribute('fill',cm<0.6?'rgba(255,255,255,.8)':'white');
     t.setAttribute('font-size','18');t.setAttribute('font-weight','bold');
     t.setAttribute('font-family','Helvetica,Arial,sans-serif');
     t.textContent=n.note;
@@ -12647,9 +12709,38 @@ function ssPaintAtElapsed(elapsed){
   ssSetCaption(caption);
 }
 
+// Metrónomo visual (#vBeats): ssFrame tiene su propio bucle rAF y nunca pasa por tick()
+// (motor compartido de Tríadas/Ritmo/etc.), así que sin esto los puntos de compás se quedan
+// mudos en Historia de escala. Mismo cálculo timeInBar/barSec/beats que tick() (ver sus dos
+// llamadas a tickBeats — durante la intro y durante la narración), adaptado al reloj propio
+// de este módulo (con o sin mapa de tempo real, ver ssElapsedBars).
+function ssBeatClock(elapsed){
+  const introSec=ssIntroSec();
+  if(ssHasTempoMap()){
+    if(elapsed<introSec){
+      const beats=getBeatsAtBar(0),barSec=(60/getIntroBPM())*beats;
+      return{timeInBar:barSec>0?elapsed%barSec:0,barSec,beats};
+    }
+    const barIdx=Math.max(0,getBarIndexAt(elapsed)),beats=getBeatsAtBar(barIdx);
+    const barSec=(60/getBpmAtBar(barIdx))*beats;
+    return{timeInBar:elapsed-getBarStartTime(barIdx),barSec,beats};
+  }
+  const barSec=ssBarSeconds(),beats=ssGetBeatsPerBar();
+  const t=elapsed<introSec?elapsed:(elapsed-introSec);
+  return{timeInBar:barSec>0?((t%barSec)+barSec)%barSec:0,barSec,beats};
+}
+function ssTickMetronome(elapsed){
+  try{
+    const{timeInBar,barSec,beats}=ssBeatClock(elapsed);
+    if(typeof tickBeats==='function')tickBeats(timeInBar,barSec,beats);
+  }catch(e){console.warn('[ssTickMetronome]',e);}
+}
+
 function ssFrame(){
   if(!audioEl||getExerciseType()!=='scaleStory'){ssRafId=null;return;}
-  ssPaintAtElapsed(Math.max(0,audioEl.currentTime||0));
+  const elapsed=Math.max(0,audioEl.currentTime||0);
+  ssPaintAtElapsed(elapsed);
+  ssTickMetronome(elapsed);
   ssRafId=requestAnimationFrame(ssFrame);
 }
 
@@ -12669,6 +12760,7 @@ function ssStopFn(){
   isPlaying=false;if(typeof setBtns==='function')setBtns(false);
   if(audioEl){audioEl.pause();audioEl.currentTime=0;}
   ssPaintAtElapsed(0);
+  ssTickMetronome(0);
 }
 
 (function wirePlayback(){
@@ -12677,6 +12769,30 @@ function ssStopFn(){
   if(typeof _origPauseIt==='function')window.pauseIt=function(){if(getExerciseType()==='scaleStory'){ssPauseFn();return;}return _origPauseIt.apply(this,arguments);};
   if(typeof _origStopAll==='function')window.stopAll=function(){if(getExerciseType()==='scaleStory'){ssStopFn();return;}return _origStopAll.apply(this,arguments);};
 })();
+
+// Recuperación del bucle rAF tras "salir y volver": Chrome (y otros) pausan o limitan mucho
+// requestAnimationFrame en pestañas del NAVEGADOR en segundo plano, y a veces no retoman la
+// cadena de auto-reprogramación (ssFrame→requestAnimationFrame(ssFrame)) al volver — el mástil
+// y el metrónomo se quedan congelados aunque el audio siga sonando. Se cancela cualquier rAF
+// (por si el handle quedó vivo pero "atascado") y se reprograma desde cero, tanto al recuperar
+// visibilidad del navegador como al volver a la pestaña "Visualizador" DENTRO de la propia app
+// (showTab('player') — cubre el caso de haber estado en otra pestaña de la herramienta, no solo
+// el de cambiar de pestaña/ventana del navegador).
+function ssEnsureLoopAlive(){
+  if(getExerciseType()!=='scaleStory')return;
+  if(typeof isPlaying==='undefined'||!isPlaying)return;
+  if(ssRafId)cancelAnimationFrame(ssRafId);
+  ssRafId=requestAnimationFrame(ssFrame);
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)ssEnsureLoopAlive();});
+if(typeof window.showTab==='function'){
+  const _origShowTab=window.showTab;
+  window.showTab=function(name){
+    const r=_origShowTab.apply(this,arguments);
+    if(name==='player')ssEnsureLoopAlive();
+    return r;
+  };
+}
 
 function ssShow(){
   ssShowBackground();
@@ -12687,6 +12803,7 @@ function ssHide(){
   if(overlay){overlay.innerHTML='';overlay.style.display='none';}
   ssSetCaption(null);
   ssShowTitle(0);
+  const beats=document.getElementById('vBeats');if(beats)beats.innerHTML='';
   if(typeof hideSVGCanvas==='function')hideSVGCanvas();
   if(ssRafId){cancelAnimationFrame(ssRafId);ssRafId=null;}
 }
@@ -12714,6 +12831,13 @@ window.ssRenderSteps=ssRenderSteps;
 
 /* ---- Init: carga la plantilla de ejemplo la primera vez que se pinta la pestaña ---- */
 function ssInit(){
+  // Sesión restaurada al cargar la página (ver applySession) antes de que este módulo
+  // existiera todavía — se recoge aquí en vez de perderse.
+  if(window._ssPendingSession){
+    ssApplySaveData(window._ssPendingSession);
+    window._ssPendingSession=null;
+    return;
+  }
   if(!ssStepDefs.length)ssLoadTemplate();
 }
 if(document.readyState==='complete'||document.readyState==='interactive')setTimeout(ssInit,300);
