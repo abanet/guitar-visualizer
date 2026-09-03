@@ -634,7 +634,7 @@ body.presentation #channelWatermark{display:flex;}
     <div class="card">
       <h3><i class="ti ti-file-code"></i> MusicXML</h3>
       <p>Exporta desde Band-in-a-Box: <strong>File → Save as → MusicXML</strong><br>
-         SVGs de Neck Diagrams: <strong>1001×394px</strong>, sin título, margen mínimo.</p>
+         SVGs de Neck Diagrams: <strong>1001×300px</strong>, sin título, margen mínimo.</p>
       <div class="field-row" style="margin-bottom:8px;">
         <label>Compases por ciclo:</label>
         <input type="number" id="cycleLenAudio" value="12" min="1" max="200" style="width:56px" onchange="applyCycleLen(this.value)" oninput="document.getElementById('cycleLen').value=this.value;const d=document.getElementById('cycleLenDisplay');if(d)d.textContent=this.value;">
@@ -823,9 +823,9 @@ body.presentation #channelWatermark{display:flex;}
           </div>
           <div class="img-layer" id="layerA"><div class="img-ph"><span>Asigna imágenes en el editor</span></div></div>
           <div class="img-layer" id="layerB" style="opacity:0;"></div>
-          <svg id="svgCanvas" viewBox="0 0 1001 394" preserveAspectRatio="xMidYMid meet"></svg>
-          <svg id="bgMapCanvas" viewBox="0 0 1001 394" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;overflow:visible;"></svg>
-          <svg id="ghostCanvas" viewBox="0 0 1001 394" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;overflow:visible;z-index:7;"></svg>
+          <svg id="svgCanvas" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet"></svg>
+          <svg id="bgMapCanvas" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;overflow:visible;"></svg>
+          <svg id="ghostCanvas" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;overflow:visible;z-index:7;"></svg>
           <!-- Texto de apoyo de "Historia de escala" (módulo scaleStory, ver final del archivo) -->
           <div id="ssCaption" style="position:absolute;left:0;right:0;bottom:0;display:none;pointer-events:none;z-index:9;background:linear-gradient(0deg,rgba(0,0,0,.72),transparent);padding:16px 18px 12px;text-align:center;">
             <div id="ssCaptionText" style="color:#fff;font:600 16px/1.3 Helvetica,Arial,sans-serif;letter-spacing:.02em;text-shadow:0 1px 3px rgba(0,0,0,.6);"></div>
@@ -837,7 +837,7 @@ body.presentation #channelWatermark{display:flex;}
           <!-- Next-arpeggio preview (forma completa de la siguiente posición) -->
           <div id="nextPreview" style="position:absolute;top:2%;right:1.5%;width:26%;max-width:340px;display:none;pointer-events:none;z-index:8;background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px 6px;backdrop-filter:blur(3px);">
             <div id="nextPreviewLabel" style="font:600 12px Helvetica,Arial,sans-serif;color:rgba(255,255,255,.75);letter-spacing:.05em;margin-bottom:4px;text-align:center;"><span style="text-transform:uppercase;">Siguiente</span></div>
-            <svg id="nextPreviewSvg" viewBox="0 0 1001 394" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;"></svg>
+            <svg id="nextPreviewSvg" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;"></svg>
           </div>
         </div>
         <div class="vis-bottom"><div class="strip" id="vStrip"></div></div>
@@ -1733,8 +1733,8 @@ body.presentation #channelWatermark{display:flex;}
       <p style="font-size:12px;color:var(--text2);margin:0 0 10px;">Se actualiza sola con cada cambio, sin necesidad de generar el guion ni ir al Visualizador. Muestra el mástil <b>asentado justo al final</b> del paso elegido (no la animación en curso).</p>
       <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">
         <div style="position:relative;flex:0 0 auto;width:100%;max-width:480px;">
-          <svg id="ssEditCanvas" viewBox="0 0 1001 394" preserveAspectRatio="xMidYMid meet" style="width:100%;display:block;background:#1a1a1a;border-radius:8px;"></svg>
-          <svg id="ssEditGhostCanvas" viewBox="0 0 1001 394" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;"></svg>
+          <svg id="ssEditCanvas" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet" style="width:100%;display:block;background:#1a1a1a;border-radius:8px;"></svg>
+          <svg id="ssEditGhostCanvas" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;"></svg>
         </div>
         <div style="flex:1;min-width:240px;">
           <div class="field-row" style="gap:8px;align-items:center;margin-bottom:8px;">
@@ -2216,9 +2216,9 @@ function parseSVG(svgText){
       const isReddish=(col)=>{const f=(col||'').toLowerCase().replace(/\s/g,'');return f==='#e53935'||f==='red'||f==='#f00'||f==='#ff0000'||/rgb\(2[0-5][0-9],[0-5]?[0-9],/.test(f)||/rgb\(1[5-9][0-9],/.test(f);};
       notes.push({cx,cy,r,fill,label,isRoot:isReddish(fill),clipId:null});
     });
-    if(notes.length>0)return{W:1001,H:394,notes,raw:svgText,generated:true};
+    if(notes.length>0)return{W:NECK_W,H:NECK_H,notes,raw:svgText,generated:true};
   }
-  return{W:1001,H:394,notes,raw:svgText};
+  return{W:NECK_W,H:NECK_H,notes,raw:svgText};
 }
 function svgToThumb(svgText,w,h){
   return new Promise(res=>{
@@ -2292,10 +2292,13 @@ document.getElementById('bankLoadBtn').addEventListener('click',()=>document.get
 // Geometría FIJA que usa arpBuildZoneSVG(...,0,15) — para entradas 'ash' (arpegios por forma)
 // permite ir en los dos sentidos: coordenadas de nota -> {string,fret} (migración de entradas
 // antiguas) y {string,fret} -> SVG completo (regenerar bajo demanda, ver loadLibFromStorage).
-const ASH_GEOM={leftPad:40,fretW:(1001-40-25)/15,stringSpacing:(394-35-50)/5,topPad:35};
+// Antes duplicaba a mano la fórmula de neckGeo(0,15) con 1001/394 copiados — un valor y una
+// fórmula compartidos por toda la app (petición de Alberto), así que se llama a neckGeo()
+// directamente (función, no top-level: para cuando se llama ya está definida más abajo).
 function ashNoteCellFromXY(cx,cy){
-  const string=Math.round(5-(cy-ASH_GEOM.topPad)/ASH_GEOM.stringSpacing);
-  const fret=cx<ASH_GEOM.leftPad?0:Math.round((cx-ASH_GEOM.leftPad)/ASH_GEOM.fretW+0.5);
+  const g=neckGeo(0,15);
+  const string=Math.round(5-(cy-g.topPad)/g.stringSpacing);
+  const fret=cx<g.leftPad?0:Math.round((cx-g.leftPad)/g.fretW+0.5);
   return{string,fret};
 }
 // Nombre de entrada "Cmaj7 arpegio (E)" -> {chordName:'Cmaj7'} (soporta también el formato
@@ -3648,8 +3651,8 @@ function drawGhostNotes(notes,currentNotes){
   notes.forEach(note=>{
     const common=isCommon(note);
     const r=common?note.r*1.15:note.r;
-    const cx=Math.max(r+2, Math.min(1001-r-2, note.cx));
-    const cy=Math.max(r+2, Math.min(394-r-2, note.cy));
+    const cx=Math.max(r+2, Math.min(NECK_W-r-2, note.cx));
+    const cy=Math.max(r+2, Math.min(NECK_H-r-2, note.cy));
     const g=document.createElementNS(NS,'g');
     const circle=document.createElementNS(NS,'circle');
     circle.setAttribute('cx',String(cx));circle.setAttribute('cy',String(cy));
@@ -3709,7 +3712,7 @@ function clearGhostNotes(){
 //
 // Ahora el recorte es GEOMÉTRICO: se re-dibuja el mástil con la ventana de trastes pedida
 // (drawUnifiedFretboard ya la acepta) y cada nota se recoloca en su celda (cuerda, traste)
-// dentro de esa ventana. El viewBox NO se toca nunca: sigue siendo 0 0 1001 394 con "meet"
+// dentro de esa ventana. El viewBox NO se toca nunca: sigue siendo 0 0 NECK_W NECK_H con "meet"
 // y overflow:visible (convención de nota al aire intacta). Resultado: menos trastes ocupando
 // el mismo ancho = trastes más anchos y notas más separadas, sin recortar ninguna cuerda.
 //
@@ -3718,7 +3721,19 @@ function clearGhostNotes(){
 //      + la siguiente, con un traste de aire a cada lado y un ancho mínimo (VIEW_MIN_FRETS).
 //   2. "Recortar el mástil a un máximo de N trastes" (getMaxFretsShown): tope duro del traste
 //      más alto visible. Se aplica también sobre el resultado del zoom.
-const NECK_TOP=35,NECK_BOTTOM=50,NECK_RIGHT=25,NECK_W=1001,NECK_H=394;
+// NECK_W/NECK_H: ÚNICA fuente de verdad para la geometría del mástil en TODA la app (petición
+// de Alberto) — generateNeckSVG, arpBuildZoneSVG, ashGeom, tnBuildSVG, seqBuildGeom,
+// spBoxEditorSVG, asBoxEditorSVG, spBuildSVG, seqRenderPlayerBg, buildAutoBg, drawUnifiedFretboard
+// y neckGeo() leen de aquí, no de números copiados a mano. Antes cada generador tenía su propio
+// "const W=1001,H=394" duplicado — cambiar uno sin los demás desalineaba mástil y notas (bug
+// real encontrado al bajar NECK_H, ver drawUnifiedFretboard). NECK_H bajado (era 394): casillas
+// más rectangulares (cuerdas más juntas respecto al ancho de traste), más parecido a un mástil
+// real — feedback de Alberto, revertir a 394 si no cuaja (con esto unificado, revertir es
+// cambiar SOLO este número).
+// Si se cambia NECK_W o NECK_H, actualizar TAMBIÉN los viewBox="0 0 1001 …" fijados en el HTML
+// (svgCanvas, ghostCanvas, bgMapCanvas, nextPreviewSvg, ssEditCanvas, ssEditGhostCanvas) — esos
+// SÍ siguen siendo texto literal, no pueden leer una constante JS.
+const NECK_TOP=35,NECK_BOTTOM=50,NECK_RIGHT=25,NECK_W=1001,NECK_H=300;
 const NECK_STRING_SPACING=(NECK_H-NECK_TOP-NECK_BOTTOM)/5;
 // Ancho mínimo de ventana con "Zona ampliada": solo un suelo de seguridad para arpegios muy
 // compactos. Se mantiene bajo a propósito — "Zona ampliada" busca acercar (menos trastes), y la
@@ -3740,8 +3755,11 @@ function neckGeo(fretMin,fretMax){
     fretW=(NECK_W-NECK_RIGHT)/(n+1);
     leftPad=fretW;
   }
+  // Tope también por NECK_STRING_SPACING (no solo por fretW): con cuerdas más juntas (ver
+  // NECK_H más arriba), un radio pensado solo para el ancho de traste podría hacer que círculos
+  // de cuerdas adyacentes se solaparan.
   return{fretMin,fretMax,leftPad,fretW,
-         r:Math.min(24,fretW*0.38),stringSpacing:NECK_STRING_SPACING,topPad:NECK_TOP};
+         r:Math.min(24,fretW*0.38,NECK_STRING_SPACING*0.42),stringSpacing:NECK_STRING_SPACING,topPad:NECK_TOP};
 }
 // (cx,cy) → celda {fret,string}. Si la nota ya la lleva horneada (svgStringToParsed) se usa
 // tal cual, lo que hace el re-encuadre IDEMPOTENTE: siempre se parte de la celda, nunca de
@@ -3959,7 +3977,7 @@ function applyZoomToZone(notesList){
 function resetCanvasViewBox(){
   ['svgCanvas','ghostCanvas','bgMapCanvas'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
-    el.setAttribute('viewBox','0 0 1001 394');
+    el.setAttribute('viewBox',`0 0 ${NECK_W} ${NECK_H}`);
     el.setAttribute('preserveAspectRatio','xMidYMid meet');
     el.setAttribute('overflow','visible');
     el.style.overflow='visible';
@@ -3968,7 +3986,7 @@ function resetCanvasViewBox(){
 }
 
 // ── Colocación del mástil en pantalla (v4.2.15) ─────────────────────────────
-// El viewBox de los lienzos es fijo (0 0 1001 394, ratio 2.54) y "meet" no recorta; sin más,
+// El viewBox de los lienzos es fijo (0 0 NECK_W NECK_H, ratio NECK_RATIO) y "meet" no recorta; sin más,
 // en una zona ancha y baja el mástil queda centrado con grandes márgenes laterales Y, sobre
 // todo, se extiende por DEBAJO del panel de previsualización de la esquina (se solapan).
 // layoutNeckBox coloca los tres lienzos en una caja con la proporción del mástil que:
@@ -3976,7 +3994,7 @@ function resetCanvasViewBox(){
 //     que el mástil NUNCA quede debajo de él;
 //   · usa todo el ancho disponible que quepa (mástil más grande, como en la versión previa).
 // Los tres lienzos reciben la MISMA caja → siguen perfectamente alineados entre sí.
-const NECK_RATIO=1001/394;
+const NECK_RATIO=NECK_W/NECK_H;
 let _neckRO=null;
 function neckPreviewReserve(){
   const p=document.getElementById('nextPreview');
@@ -4402,7 +4420,7 @@ function drawNextPreview(nextNotes,nextChord,nat){
   const key=nextChord+'@'+win.min+'-'+win.max+'@'+(getVisConfig().realisticNeck?'r':'f');
   // Margen izquierdo para el voladizo de la cuerda al aire (cx=leftPad-r-4), igual que el
   // mástil principal: sin él, el <svg> del panel (overflow:hidden por defecto) lo recortaría.
-  svg.setAttribute('viewBox','-40 0 1041 394');
+  svg.setAttribute('viewBox',`-40 0 ${NECK_W+40} ${NECK_H}`);
   svg.setAttribute('preserveAspectRatio','xMidYMid meet');
   if(panel.dataset.chord===key && svg.childElementCount>0){setNeckPreviewShown(true);return;}
   panel.dataset.chord=key;
@@ -4542,7 +4560,12 @@ function paintTwoPositions(activeNotes,nextNotes,progress,nextChord){
 // Notes are drawn separately on top. Coordinates match the 1001×394 system.
 function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15){
   const NS='http://www.w3.org/2000/svg';
-  const W=1001,H=394;
+  // OJO: W/H tenían un 1001/394 copiado a mano en vez de leer NECK_W/NECK_H — al bajar NECK_H
+  // (trastes más rectangulares, ver esa constante) las LÍNEAS del mástil (esta función) seguían
+  // con la proporción vieja mientras las NOTAS (ssNoteXY, que sí usa el global) ya usaban la
+  // nueva — de ahí que se siguiera viendo cuadrado. Mismo bug en los numeritos de traste
+  // (add('text',{y:H-10,...})), que con un H desincronizado del viewBox real quedarían fuera.
+  const W=NECK_W,H=NECK_H;
   const geo=neckGeo(fretMin,fretMax); // MISMA geometría que relayoutNotes → notas alineadas
   const leftPad=geo.leftPad,rightPad=25,topPad=35,bottomPad=50;
   const fretW=geo.fretW;
@@ -5230,7 +5253,7 @@ function getChordVoicing(chord,stringGroup,inversion){
 function generateNeckSVG(voicing,chord,fretStart=0,fretEnd=15){
   if(!voicing)return null;
   const{frets,strings,notes,intervals}=voicing;
-  const W=1001,H=394;
+  const W=NECK_W,H=NECK_H;
   const nFrets=fretEnd-fretStart;
   const leftPad=fretStart===0?40:60,rightPad=25,topPad=35,bottomPad=50;
   const fretW=(W-leftPad-rightPad)/nFrets;
@@ -5399,7 +5422,7 @@ function svgStringToParsed(svgStr){
   // real del SVG, para que el visualizador pueda re-dibujar el mismo frame en OTRA ventana
   // (recorte de trastes / zona ampliada) sin depender de las coordenadas ya cocinadas.
   // Ver "Ventana de visualización" (relayoutNotes).
-  const out={W:1001,H:394,notes,raw:svgStr,generated:true};
+  const out={W:NECK_W,H:NECK_H,notes,raw:svgStr,generated:true};
   {const _fr2=(svgStr||'').match(/data-fretrange="(-?\d+),(-?\d+)"/);
    const fr={min:_fr2?parseInt(_fr2[1],10):0,max:_fr2?parseInt(_fr2[2],10):15};
    out.fretRange=fr;
@@ -6016,11 +6039,11 @@ function previewGenerate(){
     const title=document.createElement('div');
     title.style.cssText='padding:6px 10px;font-size:11px;font-weight:600;background:var(--bg2);';
     title.textContent=`${chord} — ${INV_NAMES_GEN[inv]} (trastes ${fretStart}-${fretEnd})`;
-    const scale=300/1001;
+    const scale=300/NECK_W; // 300 = ancho fijo de esta miniatura (wrap, arriba) — no relacionado con NECK_H
     const img=document.createElement('div');img.innerHTML=svgStr;
-    img.style.cssText=`transform:scale(${scale});transform-origin:top left;width:1001px;height:394px;`;
+    img.style.cssText=`transform:scale(${scale});transform-origin:top left;width:${NECK_W}px;height:${NECK_H}px;`;
     const outer=document.createElement('div');
-    outer.style.cssText=`overflow:hidden;height:${Math.round(394*scale)}px;`;
+    outer.style.cssText=`overflow:hidden;height:${Math.round(NECK_H*scale)}px;`;
     outer.appendChild(img);wrap.appendChild(title);wrap.appendChild(outer);prev.appendChild(wrap);
   });
   if(!prev.children.length)prev.innerHTML='<p style="color:var(--text3);">No se pudieron calcular posiciones.</p>';
@@ -6164,7 +6187,7 @@ function runGenerate(){
 
 // Render an arpeggio zone as a full-neck SVG in the dark sequence style
 function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15){
-  const W=1001,H=394,fretMin=fretStart,fretMax=fretEnd;
+  const W=NECK_W,H=NECK_H,fretMin=fretStart,fretMax=fretEnd;
   const nFrets=Math.max(1,fretMax-fretMin);
   const leftPad=fretMin===0?40:60,rightPad=25,topPad=35,bottomPad=50;
   const fretW=(W-leftPad-rightPad)/nFrets;
@@ -6211,7 +6234,7 @@ ashLoadPosOverride();
 function ashGeom(){
   const fretMin=parseInt(document.getElementById('ashFretMin').value)||0;
   const fretMax=parseInt(document.getElementById('ashFretMax').value)||15;
-  const W=1001,H=394,nFrets=Math.max(1,fretMax-fretMin);
+  const W=NECK_W,H=NECK_H,nFrets=Math.max(1,fretMax-fretMin);
   const leftPad=fretMin===0?58:60,rightPad=25,topPad=35,bottomPad=50;
   const fretW=(W-leftPad-rightPad)/nFrets,stringSpacing=(H-topPad-bottomPad)/5;
   return{W,H,fretMin,fretMax,fretW,stringSpacing,leftPad,rightPad,topPad,
@@ -6576,7 +6599,7 @@ function ashBuildByKey(){
       try{
         const notes=(e.svgParsed||svgStringToParsed(e.data)).notes||[];
         const leftPad=notes.length?49:49; // fallback geométrico, ver generateNeckSVG/arpBuildZoneSVG
-        avgFret=notes.length?notes.reduce((a,n)=>a+Math.max(0,(n.cx-leftPad)/((1001-leftPad-30)/13)),0)/notes.length:5;
+        avgFret=notes.length?notes.reduce((a,n)=>a+Math.max(0,(n.cx-leftPad)/((NECK_W-leftPad-30)/13)),0)/notes.length:5;
       }catch(_){avgFret=5;}
     }
     byKey[key].push({entry:e,avgFret,pos:m[3]||e.arpPos||'?'});
@@ -6812,7 +6835,7 @@ const TN_GUIDE_IVS=['3','b3','7','b7'];
 // SVG del preview: mástil oscuro (mismo look que arpBuildZoneSVG), notas de escala
 // tenues, chord tones iluminados (tónica del acorde roja, guías con anillo dorado).
 function tnBuildSVG(notes,chordInfo,fretMin,fretMax,labelMode,asMode){
-  const W=1001,H=394;
+  const W=NECK_W,H=NECK_H;
   const nFrets=Math.max(1,fretMax-fretMin);
   const leftPad=fretMin===0?40:60,rightPad=25,topPad=35,bottomPad=50;
   const fretW=(W-leftPad-rightPad)/nFrets;
@@ -7097,7 +7120,7 @@ function seqRefreshBg(){seqBgNotes=seqGetScaleNotes();seqRenderBg();}
 function seqBuildGeom(){
   const fretMin=parseInt(document.getElementById('seqFretMin').value)||0;
   const fretMax=parseInt(document.getElementById('seqFretMax').value)||15;
-  const W=1001,H=394;
+  const W=NECK_W,H=NECK_H;
   const nFrets=Math.max(1,fretMax-fretMin);
   const leftPad=fretMin===0?40:60,rightPad=25,topPad=35,bottomPad=50;
   const fretW=(W-leftPad-rightPad)/nFrets;
@@ -8384,7 +8407,7 @@ function spBoxEditorSVG(i){
   const rootPc=noteToSt(seg.root);
   const pcs=new Set(f.map(s=>(rootPc+s)%12));
   const sel=new Set((seg.customNotes||[]).map(k=>k.string+':'+k.fret));
-  const W=1001,H=394,fretMin=0,fretMax=15;
+  const W=NECK_W,H=NECK_H,fretMin=0,fretMax=15;
   const nFrets=fretMax-fretMin;
   const leftPad=40,rightPad=25,topPad=35,bottomPad=50;
   const fretW=(W-leftPad-rightPad)/nFrets;
@@ -9049,7 +9072,7 @@ function asBoxEditorSVG(){
   const custom=asGetCustomNotes(asState.root,asState.scale,posLabel);
   const activeKeys=(custom&&custom.length)?custom:asState.notes.map(n=>({string:n.string,fret:n.fret}));
   const sel=new Set(activeKeys.map(k=>k.string+':'+k.fret));
-  const W=1001,H=394,fretMin=0,fretMax=15;
+  const W=NECK_W,H=NECK_H,fretMin=0,fretMax=15;
   const nFrets=fretMax-fretMin;
   const leftPad=40,rightPad=25,topPad=35,bottomPad=50;
   const fretW=(W-leftPad-rightPad)/nFrets;
@@ -9276,7 +9299,7 @@ function asExportConfigFile(){
 // data-sp (los fills SON el ejercicio, como los tn reales → sin forceOwnNoteStyle).
 // data-tn="1" siempre, a propósito: ver nota en EXERCISES.
 function spBuildSVG(notes,fretMin,fretMax,labelMode,lit){
-  const W=1001,H=394;
+  const W=NECK_W,H=NECK_H;
   const nFrets=Math.max(1,fretMax-fretMin);
   const leftPad=fretMin===0?40:60,rightPad=25,topPad=35,bottomPad=50;
   const fretW=(W-leftPad-rightPad)/nFrets;
@@ -9530,7 +9553,7 @@ function seqRenderPlayerBg(){
   const d=seqPlayData;
   // Reuse the sequence geometry but render into #svgCanvas
   const fretMin=d.fretMin,fretMax=d.fretMax;
-  const W=1001,H=394;
+  const W=NECK_W,H=NECK_H;
   const nFrets=Math.max(1,fretMax-fretMin);
   const leftPad=fretMin===0?58:60,rightPad=25,topPad=35,bottomPad=50;
   const fretW=(W-leftPad-rightPad)/nFrets;
@@ -10025,7 +10048,7 @@ function buildAutoBg(bar,activeSlot){
   // (cuerda, traste), así que basta usar la ventana efectiva como marco — los trastes fuera
   // de ella no entran en el bucle. Así comparte geometría con el mástil re-dibujado. v4.2.14.
   if(_viewWin){fretMin=_viewWin.min;fretMax=_viewWin.max;}
-  const W=1001,H=394,nFrets=Math.max(1,fretMax-fretMin);
+  const W=NECK_W,H=NECK_H,nFrets=Math.max(1,fretMax-fretMin);
   const leftPad=fretMin===0?40:60,rightPad=25,topPad=35,bottomPad=50;
   const fretW=(W-leftPad-rightPad)/nFrets;
   const stringSpacing=(H-topPad-bottomPad)/5;
@@ -11005,7 +11028,12 @@ function onVisToggleChange(id,checked){
   if(['realisticNeck','darkFretboard','forceOwnNoteStyle','zoomToZone','nextPreview'].includes(id)){
     try{
       if(id==='nextPreview'&&!checked)hideNextPreview();
-      if(_lastParsedShown){
+      // Historia de escala pinta su propio fondo (drawUnifiedFretboard) UNA vez al entrar en el
+      // ejercicio (ssShowBackground) — no pasa por _lastParsedShown/renderSVGStatic (sistema del
+      // resto de tipos), así que sin esto el cambio no se veía hasta salir y volver a entrar.
+      if(getExerciseType&&getExerciseType()==='scaleStory'){
+        if(typeof ssShowBackground==='function')ssShowBackground();
+      }else if(_lastParsedShown){
         renderSVGStatic(_lastParsedShown);
         if(_lastBgArgs)buildBgMap(_lastBgArgs.bar,_lastBgArgs.slot);
         if(currentChordData&&currentChordData.chord)applyFollowHighlight(currentChordData.chord);
@@ -12296,11 +12324,16 @@ const SS_STRING_LABELS=['6ª (grave)','5ª','4ª','3ª','2ª','1ª (aguda)']; //
 // más abajo) pasando cada paso por el mismo pipeline de selectores.
 function ssTriadChordFor(root,scaleKey){return root+(scaleKey==='penta_major'?'':'m');}
 function ssInversionsFor(step){return(step.inversions&&step.inversions.length)?step.inversions:[0,1,2];}
-// "Todas" (stringGroupIdx==='all'): recorre las 4 posiciones de cuerdas adyacentes por todo el
-// mástil en el orden 321→432→543→654 (el que pidió Alberto — agudas primero), en vez de tener
-// que dar de alta 4 pasos sueltos con el mismo acorde. Ver SS_TRIAD_ALL_GROUPS_ORDER.
+// "Todas" y "Barrido continuo" (stringGroupIdx 'all'/'sweep'): recorren las 4 posiciones de
+// cuerdas adyacentes en el orden 321→432→543→654 (agudas primero), en vez de dar de alta 4
+// pasos sueltos con el mismo acorde. Se diferencian en el ORDEN de los trozos con "Trocear: una
+// inversión a la vez" (ver ssChunksForStep): 'all' procesa grupo por grupo (cada grupo entero,
+// izda→dcha dentro de él, luego el siguiente grupo — lo que pidió Alberto); 'sweep' además
+// mezcla los 4 grupos por su traste real, un barrido de punta a punta del mástil sin respetar
+// la agrupación por cuerdas (interesante para otras visualizaciones — no se pierde, es la otra
+// opción del desplegable).
 const SS_TRIAD_ALL_GROUPS_ORDER=[3,0,1,2];
-function ssTriadGroupsForStep(step){return step.stringGroupIdx==='all'?SS_TRIAD_ALL_GROUPS_ORDER:[step.stringGroupIdx];}
+function ssTriadGroupsForStep(step){return(step.stringGroupIdx==='all'||step.stringGroupIdx==='sweep')?SS_TRIAD_ALL_GROUPS_ORDER:[step.stringGroupIdx];}
 // Origen "Nota" — UNA nota concreta (p.ej. la tónica) por TODO el mástil, una instancia por
 // cuerda (la de traste más bajo), sin depender de ninguna caja CAGED. Sirve p.ej. para "revela
 // la tónica cuerda a cuerda por todo el mástil" (combinado con Trocear "una a una" + "Dejar
@@ -12349,8 +12382,20 @@ function ssChunksForStep(step,notes,root,scaleKey){
   if(step.source==='triada'){
     const chord=ssTriadChordFor(root,scaleKey),groups=ssTriadGroupsForStep(step);
     if(step.chunkMode==='porInversion'){
+      const avgFret=c=>c.reduce((s,n)=>s+n.fret,0)/c.length;
       const chunks=[];
-      groups.forEach(gi=>ssInversionsFor(step).forEach(inv=>{const c=ssSelectTriad(chord,gi,inv);if(c.length)chunks.push(c);}));
+      groups.forEach(gi=>{
+        const invChunks=ssInversionsFor(step).map(inv=>ssSelectTriad(chord,gi,inv)).filter(c=>c.length);
+        // De izquierda a derecha DENTRO de este grupo (traste ascendente) — el orden fundamental/
+        // 1ª/2ª no siempre coincide con el orden real en el mástil.
+        invChunks.sort((a,b)=>avgFret(a)-avgFret(b));
+        chunks.push(...invChunks);
+      });
+      // "Barrido continuo" (stringGroupIdx==='sweep'): además mezcla los 4 grupos por su traste
+      // real, un barrido de punta a punta sin respetar la agrupación por cuerdas — la otra
+      // opción del desplegable "Grupo de cuerdas", NO el comportamiento por defecto de "Todas"
+      // (que procesa grupo por grupo, izda→dcha dentro de cada uno — lo que pidió Alberto).
+      if(step.stringGroupIdx==='sweep')chunks.sort((a,b)=>avgFret(a)-avgFret(b));
       return chunks;
     }
     if(step.chunkMode==='porCuerda'){
@@ -12380,7 +12425,7 @@ function ssDefaultCaption(step){
   const pinSuf=step.op!=='apagar'&&step.pin?' (fijada — no vuelve a fantasma)':'';
   if(step.source==='triada'){
     const invLbl={0:'fundamental',1:'1ª inv.',2:'2ª inv.'};
-    const grpLbl=step.stringGroupIdx==='all'?'por todo el mástil':(SS_TRIAD_GROUP_LABELS[step.stringGroupIdx]||'?');
+    const grpLbl=step.stringGroupIdx==='all'?'por todo el mástil, grupo a grupo':step.stringGroupIdx==='sweep'?'barrido continuo por todo el mástil':(SS_TRIAD_GROUP_LABELS[step.stringGroupIdx]||'?');
     return`${verbo} tríada (${grpLbl}) — ${ssInversionsFor(step).map(i=>invLbl[i]).join('/')}${pinSuf}`;
   }
   if(step.source==='nota'){
@@ -12402,7 +12447,7 @@ function ssStepToAction(step,root,scaleKey){
   const trozos=ssChunksForStep(step,notes,root,scaleKey);
   // pin no tiene sentido para "apagar" (fuerza justo lo contrario: a fantasma, desbloqueando
   // incluso una fijada) — se ignora aunque el checkbox tuviera un valor residual.
-  const action={op:step.op,trozos,bars:Math.max(0.25,step.bars||1),pin:step.op!=='apagar'&&!!step.pin,highlight:!!step.highlight,caption:step.caption||ssDefaultCaption(step)};
+  const action={op:step.op,trozos,bars:Math.max(0.25,step.bars||1),pin:step.op!=='apagar'&&!!step.pin,highlight:!!step.highlight,source:step.source,caption:step.caption||ssDefaultCaption(step)};
   if(step.op==='revelar'){action.flash=!!step.flash;action.quedaComo=step.endState;}
   else if(step.op==='apagar'){action.apagar=true;}
   else{action.flash=true;action.vuelveA=step.endState;}
@@ -12461,11 +12506,11 @@ function ssMoveStep(id,dir){
   ssRenderSteps();
 }
 function ssCollectChecks(stepId,cls){return[...document.querySelectorAll(`.${cls}[data-step="${stepId}"]:checked`)].map(el=>el.value);}
-const SS_STRUCTURAL_FIELDS=['op','chunkMode','source','pin','wipeAll']; // cambian qué campos se ven en la fila → re-render completo ('pin' deshabilita el selector "Queda como"; 'wipeAll' oculta selector de notas/trocear)
+const SS_STRUCTURAL_FIELDS=['op','chunkMode','source','pin','wipeAll','inversions','stringGroupIdx']; // cambian qué campos se ven en la fila → re-render completo ('pin' deshabilita el selector "Queda como"; 'wipeAll' oculta selector de notas/trocear; 'inversions'/'stringGroupIdx' recalculan los avisos de "Barrido de cuerdas"/"Todas"·"Barrido continuo")
 function ssUpdateStep(id,field,value){
   const s=ssStepDefs.find(x=>x.id===id);if(!s)return;
   if(field==='bars'||field==='chunkSize')s[field]=parseFloat(value)||(field==='bars'?1:3);
-  else if(field==='stringGroupIdx')s[field]=value==='all'?'all':(parseInt(value,10)||0);
+  else if(field==='stringGroupIdx')s[field]=(value==='all'||value==='sweep')?value:(parseInt(value,10)||0);
   else if(field==='flash')s[field]=!!value;
   else if(field==='basePositions'||field==='strings'||field==='inversions')s[field]=value.map(v=>parseInt(v,10));
   else if(field==='source'&&value==='triada'&&(s.chunkMode==='grupos'||s.chunkMode==='unaAUna')){s[field]=value;s.chunkMode='todas';}
@@ -12510,7 +12555,8 @@ function ssCheckboxGroup(stepId,field,cls,options,checkedVals){
 function ssSourceFieldsHtml(s,scaleKey){
   if(s.source==='triada'){
     const grpOpts=SS_TRIAD_GROUP_LABELS.map((l,idx)=>[String(idx),l]);
-    grpOpts.push(['all','Todas — recorrer el mástil (321→432→543→654)']);
+    grpOpts.push(['all','Todas — grupo a grupo (321→432→543→654)']);
+    grpOpts.push(['sweep','Todas — barrido continuo por todo el mástil (mezcla los 4 grupos por traste real)']);
     const invOpts=[['0','Fundamental'],['1','1ª inversión'],['2','2ª inversión']];
     const chord=ssTriadChordFor(document.getElementById('ssRoot')?.value||'A',scaleKey);
     return`<div style="font-size:11px;color:var(--text2);margin-bottom:2px;">Acorde (de la tónica+escala): <b>${chord}</b> · Grupo de cuerdas</div>
@@ -12519,7 +12565,8 @@ function ssSourceFieldsHtml(s,scaleKey){
     </select>
     <div style="font-size:11px;color:var(--text2);margin:6px 0 2px;">Inversiones incluidas</div>
     <div>${ssCheckboxGroup(s.id,'inversions','ssChkInv',invOpts,s.inversions.map(String))}</div>
-    ${s.stringGroupIdx==='all'?'<div style="font-size:11px;color:var(--text2);margin-top:4px;">Con "Trocear: todas las inversiones juntas" da 1 trozo por grupo de cuerdas (4 en total); con "una inversión a la vez" da uno por cada combinación grupo×inversión.</div>':''}`;
+    ${(s.stringGroupIdx==='all'||s.stringGroupIdx==='sweep')?`<div style="font-size:11px;color:var(--text2);margin-top:4px;">Con "Trocear: todas las inversiones juntas" da 1 trozo por grupo de cuerdas (4 en total); con "una inversión a la vez" da uno por cada combinación grupo×inversión — ${s.stringGroupIdx==='all'?'grupo a grupo, izda→dcha dentro de cada uno':'mezclando los 4 grupos, izda→dcha por TODO el mástil'}.</div>`:''}
+    ${s.chunkMode==='porCuerda'&&s.inversions.length>1?`<div style="font-size:11px;color:#c0392b;margin-top:4px;">⚠ Con ${s.inversions.length} inversiones marcadas, "Barrido de cuerdas" da ${s.inversions.length} trozos por cuerda (${s.inversions.length*3} en total), no uno — cada nota de cada inversión es su propio trozo. Para un barrido limpio de una sola tríada (3 notas), marca solo una inversión.</div>`:''}`;
   }
   if(s.source==='nota'){
     const degOpts2=ssAvailableDegrees(scaleKey).map(d=>[d,SS_DEGREE_LABELS[d]||d]);
@@ -12749,8 +12796,11 @@ function ssApplyAction(state,action,elapsedBars,actionStartBar,pinnedKeys,highli
     // "Todo el mástil" (ver ssStepToAction): apaga lo que sea que haya en `state` en este
     // instante — construido por TODAS las acciones anteriores en el mismo ssComputeState — sin
     // necesidad de conocer de antemano qué notas hay. También desbloquea todo lo fijado.
-    state.forEach((entry,key)=>state.set(key,{...entry,colorMix:0}));
-    pinnedKeys.clear();
+    // Fundido gradual (a lo largo de `action.bars`, no de golpe — feedback de Alberto): cada
+    // nota se funde desde SU colorMix actual, no todas a la vez desde el mismo punto.
+    const p=action.bars>0?Math.min(1,(elapsedBars-actionStartBar)/action.bars):1;
+    state.forEach((entry,key)=>state.set(key,{...entry,colorMix:entry.colorMix*(1-p)}));
+    if(p>=1)pinnedKeys.clear(); // desbloquea solo cuando el fundido ha terminado del todo
     return;
   }
   const endSolid=(action.quedaComo||action.vuelveA)==='solida';
@@ -12771,9 +12821,21 @@ function ssApplyAction(state,action,elapsedBars,actionStartBar,pinnedKeys,highli
     if(action.apagar){
       // "Apagar (a fantasma)": a diferencia de revelar/iluminar, que respetan una nota ya fijada
       // (ver "Dejar siempre activo"), apagar es justo la herramienta para deshacer eso — limpia
-      // el mástil (o solo las notas elegidas) a fantasma de golpe, y la desbloquea para que
-      // pasos posteriores puedan volver a tocarla con normalidad.
-      chunkRaw.forEach(n=>{const k=ssKey(n);pinnedKeys.delete(k);state.set(k,{note:n,opacity:1,colorMix:0});});
+      // el mástil (o solo las notas elegidas), y la desbloquea para que pasos posteriores puedan
+      // volver a tocarla con normalidad. El fundido a fantasma es GRADUAL, a lo largo de los
+      // compases del propio trozo (unitDur, el mismo campo "Compases por trozo" de la UI) — antes
+      // era instantáneo (feedback de Alberto). Parte de lo que la nota YA tuviera en `state`
+      // (construido por las acciones anteriores en este mismo frame) para que la transición sea
+      // suave sea cual sea su color de partida, no solo si venía a tope.
+      chunkRaw.forEach(n=>{
+        const k=ssKey(n);
+        pinnedKeys.delete(k);
+        if(!isActive){state.set(k,{note:n,opacity:1,colorMix:0});return;} // ya asentada en fantasma
+        const prevMix=state.get(k)?.colorMix;
+        const from=prevMix!=null?prevMix:1; // sin nada previo, se asume que venía coloreada (caso típico)
+        const p=unitDur>0?Math.min(1,(elapsedBars-chunkStart)/unitDur):1;
+        state.set(k,{note:n,opacity:1,colorMix:from*(1-p)});
+      });
       return;
     }
     const chunk=chunkRaw.filter(n=>!pinnedKeys.has(ssKey(n))); // ya fijada por una acción anterior: no se toca el color
@@ -12800,15 +12862,15 @@ function ssApplyAction(state,action,elapsedBars,actionStartBar,pinnedKeys,highli
 // vigente (el de la última acción cuyo inicio ya se alcanzó).
 function ssComputeState(actions,elapsedBars){
   const state=new Map(),pinnedKeys=new Set(),highlightedKeys=new Set();
-  let cursor=0,caption=actions.length?actions[0].caption:'';
+  let cursor=0,caption=actions.length?actions[0].caption:'',curSource=actions.length?actions[0].source:null;
   actions.forEach(act=>{
     const actStart=cursor;
-    if(elapsedBars>=actStart)caption=act.caption;
+    if(elapsedBars>=actStart){caption=act.caption;curSource=act.source;}
     ssApplyAction(state,act,elapsedBars,actStart,pinnedKeys,highlightedKeys);
     cursor=actStart+act.bars*(act.trozos.length||1);
   });
   highlightedKeys.forEach(k=>{const e=state.get(k);if(e)e.highlighted=true;});
-  return{state,caption};
+  return{state,caption,curSource};
 }
 
 // Mismo criterio de color que el resto de la app ("Aplicar estilo propio a las notas" — ver
@@ -12875,10 +12937,25 @@ function ssPaintState(state,canvasId){
   });
 }
 
+// El texto de apoyo vivía abajo (#ssCaption, superpuesto al mástil) — Alberto pidió subirlo a
+// #vResBox, la cajita junto a "Tonalidad" que en Historia de escala nunca se rellena (ahí
+// normalmente van sugerencias de escala, que no aplican aquí — "ocultar el modo" = da igual su
+// uso original, se reaprovecha sin más). El overlay de abajo (#ssCaption) se deja SIEMPRE oculto.
+// El texto de apoyo vivía abajo (#ssCaption, superpuesto al mástil) — Alberto pidió subirlo.
+// #vResBox (90px de ancho, junto a "Tonalidad") resultó demasiado estrecho para una frase.
+// #vMsgText (la "msg-zone" justo debajo de la cabecera) es la zona correcta: ancha, centrada,
+// y ya tiene su propio fundido de entrada/salida vía la clase .visible — mismo patrón que usa
+// renderMsg() para los mensajes por compás del resto de ejercicios.
 function ssSetCaption(text){
-  const box=document.getElementById('ssCaption'),t=document.getElementById('ssCaptionText');
-  if(!box||!t)return;
-  if(text){box.style.display='block';t.textContent=text;}else{box.style.display='none';}
+  const oldBox=document.getElementById('ssCaption');if(oldBox)oldBox.style.display='none';
+  const el=document.getElementById('vMsgText');if(!el)return;
+  if(text){
+    el.textContent=text;
+    el.classList.add('visible');
+  }else{
+    el.classList.remove('visible');
+    setTimeout(()=>{if(!el.classList.contains('visible'))el.textContent='';},500);
+  }
 }
 
 function ssGetTitle(){
@@ -12896,6 +12973,36 @@ function ssShowTitle(opacity){
   t.textContent=ssGetTitle();
 }
 
+// Franja de notas (#vNotes) — feedback de Alberto: la primera versión usaba renderScaleRow/
+// updateCarousel (título enorme + escala teórica de 7 notas de "Am"), que no coincidía con lo
+// que de verdad había en el mástil en ese instante (p.ej. mostraba "A-C-E" aunque el paso solo
+// revelara la tónica) — "un poco de caos". Esta reconstruye directo desde `state`: las notas
+// REALMENTE coloreadas/activas ahora mismo (colorMix alto — mismo umbral que usa ssPaintState
+// para pasar de fantasma a color), deduplicadas por nombre. Nada de #vChord ni #scaleRow.
+let _ssLastNotesKey=null;
+function ssUpdateChordStrip(state){
+  const el=document.getElementById('vNotes');
+  if(!el)return;
+  const seen=new Set(),active=[];
+  if(state)state.forEach(({note:n,colorMix})=>{
+    if(colorMix<0.5)return; // solo lo coloreado/activo — el fantasma de fondo no cuenta como "pista"
+    if(seen.has(n.note))return;
+    seen.add(n.note);active.push(n);
+  });
+  active.sort((a,b)=>(b.isRoot?1:0)-(a.isRoot?1:0)||a.note.localeCompare(b.note));
+  const key=active.map(n=>n.note+(n.isRoot?'R':'')).join(',');
+  if(key===_ssLastNotesKey)return;
+  _ssLastNotesKey=key;
+  // Círculo tipo .sc-dot (mismo que la franja de escala normal — ver appendScaleNote), NO el
+  // rectángulo de .note-chip que quedaba "pegado a la nota" y feo (feedback de Alberto).
+  el.innerHTML=active.map(n=>{
+    const col=n.isRoot?'#E53935':'#26C6DA';
+    const{r,g,b}=hexToRgb(col);
+    const bg=`rgba(${r},${g},${b},${n.isRoot?0.6:0.3})`,bd=`rgba(${r},${g},${b},${n.isRoot?1:0.75})`;
+    const glow=n.isRoot?`box-shadow:0 0 12px rgba(${r},${g},${b},0.8);`:'';
+    return`<div class="sc-note${n.isRoot?' is-root':''} in-chord-scale"><div class="sc-dot" style="background:${bg};border-color:${bd};border-width:2.5px;${glow}"><span class="sc-lbl" style="color:${col};">${n.note}</span></div></div>`;
+  }).join('');
+}
 function ssPaintAtElapsed(elapsed){
   if(!ssActions.length)return;
   const elapsedBars=ssElapsedBars(elapsed);
@@ -12903,6 +13010,7 @@ function ssPaintAtElapsed(elapsed){
     // Compases de intro: mástil vacío + título con fundido — la narración todavía no arranca.
     ssPaintState(new Map());
     ssSetCaption(null);
+    ssUpdateChordStrip(null);
     const introSec=ssIntroSec();
     const barSec=ssHasTempoMap()?(60/getBpmAtBar(0))*getBeatsAtBar(0):ssBarSeconds();
     const fadeDur=Math.min(barSec,introSec)||0.6; // se difumina en el último compás de intro
@@ -12913,6 +13021,7 @@ function ssPaintAtElapsed(elapsed){
   const{state,caption}=ssComputeState(ssActions,elapsedBars);
   ssPaintState(state);
   ssSetCaption(caption);
+  ssUpdateChordStrip(state);
 }
 
 // Metrónomo visual (#vBeats): ssFrame tiene su propio bucle rAF y nunca pasa por tick()
@@ -13010,6 +13119,32 @@ if(typeof window.showTab==='function'){
 
 function ssShow(){
   ssShowBackground();
+  // Sin acorde real que mostrar, el carrusel se queda pintando guiones "—" enormes — una franja
+  // gris vacía en medio de la cabecera (feedback de Alberto). Se oculta entero: #vNotes ya NO
+  // vive ahí dentro (se muda más abajo, ver el insertAdjacentElement de debajo), así que ya no
+  // hay riesgo de colapsar nada con ella dentro. Libera bastante alto — #vis-img-zone tiene
+  // flex:1, así que el mástil crece solo para ocupar el hueco (pidió "aprovechar el aire").
+  const carousel=document.getElementById('chordCarousel');if(carousel)carousel.style.display='none';
+  // La "msg-zone" (#vMsgText, ver ssSetCaption) y #vNotes (franja de notas, ver
+  // ssUpdateChordStrip) están OCULTOS por defecto para todo el mundo (ajustes "Mensajes/
+  // consejos" y "Notas del acorde" = false de fábrica) — aquí no son opcionales, son la UI
+  // principal del ejercicio, así que se fuerzan visibles.
+  const mz=document.getElementById('vMsgText')?.parentElement;if(mz)mz.style.display='';
+  const vn=document.getElementById('vNotes');if(vn)vn.style.display='';
+  // Orden: texto de apoyo primero, notas debajo (pidió "el texto encima de las notas") — se
+  // muda #vNotes justo después de la msg-zone; ssHide() la devuelve a su sitio original (justo
+  // después del carrusel, dentro de .chord-center).
+  if(mz&&vn)mz.insertAdjacentElement('afterend',vn);
+  // Modo "Compases"/"Minimalista" (selector #chordDisplayMode, ver setChordDisplayMode): sin
+  // acorde real, esos overlays se quedan pintando cajas "Ahora"/"Siguiente" vacías encima del
+  // carrusel — se fuerza a 'carousel' para que ninguno se muestre; ssHide() restaura el modo
+  // que el usuario tuviera elegido.
+  if(typeof setChordDisplayMode==='function')setChordDisplayMode('carousel');
+  // #scaleRow (franja de escala del resto de ejercicios) no la usamos y se queda vacía pero con
+  // su alto reservado (clamp 36-52px) — puro aire encima del mástil. Se oculta; ssHide() la
+  // restaura (su visibilidad normal la gestiona applyVisConfig/mastilOnly, no hace falta leer
+  // ningún ajuste aquí, solo devolverle el display por defecto del CSS).
+  const sr=document.getElementById('scaleRow');if(sr)sr.style.display='none';
   ssPaintAtElapsed(0);
 }
 function ssHide(){
@@ -13018,6 +13153,20 @@ function ssHide(){
   ssSetCaption(null);
   ssShowTitle(0);
   const beats=document.getElementById('vBeats');if(beats)beats.innerHTML='';
+  _ssLastNotesKey=null;ssUpdateChordStrip(null); // no dejar notas residuales al cambiar de ejercicio
+  const carousel=document.getElementById('chordCarousel'),vn=document.getElementById('vNotes');
+  if(carousel){
+    carousel.style.display='';
+    if(vn)carousel.insertAdjacentElement('afterend',vn); // devuelve #vNotes a su sitio original
+  }
+  const mz=document.getElementById('vMsgText')?.parentElement,sr=document.getElementById('scaleRow');
+  if(typeof getVisConfig==='function'){
+    const cfg=getVisConfig(); // deja los ajustes del usuario como estaban al salir
+    if(mz)mz.style.display=cfg.showMsg===false?'none':'';
+    if(vn)vn.style.display=cfg.showNotes===false?'none':'';
+    if(sr)sr.style.display=cfg.showScaleRow===false?'none':'';
+  }
+  if(typeof setChordDisplayMode==='function'&&typeof getChordDisplayMode==='function')setChordDisplayMode(getChordDisplayMode());
   if(typeof hideSVGCanvas==='function')hideSVGCanvas();
   if(ssRafId){cancelAnimationFrame(ssRafId);ssRafId=null;}
 }
@@ -13045,6 +13194,7 @@ window.ssRenderSteps=ssRenderSteps;
 window.ssPreviewStep=ssPreviewStep;
 window.ssPreviewGoto=ssPreviewGoto;
 window.ssRenderEditorPreview=ssRenderEditorPreview;
+window.ssShowBackground=ssShowBackground; // repintado en vivo desde onVisToggleChange (Mástil realista, etc.)
 
 /* ---- Init: carga la plantilla de ejemplo la primera vez que se pinta la pestaña ---- */
 function ssInit(){
