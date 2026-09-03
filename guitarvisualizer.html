@@ -847,6 +847,10 @@ body.presentation #channelWatermark{display:flex;}
       <button class="btn primary" id="playBtn" onclick="togglePlay()"><i class="ti ti-player-play"></i> Play</button>
       <button class="btn" onclick="togglePresentation()" title="Modo presentación — UI limpia para grabar (Esc para salir)"><i class="ti ti-maximize"></i></button>
       <button class="btn" onclick="stopAll()"><i class="ti ti-player-stop"></i> Stop</button>
+      <span id="ssStepNavControls" style="display:none;gap:6px;">
+        <button class="btn" onclick="ssJumpToStep(-1)" title="Salta al principio del paso anterior de la narración"><i class="ti ti-player-track-prev"></i> Paso</button>
+        <button class="btn" onclick="ssJumpToStep(1)" title="Salta al principio del paso siguiente de la narración">Paso <i class="ti ti-player-track-next"></i></button>
+      </span>
       <button class="btn" id="slideshowBtn" onclick="toggleSlideshow()" title="Modo diapositivas — navega con ← →" style="padding:6px 10px;"><i class="ti ti-presentation"></i></button>
       <label>Velocidad:</label>
       <select id="speedSel" onchange="setSpeed(this.value)">
@@ -12373,10 +12377,48 @@ function ssNotesForStep(step,root,scaleKey){
     if(step.strings&&step.strings.length)notes=ssByStrings(notes,step.strings);
     return notes;
   }
+  if(step.posWalk)return ssPositionInstancesLeftToRight(root,scaleKey).reduce((acc,p)=>acc.concat(p.notes),[]);
   let notes=ssSelectPositions(root,scaleKey,(step.basePositions&&step.basePositions.length)?step.basePositions:[0]);
   if(step.degrees&&step.degrees.length)notes=ssByDegree(notes,step.degrees);
   if(step.strings&&step.strings.length)notes=ssByStrings(notes,step.strings);
   return notes;
+}
+// "Recorrer las 5 posiciones" (step.posWalk): las 5 posiciones CAGED ordenadas por su traste
+// MÁS BAJO real, no por la etiqueta Forma E/D/C/A/G — igual que con las tríadas, ese orden de
+// letra no siempre coincide con la posición física en el mástil para cada tónica concreta.
+// Con el mástil dibujado hasta el traste 15 (SS_FRET_MAX), la posición más cercana a la cejilla
+// puede caber ENTERA una segunda vez una octava más arriba (+12 trastes, misma digitación) —
+// pidió Alberto que salgan las dos apariciones, no solo la primera.
+function ssPositionInstancesLeftToRight(root,scaleKey){
+  const out=[];
+  [0,1,2,3,4].forEach(idx=>{
+    const base=ssSelectPos(root,scaleKey,idx);
+    if(!base.length)return;
+    out.push({idx,notes:base,minFret:Math.min(...base.map(n=>n.fret))});
+    const shifted=base.map(n=>({...n,fret:n.fret+12}));
+    if(shifted.every(n=>n.fret<=SS_FRET_MAX))out.push({idx,notes:shifted,minFret:Math.min(...shifted.map(n=>n.fret)),octaveUp:true});
+  });
+  return out.sort((a,b)=>a.minFret-b.minFret);
+}
+// Trocea cada posición/instancia (ver ssPositionInstancesLeftToRight) POR SEPARADO según el
+// troceo elegido (todas/grupos/una a una) — un array de trozos POR posición, no una lista plana,
+// para que ssStepToAction pueda saber dónde empieza y acaba cada una (hold + fundido conjunto,
+// ver action.posWalkGroups en ssApplyAction). Compartido con ssChunksForStep (solo cuenta de
+// trozos para la vista previa, sin la lógica de tiempo) para no calcular las notas dos veces.
+function ssPosWalkGroups(step,root,scaleKey){
+  const groups=[];
+  ssPositionInstancesLeftToRight(root,scaleKey).forEach(({notes:raw})=>{
+    let posNotes=raw;
+    if(step.degrees&&step.degrees.length)posNotes=ssByDegree(posNotes,step.degrees);
+    if(step.strings&&step.strings.length)posNotes=ssByStrings(posNotes,step.strings);
+    if(!posNotes.length)return;
+    let chunks;
+    if(step.chunkMode==='unaAUna')chunks=ssEachNote(posNotes);
+    else if(step.chunkMode==='grupos')chunks=ssGroupsOfStrings(posNotes,Math.max(1,Math.min(6,step.chunkSize||3)));
+    else chunks=[posNotes]; // 'todas': la posición entera como 1 solo trozo
+    if(chunks.length)groups.push(chunks);
+  });
+  return groups;
 }
 function ssChunksForStep(step,notes,root,scaleKey){
   if(step.source==='triada'){
@@ -12412,6 +12454,11 @@ function ssChunksForStep(step,notes,root,scaleKey){
       return chunk;
     }).filter(c=>c.length);
   }
+  if(step.posWalk){
+    // Solo para la vista previa (cuenta de trozos) — la temporización real (hold + fundido
+    // conjunto por posición) vive en ssStepToAction/ssApplyAction (action.posWalkGroups).
+    return[].concat(...ssPosWalkGroups(step,root,scaleKey));
+  }
   if(step.chunkMode==='grupos')return ssGroupsOfStrings(notes,Math.max(1,Math.min(6,step.chunkSize||3)));
   // 'nota': ssSelectNoteFullNeck ya deja `notes` ordenadas por traste (barrido grave→agudo por el
   // mástil) — ssEachNote reordenaría por cuerda y lo deshace, así que aquí se trocea sin volver
@@ -12420,7 +12467,10 @@ function ssChunksForStep(step,notes,root,scaleKey){
   return notes.length?[notes]:[];
 }
 function ssDefaultCaption(step){
-  if(step.op==='apagar'&&step.wipeAll)return'Apaga todo el mástil';
+  if(step.op==='apagar'&&step.wipeAll){
+    const exc=(step.wipeExcept||[]).map(d=>SS_DEGREE_LABELS[d]||d);
+    return exc.length?`Apaga todo el mástil (menos ${exc.join('/')})`:'Apaga todo el mástil';
+  }
   const verbo=step.op==='revelar'?'Revela':step.op==='apagar'?'Apaga':'Ilumina';
   const pinSuf=step.op!=='apagar'&&step.pin?' (fijada — no vuelve a fantasma)':'';
   if(step.source==='triada'){
@@ -12432,7 +12482,8 @@ function ssDefaultCaption(step){
     return`${verbo} ${SS_DEGREE_LABELS[step.note]||step.note} por todo el mástil${pinSuf}`;
   }
   const que=(step.degrees&&step.degrees.length)?step.degrees.map(d=>SS_DEGREE_LABELS[d]||d).join('/'):'la posición';
-  return`${verbo} ${que}${pinSuf}`;
+  const posSuf=step.posWalk?' — las 5 posiciones, izda→dcha':'';
+  return`${verbo} ${que}${posSuf}${pinSuf}`;
 }
 function ssStepToAction(step,root,scaleKey){
   if(step.op==='apagar'&&step.wipeAll){
@@ -12441,7 +12492,18 @@ function ssStepToAction(step,root,scaleKey){
     // resuelve en tiempo real dentro de ssApplyAction (action.apagarTodo), no aquí — por eso
     // no pasa por ssNotesForStep/ssChunksForStep como el resto. `trozos:[[]]` es solo un
     // placeholder de 1 elemento para que ssComputeState siga contando bien la duración total.
-    return{op:'apagar',apagarTodo:true,trozos:[[]],bars:Math.max(0.25,step.bars||1),pin:false,highlight:false,caption:step.caption||'Apaga todo el mástil'};
+    return{op:'apagar',apagarTodo:true,wipeExcept:step.wipeExcept||[],trozos:[[]],bars:Math.max(0.25,step.bars||1),pin:false,highlight:false,caption:step.caption||ssDefaultCaption(step)};
+  }
+  if(step.source==='pentatonica'&&step.posWalk&&step.op==='revelar'){
+    // "Recorrer las 5 posiciones": aparece de golpe coloreada nota a nota (o grupo a grupo/la
+    // posición entera, según Trocear) — TODO lo revelado se mantiene coloreado (no se funde
+    // trozo a trozo como el resto de pasos) hasta completar la posición Y esperar holdBars
+    // compases; entonces esa posición ENTERA se funde a la vez a fantasma, y justo ahí empieza
+    // a revelarse la siguiente. Ver action.posWalkGroups en ssApplyAction.
+    const groups=ssPosWalkGroups(step,root,scaleKey);
+    const trozos=[].concat(...groups);
+    return{op:'revelar',trozos,posWalkGroups:groups.map(g=>g.length),holdBars:Math.max(0,step.holdBars||0),
+      bars:Math.max(0.25,step.bars||1),pin:false,highlight:!!step.highlight,caption:step.caption||ssDefaultCaption(step)};
   }
   const notes=ssNotesForStep(step,root,scaleKey);
   const trozos=ssChunksForStep(step,notes,root,scaleKey);
@@ -12495,7 +12557,7 @@ const SS_FRET_MIN=0,SS_FRET_MAX=15;
 let ssStepDefs=[],ssStepSeq=0;
 function ssNewStep(overrides){
   return Object.assign({id:'st'+(++ssStepSeq),op:'revelar',source:'pentatonica',basePositions:[0],degrees:[],strings:[],note:'1',
-    chunkMode:'todas',chunkSize:3,stringGroupIdx:2,inversions:[0,1,2],bars:1,flash:false,endState:'fantasma',pin:false,highlight:false,wipeAll:false,caption:''},overrides||{});
+    chunkMode:'todas',chunkSize:3,stringGroupIdx:2,inversions:[0,1,2],bars:1,flash:false,endState:'fantasma',pin:false,highlight:false,wipeAll:false,wipeExcept:[],posWalk:false,holdBars:1,caption:''},overrides||{});
 }
 function ssAddStep(){ssStepDefs.push(ssNewStep());ssRenderSteps();}
 function ssRemoveStep(id){ssStepDefs=ssStepDefs.filter(s=>s.id!==id);ssRenderSteps();}
@@ -12506,10 +12568,11 @@ function ssMoveStep(id,dir){
   ssRenderSteps();
 }
 function ssCollectChecks(stepId,cls){return[...document.querySelectorAll(`.${cls}[data-step="${stepId}"]:checked`)].map(el=>el.value);}
-const SS_STRUCTURAL_FIELDS=['op','chunkMode','source','pin','wipeAll','inversions','stringGroupIdx']; // cambian qué campos se ven en la fila → re-render completo ('pin' deshabilita el selector "Queda como"; 'wipeAll' oculta selector de notas/trocear; 'inversions'/'stringGroupIdx' recalculan los avisos de "Barrido de cuerdas"/"Todas"·"Barrido continuo")
+const SS_STRUCTURAL_FIELDS=['op','chunkMode','source','pin','wipeAll','inversions','stringGroupIdx','posWalk']; // cambian qué campos se ven en la fila → re-render completo ('pin' deshabilita el selector "Queda como"; 'wipeAll' oculta selector de notas/trocear; 'inversions'/'stringGroupIdx' recalculan los avisos de "Barrido de cuerdas"/"Todas"·"Barrido continuo"; 'posWalk' oculta "Posición(es) CAGED")
 function ssUpdateStep(id,field,value){
   const s=ssStepDefs.find(x=>x.id===id);if(!s)return;
   if(field==='bars'||field==='chunkSize')s[field]=parseFloat(value)||(field==='bars'?1:3);
+  else if(field==='holdBars')s[field]=Math.max(0,parseFloat(value)||0);
   else if(field==='stringGroupIdx')s[field]=(value==='all'||value==='sweep')?value:(parseInt(value,10)||0);
   else if(field==='flash')s[field]=!!value;
   else if(field==='basePositions'||field==='strings'||field==='inversions')s[field]=value.map(v=>parseInt(v,10));
@@ -12523,14 +12586,21 @@ function ssRenderStepPreview(id){
   const el=document.getElementById('ssPreview_'+id);if(!el)return;
   const s=ssStepDefs.find(x=>x.id===id);if(!s)return;
   if(s.op==='apagar'&&s.wipeAll){
-    el.textContent=`→ apaga TODO lo que haya en el mástil en ese momento (sin selección de notas), ${s.bars} compás/es`;
+    const exc=(s.wipeExcept||[]).map(d=>SS_DEGREE_LABELS[d]||d);
+    el.textContent=`→ apaga TODO lo que haya en el mástil en ese momento${exc.length?` EXCEPTO ${exc.join('/')}`:''} (sin selección de notas), ${s.bars} compás/es`;
     el.style.color='var(--text2)';
     return;
   }
   const root=document.getElementById('ssRoot').value,scaleKey=document.getElementById('ssScale').value;
   const notes=ssNotesForStep(s,root,scaleKey),chunks=ssChunksForStep(s,notes,root,scaleKey);
   const totalBars=s.bars*(chunks.length||1);
-  el.textContent=notes.length?`→ ${notes.length} nota(s) en ${chunks.length} trozo(s), ${s.bars} compás/es por trozo (${totalBars} compás/es en total)`:'→ sin notas (revisa posición/filtros/acorde)';
+  // posWalk procesa cada posición POR SEPARADO (no una unión deduplicada) — las notas que caen
+  // en el solape entre dos posiciones CAGED adyacentes se revelan una vez por cada una, así que
+  // el nº de trozos puede superar al de notas únicas (notes.length); se avisa para que no
+  // parezca una cuenta que no cuadra.
+  const chunkNotesTotal=s.posWalk?chunks.reduce((n,c)=>n+c.length,0):notes.length;
+  const dupSuf=s.posWalk&&chunkNotesTotal>notes.length?` (${notes.length} únicas — las del solape entre posiciones salen 2 veces)`:'';
+  el.textContent=notes.length?`→ ${chunkNotesTotal} nota(s)${dupSuf} en ${chunks.length} trozo(s), ${s.bars} compás/es por trozo (${totalBars} compás/es en total)`:'→ sin notas (revisa posición/filtros/acorde)';
   el.style.color=notes.length?'var(--text2)':'#c0392b';
 }
 function ssLoadTemplate(){
@@ -12581,8 +12651,13 @@ function ssSourceFieldsHtml(s,scaleKey){
   const posOpts=SS_CAGED_LABELS.map((l,idx)=>[String(idx),l]);
   const degOpts=ssAvailableDegrees(scaleKey).map(d=>[d,SS_DEGREE_LABELS[d]||d]);
   const strOpts=SS_STRING_LABELS.map((l,idx)=>[String(idx),l]);
-  return`<div style="font-size:11px;color:var(--text2);margin-bottom:2px;">Posición(es) CAGED (pentatónica)</div>
-    <div>${ssCheckboxGroup(s.id,'basePositions','ssChkPos',posOpts,s.basePositions.map(String))}</div>
+  return`<label style="display:flex;align-items:center;gap:4px;font-size:12px;margin-bottom:6px;" title="Ignora la selección de abajo: usa las 5 posiciones CAGED, ordenadas por su traste real (no por Forma E/D/C/A/G) — la más a la izquierda del mástil primero. Combinado con 'Trocear: una a una' da un recorrido nota a nota posición por posición, de izquierda a derecha.">
+    <input type="checkbox" ${s.posWalk?'checked':''} onchange="ssUpdateStep('${s.id}','posWalk',this.checked)"> Recorrer las 5 posiciones (izda→dcha)</label>
+    ${s.posWalk?`<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);margin-bottom:6px;" title="Al terminar de revelar una posición nota a nota, se mantiene entera coloreada este número de compases antes de apagarse (fundido) y dar paso a la siguiente.">
+      Compases de espera al terminar cada posición:
+      <input type="number" min="0" step="0.25" value="${s.holdBars}" style="width:56px;" onchange="ssUpdateStep('${s.id}','holdBars',this.value)">
+    </label>`:`<div style="font-size:11px;color:var(--text2);margin-bottom:2px;">Posición(es) CAGED (pentatónica)</div>
+    <div>${ssCheckboxGroup(s.id,'basePositions','ssChkPos',posOpts,s.basePositions.map(String))}</div>`}
     <div style="font-size:11px;color:var(--text2);margin:6px 0 2px;">Filtrar por grado (vacío = todos)</div>
     <div>${ssCheckboxGroup(s.id,'degrees','ssChkDeg',degOpts,s.degrees)}</div>
     <div style="font-size:11px;color:var(--text2);margin:6px 0 2px;">Filtrar por cuerdas (vacío = todas)</div>
@@ -12619,7 +12694,8 @@ function ssStepRowHtml(s,i,total,scaleKey){
       <button class="btn sm" ${i===total-1?'disabled':''} onclick="ssMoveStep('${s.id}',1)" title="Bajar">↓</button>
       <button class="btn sm" onclick="ssRemoveStep('${s.id}')" title="Eliminar">🗑</button>
     </div>
-    ${(s.op==='apagar'&&s.wipeAll)?'':ssSourceFieldsHtml(s,scaleKey)}
+    ${s.op==='apagar'&&s.wipeAll?`<div style="font-size:11px;color:var(--text2);margin-bottom:2px;">Excepto estos grados (no se apagan — se quedan tal cual estén, color y fijado incluidos)</div>
+    <div>${ssCheckboxGroup(s.id,'wipeExcept','ssChkWipeExcept',ssAvailableDegrees(scaleKey).map(d=>[d,SS_DEGREE_LABELS[d]||d]),s.wipeExcept||[])}</div>`:ssSourceFieldsHtml(s,scaleKey)}
     <div class="field-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:6px;">
       ${(s.op==='apagar'&&s.wipeAll)?'':`<div><label style="display:block;font-size:11px;color:var(--text2);">Trocear</label>
         <select onchange="ssUpdateStep('${s.id}','chunkMode',this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border2);font-size:12px;">
@@ -12681,7 +12757,7 @@ function ssRenderEditorPreview(){
   }
   ssPreviewIdx=Math.max(0,Math.min(ssPreviewIdx,actions.length-1));
   let cursor=0;
-  const rows=actions.map((a,i)=>{const start=cursor,dur=a.bars*(a.trozos.length||1);cursor+=dur;return{start,end:cursor,caption:a.caption};});
+  const rows=actions.map((a,i)=>{const start=cursor,dur=ssActionTotalBars(a);cursor+=dur;return{start,end:cursor,caption:a.caption};});
   if(timelineEl){
     timelineEl.innerHTML=rows.map((r,i)=>
       `<li style="margin-bottom:4px;${i===ssPreviewIdx?'font-weight:600;color:var(--text);':''}">`+
@@ -12798,9 +12874,46 @@ function ssApplyAction(state,action,elapsedBars,actionStartBar,pinnedKeys,highli
     // necesidad de conocer de antemano qué notas hay. También desbloquea todo lo fijado.
     // Fundido gradual (a lo largo de `action.bars`, no de golpe — feedback de Alberto): cada
     // nota se funde desde SU colorMix actual, no todas a la vez desde el mismo punto.
+    // Excepciones (step.wipeExcept, p.ej. "menos la tónica"): esas notas no se tocan en
+    // absoluto — ni color ni fijado — como si esta acción no existiera para ellas.
     const p=action.bars>0?Math.min(1,(elapsedBars-actionStartBar)/action.bars):1;
-    state.forEach((entry,key)=>state.set(key,{...entry,colorMix:entry.colorMix*(1-p)}));
-    if(p>=1)pinnedKeys.clear(); // desbloquea solo cuando el fundido ha terminado del todo
+    const except=action.wipeExcept&&action.wipeExcept.length?new Set(action.wipeExcept):null;
+    state.forEach((entry,key)=>{
+      if(except&&except.has(entry.note.degree))return;
+      state.set(key,{...entry,colorMix:entry.colorMix*(1-p)});
+    });
+    if(p>=1){ // desbloquea solo cuando el fundido ha terminado del todo (respetando excepciones)
+      if(except)Array.from(pinnedKeys).forEach(k=>{const e=state.get(k);if(!e||!except.has(e.note.degree))pinnedKeys.delete(k);});
+      else pinnedKeys.clear();
+    }
+    return;
+  }
+  if(action.posWalkGroups){
+    // "Recorrer las 5 posiciones" (ver ssStepToAction): a diferencia del resto de acciones, aquí
+    // los trozos de una MISMA posición no se funden cada uno por su cuenta en cuanto llega el
+    // siguiente — se acumulan coloreados hasta completar la posición entera, se mantienen
+    // holdBars compases, y SOLO ENTONCES se funden TODOS JUNTOS a fantasma (durante
+    // SS_FADE_OUT_BARS) justo cuando empieza a revelarse la siguiente posición.
+    const unitDur=action.bars,hold=action.holdBars||0,trozosPW=action.trozos||[];
+    let idx=0,groupStart=actionStartBar;
+    action.posWalkGroups.forEach(size=>{
+      const revealEnd=groupStart+size*unitDur,fadeStart=revealEnd+hold,fadeEnd=fadeStart+SS_FADE_OUT_BARS;
+      for(let i=0;i<size;i++){
+        const chunk=trozosPW[idx]||[];idx++;
+        const noteStart=groupStart+i*unitDur;
+        if(elapsedBars<=noteStart)continue; // esta nota aún no le toca
+        if(elapsedBars<noteStart+unitDur&&action.highlight)chunk.forEach(n=>highlightedKeys.add(ssKey(n)));
+        if(elapsedBars<fadeStart){
+          chunk.forEach(n=>state.set(ssKey(n),{note:n,opacity:1,colorMix:1}));
+        }else if(elapsedBars<fadeEnd){
+          const p2=(elapsedBars-fadeStart)/SS_FADE_OUT_BARS;
+          chunk.forEach(n=>state.set(ssKey(n),{note:n,opacity:1,colorMix:1-p2}));
+        }else{
+          chunk.forEach(n=>state.set(ssKey(n),{note:n,opacity:1,colorMix:0}));
+        }
+      }
+      groupStart=fadeEnd; // la siguiente posición empieza justo cuando esta termina de apagarse
+    });
     return;
   }
   const endSolid=(action.quedaComo||action.vuelveA)==='solida';
@@ -12857,6 +12970,18 @@ function ssApplyAction(state,action,elapsedBars,actionStartBar,pinnedKeys,highli
     chunk.forEach(n=>state.set(ssKey(n),{note:n,opacity:1,colorMix:wasColored?(1-fadeP):0}));
   });
 }
+// Duración total en compases de una acción, tal y como la recorre ssApplyAction — usada tanto
+// para avanzar el cursor en ssComputeState como para las fronteras de ssActionBoundaries, así
+// las dos coinciden siempre (antes cada una tenía su propia fórmula y se desincronizaban).
+function ssActionTotalBars(act){
+  if(act.posWalkGroups){
+    const unitDur=act.bars,hold=act.holdBars||0;
+    let total=0;
+    act.posWalkGroups.forEach(size=>{total+=size*unitDur+hold+SS_FADE_OUT_BARS;});
+    return total;
+  }
+  return act.bars*(act.trozos.length||1);
+}
 // Recorre TODA la narración hasta `elapsedBars` acumulando estado (las acciones ya
 // pasadas quedan asentadas, la actual se anima) y devuelve también el texto de apoyo
 // vigente (el de la última acción cuyo inicio ya se alcanzó).
@@ -12867,10 +12992,52 @@ function ssComputeState(actions,elapsedBars){
     const actStart=cursor;
     if(elapsedBars>=actStart){caption=act.caption;curSource=act.source;}
     ssApplyAction(state,act,elapsedBars,actStart,pinnedKeys,highlightedKeys);
-    cursor=actStart+act.bars*(act.trozos.length||1);
+    cursor=actStart+ssActionTotalBars(act);
   });
   highlightedKeys.forEach(k=>{const e=state.get(k);if(e)e.highlighted=true;});
   return{state,caption,curSource};
+}
+
+// ── Navegación por pasos en el Visualizador ("Paso ◀ ▶", ver #ssStepNavControls) ────────────
+// Antes, para comprobar un paso concreto había que darle a Play y esperar a que le tocara el
+// turno reproduciendo desde el principio. Reutiliza el mismo reloj de compases que ya usa el
+// motor (ssElapsedBars/ssBarsToSeconds son inversas la una de la otra) para saltar directo al
+// principio del paso anterior/siguiente, en vez de scrubbear a ciegas por la barra de progreso.
+function ssActionBoundaries(){
+  let cursor=0;
+  return ssActions.map(act=>{
+    const start=cursor;cursor+=ssActionTotalBars(act);
+    return{start,end:cursor};
+  });
+}
+// Inversa de ssElapsedBars: compás (fraccionario, desde el fin de la intro) → segundos reales
+// de audio (con intro incluida), usando el mismo mapa de tempo real si lo hay.
+function ssBarsToSeconds(bars){
+  if(ssHasTempoMap()){
+    const bi=Math.max(0,Math.floor(bars)),frac=bars-bi;
+    const barDur=(60/getBpmAtBar(bi))*getBeatsAtBar(bi);
+    return getBarStartTime(bi)+frac*barDur;
+  }
+  return ssIntroSec()+bars*ssBarSeconds();
+}
+function ssJumpToStep(delta){
+  if(!audioEl||!ssActions.length)return;
+  const bounds=ssActionBoundaries();
+  const curBars=ssElapsedBars(Math.max(0,audioEl.currentTime||0));
+  let idx;
+  if(curBars===null){
+    idx=delta>0?0:0; // en la intro: "paso anterior" y "paso siguiente" llevan igual al primer paso
+  }else{
+    idx=bounds.findIndex(b=>curBars<b.end);
+    if(idx<0)idx=bounds.length-1; // ya pasado el último paso
+    idx+=delta;
+  }
+  idx=Math.max(0,Math.min(bounds.length-1,idx));
+  audioEl.currentTime=Math.max(0,ssBarsToSeconds(bounds[idx].start));
+  // Refresco inmediato — no esperar al próximo frame del rAF (que sigue corriendo solo si
+  // isPlaying; si está en pausa, sin esto el mástil no se movería hasta el próximo Play).
+  ssPaintAtElapsed(audioEl.currentTime);
+  ssTickMetronome(audioEl.currentTime);
 }
 
 // Mismo criterio de color que el resto de la app ("Aplicar estilo propio a las notas" — ver
@@ -13145,6 +13312,7 @@ function ssShow(){
   // restaura (su visibilidad normal la gestiona applyVisConfig/mastilOnly, no hace falta leer
   // ningún ajuste aquí, solo devolverle el display por defecto del CSS).
   const sr=document.getElementById('scaleRow');if(sr)sr.style.display='none';
+  const nav=document.getElementById('ssStepNavControls');if(nav)nav.style.display='inline-flex';
   ssPaintAtElapsed(0);
 }
 function ssHide(){
@@ -13167,6 +13335,7 @@ function ssHide(){
     if(sr)sr.style.display=cfg.showScaleRow===false?'none':'';
   }
   if(typeof setChordDisplayMode==='function'&&typeof getChordDisplayMode==='function')setChordDisplayMode(getChordDisplayMode());
+  const nav=document.getElementById('ssStepNavControls');if(nav)nav.style.display='none';
   if(typeof hideSVGCanvas==='function')hideSVGCanvas();
   if(ssRafId){cancelAnimationFrame(ssRafId);ssRafId=null;}
 }
@@ -13194,6 +13363,7 @@ window.ssRenderSteps=ssRenderSteps;
 window.ssPreviewStep=ssPreviewStep;
 window.ssPreviewGoto=ssPreviewGoto;
 window.ssRenderEditorPreview=ssRenderEditorPreview;
+window.ssJumpToStep=ssJumpToStep;
 window.ssShowBackground=ssShowBackground; // repintado en vivo desde onVisToggleChange (Mástil realista, etc.)
 
 /* ---- Init: carga la plantilla de ejemplo la primera vez que se pinta la pestaña ---- */
