@@ -49,9 +49,12 @@
  *   --root <nota>           Tónica, p.ej. C, F#, Bb (con --scale, alternativa a --config)
  *   --scale <clave>         Escala (clave interna, p.ej. major, dorian, harmonic_minor — ver
  *                           SEQ_SCALE_FORMULAS en guitarvisualizer.html)
- *   --quality <sevenths|triads>  Cualidad de los acordes diatónicos (por defecto: sevenths;
- *                           en modo tema solo se usa para la validación, no para el vídeo — los
- *                           acordes del vídeo salen del XML tal cual)
+ *   --quality <sevenths|triads|pentatonic>  Qué resaltar de cada acorde (por defecto: sevenths).
+ *                           "pentatonic" resalta la pentatónica de cada acorde (mayor si el
+ *                           acorde es mayor, menor en cualquier otro caso) en vez de sus chord
+ *                           tones. En modo tema el ACORDE en sí sale del XML tal cual siempre —
+ *                           --quality solo decide qué se ilumina de él (chord tones o pentatónica)
+ *                           y, en modo diapositivas, también la lista de acordes diatónicos.
  *   --config <path>         config.json exportado desde la pestaña — solo si corregiste alguna
  *                           posición a mano y quieres conservar esa corrección (si no, usa
  *                           --root/--scale/--quality directamente, sin exportar nada)
@@ -149,7 +152,7 @@ async function validatePositions({ appUrl, cfg, positions }) {
         const fretMax = Math.min(24, Math.max(...frets) + 1);
         const missingSubset = [];
         asState.chords.forEach(c => {
-          const info = tnChordToneMap(c.chord);
+          const info = asChordInfo(c.chord);
           const svg = asBuildArpeggioSVG(notes, info, c.chord, fretMin, fretMax);
           if (!svg) missingSubset.push(c.chord);
         });

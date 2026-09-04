@@ -857,7 +857,7 @@ body.presentation #channelWatermark{display:flex;}
         <option value="1">100%</option><option value="0.75">75%</option><option value="0.5">50%</option>
       </select>
       <label data-tip="Etiquetas de las notas SOBRE el mástil durante la reproducción. Auto/Inversiones alternan por vuelta (pares=notas, impares=intervalos); Inversiones añade mensajes automáticos de inversión.">Mástil:</label>
-      <select id="globalNoteDisplay" style="font-size:13px;padding:4px 8px;border-radius:6px;border:1px solid var(--border2);">
+      <select id="globalNoteDisplay" onchange="onGlobalNoteDisplayChange()" style="font-size:13px;padding:4px 8px;border-radius:6px;border:1px solid var(--border2);">
         <option value="auto">Auto (alterna notas/intervalos)</option>
         <option value="notes">Siempre notas</option>
         <option value="intervals">Siempre intervalos</option>
@@ -1645,7 +1645,7 @@ body.presentation #channelWatermark{display:flex;}
 <div class="panel" id="tab-arpscale" style="display:none;padding:20px;">
   <div style="max-width:1100px;margin:0 auto;">
     <h2 style="margin:0 0 6px;font-size:18px;"><i class="ti ti-guitar-pick"></i> Arpegios dentro de escala</h2>
-    <div class="tab-help"><div><span class="th-k">Qué genera</span>La <b>progresión diatónica completa</b> de una escala (un acorde por grado, tríada o tétrada) sobre una <b>posición CAGED</b>, resaltando en cada paso qué notas de esa misma posición son las del acorde — sin dibujar ninguna forma de arpegio: el arpegio es siempre un subconjunto de las notas de la escala.</div><div><span class="th-k">Si la posición no es correcta</span>Corrígela a mano en "2 · Corregir posición" — igual que el editor de caja personalizada de Escalas por tramos.</div><div><span class="th-k">"Ver en Visualizador" (paso 4)</span>Si ya cargaste un <b>tema (XML)</b> en Audio &amp; XML, respeta SUS compases/ciclos y coloca el fotograma allí donde el acorde real de cada compás encaje (el selector "Resaltar" no interviene: el acorde se lee tal cual está en el XML). Sin tema cargado, crea un ejercicio corto de un compás por grado ("modo diapositivas").</div><div><span class="th-k">Para generar en lote</span>Exporta el config.json (paso 4) y úsalo con <code>scripts/generate-scale-arpeggio-videos.js</code> (ese script siempre usa el modo diapositivas + un audio compartido, no el tema cargado).</div></div>
+    <div class="tab-help"><div><span class="th-k">Qué genera</span>La <b>progresión diatónica completa</b> de una escala (un acorde por grado, tríada o tétrada) sobre una <b>posición CAGED</b>, resaltando en cada paso qué notas de esa misma posición corresponden al acorde — sin dibujar ninguna forma de arpegio: el resaltado siempre es un subconjunto de las notas de la escala.</div><div><span class="th-k">Resaltar → Pentatónica</span>En vez de las notas del propio acorde, resalta la <b>pentatónica</b> que le corresponde (mayor si el acorde es mayor, menor en cualquier otro caso), siempre dentro de la misma posición CAGED.</div><div><span class="th-k">Si la posición no es correcta</span>Corrígela a mano en "2 · Corregir posición" — igual que el editor de caja personalizada de Escalas por tramos.</div><div><span class="th-k">"Ver en Visualizador" (paso 4)</span>Si ya cargaste un <b>tema (XML)</b> en Audio &amp; XML, respeta SUS compases/ciclos y coloca el fotograma allí donde el acorde real de cada compás encaje — el acorde en sí se lee tal cual está en el XML (no se reconstruye del grado diatónico), pero el selector "Resaltar" sí decide qué se ilumina de ese acorde (sus notas o su pentatónica). Sin tema cargado, crea un ejercicio corto de un compás por grado ("modo diapositivas").</div><div><span class="th-k">Para generar en lote</span>Exporta el config.json (paso 4) y úsalo con <code>scripts/generate-scale-arpeggio-videos.js</code> (ese script siempre usa el modo diapositivas + un audio compartido, no el tema cargado).</div></div>
 
     <div class="card">
       <h3>1 · Escala y posición</h3>
@@ -1667,6 +1667,7 @@ body.presentation #channelWatermark{display:flex;}
           <select id="asQuality" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);font-size:13px;">
             <option value="sevenths">Tétradas (7ª)</option>
             <option value="triads">Tríadas</option>
+            <option value="pentatonic">Pentatónica (según acorde)</option>
           </select></div>
         <button class="btn accent" onclick="asGenerate()"><i class="ti ti-bolt"></i> Generar posición</button>
       </div>
@@ -3746,7 +3747,11 @@ const NECK_STRING_SPACING=(NECK_H-NECK_TOP-NECK_BOTTOM)/5;
 const VIEW_MIN_FRETS=5;
 // Geometría del mástil para una ventana de trastes — MISMA fórmula que todos los generadores
 // (generateNeckSVG, arpBuildZoneSVG, tnBuildSVG, spBuildSVG, buildAutoBg, drawUnifiedFretboard).
-function neckGeo(fretMin,fretMax){
+// `H` opcional (por defecto NECK_H): SOLO lo usa "Arpegios en escala" (ver arpNeckH) para una
+// separación de cuerdas más alta cuando la posición cabe en pocos trastes — el resto de
+// llamadas, sin H, se comportan exactamente igual que antes.
+function neckGeo(fretMin,fretMax,H){
+  H=H||NECK_H;
   const n=Math.max(1,fretMax-fretMin);
   let leftPad,fretW;
   if(fretMin===0){
@@ -3759,11 +3764,32 @@ function neckGeo(fretMin,fretMax){
     fretW=(NECK_W-NECK_RIGHT)/(n+1);
     leftPad=fretW;
   }
-  // Tope también por NECK_STRING_SPACING (no solo por fretW): con cuerdas más juntas (ver
-  // NECK_H más arriba), un radio pensado solo para el ancho de traste podría hacer que círculos
-  // de cuerdas adyacentes se solaparan.
+  const stringSpacing=(H-NECK_TOP-NECK_BOTTOM)/5;
+  // Tope también por stringSpacing (no solo por fretW): con cuerdas más juntas, un radio pensado
+  // solo para el ancho de traste podría hacer que círculos de cuerdas adyacentes se solaparan.
+  // El "24" está pensado para NECK_H=300 — con un H adaptativo (arpNeckH) hay que escalarlo o las
+  // notas se quedan chiquitas dentro de un mástil ahora mucho más alto (bug reportado: "el mástil
+  // se ve enorme y las notas enanas"). El *0.88 es un pequeño recorte sobre la escala 1:1 (feedback
+  // de Alberto tras probarlo: "las notas un poco más pequeñas, pero poco").
+  const noteScale=H===NECK_H?1:0.88;
   return{fretMin,fretMax,leftPad,fretW,
-         r:Math.min(24,fretW*0.38,NECK_STRING_SPACING*0.42),stringSpacing:NECK_STRING_SPACING,topPad:NECK_TOP};
+         r:Math.min(24*(H/NECK_H),fretW*0.38,stringSpacing*0.42)*noteScale,stringSpacing,topPad:NECK_TOP};
+}
+// Alto adaptativo del mástil SOLO para "Arpegios en escala": con pocos trastes visibles, un
+// NECK_H fijo (pensado para ~15 trastes) deja casillas muy anchas con las notas (tope de radio
+// ligado a la separación de cuerdas) perdidas en medio de mucho hueco vacío horizontal ("trastes
+// muy alargados", "poco aprovechamiento de la altura de página", feedback de Alberto). Se calcula
+// UNA VEZ por posición a partir de su rango nativo COMPLETO (nunca cambia durante el ejercicio,
+// aunque "Zona ampliada" recorte la ventana visible acorde a acorde) y se hornea en el propio SVG
+// (data-neckh) para que el resto de funciones (buildAutoBg, drawUnifiedFretboard, layoutNeckBox)
+// LEAN ese mismo valor en vez de recalcularlo cada una por su cuenta — evita que diverjan.
+const ARP_NECKH_REF_FRETS=15,ARP_NECKH_MIN_FRETS=4,ARP_NECKH_MAX_MULT=1.9;
+// Tope, más modesto, para el panel "Siguiente" (ver drawNextPreview): es un rincón pequeño, no
+// el mástil principal — dejarlo crecer hasta ARP_NECKH_MAX_MULT lo desbordaba de su recuadro.
+const ARP_PREVIEW_MAX_MULT=1.5;
+function arpNeckH(fretMin,fretMax){
+  const n=Math.max(1,fretMax-fretMin);
+  return Math.round(Math.min(NECK_H*ARP_NECKH_MAX_MULT,Math.max(NECK_H,NECK_H*ARP_NECKH_REF_FRETS/Math.max(n,ARP_NECKH_MIN_FRETS))));
 }
 // (cx,cy) → celda {fret,string}. Si la nota ya la lleva horneada (svgStringToParsed) se usa
 // tal cual, lo que hace el re-encuadre IDEMPOTENTE: siempre se parte de la celda, nunca de
@@ -3772,7 +3798,11 @@ function noteCellOf(n,g){
   if(!n)return null;
   if(Number.isFinite(n.fret)&&Number.isFinite(n.string))return{fret:n.fret,string:n.string};
   if(!Number.isFinite(n.cx)||!Number.isFinite(n.cy))return null;
-  const string=Math.round(5-(n.cy-NECK_TOP)/NECK_STRING_SPACING);
+  // g.stringSpacing/g.topPad (no las constantes globales NECK_STRING_SPACING/NECK_TOP): con el
+  // alto adaptativo de "Arpegios en escala" (ver arpNeckH) la separación real de cuerdas del
+  // frame puede ser mayor que la global — usar la global aquí derivaba mal la cuerda de toda
+  // nota sin fret/string ya horneado (bug real: celda mal calculada al parsear el SVG).
+  const string=Math.round(5-(n.cy-g.topPad)/g.stringSpacing);
   if(string<0||string>5)return null;
   // Con fretMin===0 la cuerda al aire es la única nota a la izquierda de la cejilla
   // (cx=leftPad-r-4). Con fretMin>0 no hay notas al aire y el traste fretMin cae en
@@ -3784,13 +3814,16 @@ function noteCellOf(n,g){
 // Re-coloca un conjunto de notas en la ventana `win`. Las que caen fuera no se dibujan.
 // Si alguna nota no tiene celda derivable se devuelve el array ORIGINAL sin tocar (todo o
 // nada: mezclar coordenadas de dos geometrías desalinearía nota/fantasma/fondo).
-function relayoutNotes(notes,win,srcRange){
+// `dstH` opcional: SOLO lo usa la previsualización "Siguiente" (ver drawNextPreview) para
+// recolocar con un alto más contenido que el del mástil principal (mismo frame, dos H). Sin
+// `dstH` explícito y con la misma ventana, se comporta exactamente igual que siempre.
+function relayoutNotes(notes,win,srcRange,dstH){
   if(!notes||!notes.length)return notes;
   const w=win||_viewWin;
   if(!w)return notes;
   const src=srcRange||_lastFretRange||{min:0,max:15};
-  if(src.min===w.min&&src.max===w.max)return notes;
-  const sg=neckGeo(src.min,src.max),dg=neckGeo(w.min,w.max);
+  if(src.min===w.min&&src.max===w.max&&dstH==null)return notes;
+  const sg=neckGeo(src.min,src.max),dg=neckGeo(w.min,w.max,dstH);
   const out=[];
   for(const n of notes){
     const c=noteCellOf(n,sg);
@@ -3799,7 +3832,8 @@ function relayoutNotes(notes,win,srcRange){
     if(dg.fretMin>0&&c.fret===0)continue; // al aire no representable fuera de la 1ª posición
     const r=dg.r;
     const cx=c.fret===0?(dg.leftPad-r-4):(dg.leftPad+(c.fret-dg.fretMin)*dg.fretW-dg.fretW/2);
-    out.push({...n,cx,r,fret:c.fret,string:c.string});
+    const cy=dg.topPad+(5-c.string)*dg.stringSpacing;
+    out.push({...n,cx,cy,r,fret:c.fret,string:c.string});
   }
   return out;
 }
@@ -3978,10 +4012,11 @@ function applyZoomToZone(notesList){
 // Deja los lienzos en su estado canónico: viewBox completo, "meet" y overflow:visible (para el
 // voladizo de la cuerda al aire). Se llama en cada render para no heredar estados de recortes
 // anteriores (slice/clip-path de v4.2.8-4.2.13).
-function resetCanvasViewBox(){
+function resetCanvasViewBox(H){
+  H=H||NECK_H;
   ['svgCanvas','ghostCanvas','bgMapCanvas'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
-    el.setAttribute('viewBox',`0 0 ${NECK_W} ${NECK_H}`);
+    el.setAttribute('viewBox',`0 0 ${NECK_W} ${H}`);
     el.setAttribute('preserveAspectRatio','xMidYMid meet');
     el.setAttribute('overflow','visible');
     el.style.overflow='visible';
@@ -4012,9 +4047,14 @@ function layoutNeckBox(){
   const ZW=zone.clientWidth,ZH=zone.clientHeight;if(!ZW||!ZH)return;
   const reserve=neckPreviewReserve();
   const availW=ZW-reserve,availH=ZH;
+  // Proporción del recuadro: NECK_RATIO fija salvo que el frame activo lleve un H adaptativo
+  // horneado (data-neckh, solo "Arpegios en escala" — ver arpNeckH) — si no, el recuadro CSS
+  // quedaría con la proporción vieja mientras el SVG interno (viewBox) ya usa la nueva, y todo
+  // ese aire vertical de más no se aprovecha (queda igual de ancho y bajo que siempre).
+  const ratio=NECK_W/(_lastParsedShown?.H||NECK_H);
   // "contain": llenar el ancho disponible; si sale más alto que la zona, ajustar por alto.
-  let w=availW,h=w/NECK_RATIO;
-  if(h>availH){h=availH;w=h*NECK_RATIO;}
+  let w=availW,h=w/ratio;
+  if(h>availH){h=availH;w=h*ratio;}
   const left=Math.round((availW-w)/2);   // centrado en la región libre (a la izquierda del panel)
   const top=Math.round((ZH-h)/2);
   ['svgCanvas','bgMapCanvas','ghostCanvas'].forEach(id=>{
@@ -4326,7 +4366,10 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
       g.appendChild(c);
       const t=document.createElementNS(NS,'text');
       t.setAttribute('x',cx);t.setAttribute('y',cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
-      t.setAttribute('font-size',note.label&&note.label.length>2?'16':'18');t.setAttribute('font-weight','bold');t.setAttribute('font-family','Helvetica,Arial,sans-serif');t.textContent=labelOf(note);
+      // Proporcional a r (como renderSVGStatic) en vez de un tamaño fijo 16/18 — con el radio
+      // adaptativo de "Arpegios en escala" (ver arpNeckH) el círculo crece pero la letra se
+      // quedaba enana (feedback de Alberto, mismo caso que el fondo automático).
+      t.setAttribute('font-size',String(Math.round(note.label&&note.label.length>2?r*0.65:r*0.85)));t.setAttribute('font-weight','bold');t.setAttribute('font-family','Helvetica,Arial,sans-serif');t.textContent=labelOf(note);
       g.appendChild(t);
       overlay.appendChild(g);
       // Fill/stroke FINALES: EXACTAMENTE los que dibujará renderSVGStatic para la nota real
@@ -4421,16 +4464,24 @@ function drawNextPreview(nextNotes,nextChord,nat){
   const natRange=(nat&&Number.isFinite(nat.min))?nat:{min:0,max:15};
   _lastPreviewArgs={notes:nextNotes,chord:nextChord,nat:natRange}; // para redibujar al cambiar ajustes
   const win=computePreviewWin(nextNotes,natRange);
-  const key=nextChord+'@'+win.min+'-'+win.max+'@'+(getVisConfig().realisticNeck?'r':'f');
+  // H del frame (data-neckh, solo "Arpegios en escala" — ver arpNeckH): las notas ya llevan su
+  // cy horneado con el H del frame (ver arpNeckH), así que hay que recolocar SIEMPRE con ese
+  // H de origen — pero el panel es un rincón pequeño, no el mástil principal: dejar que crezca
+  // tanto como éste lo desbordaba de su recuadro (bug reportado: "la miniatura se ve cortada").
+  // ARP_PREVIEW_MAX_MULT lo limita a un crecimiento más modesto; relayoutNotes recoloca cx/cy/r
+  // de origen (H del frame) a destino (H del panel) con la MISMA fórmula que todo lo demás.
+  const frameH=natRange.H||NECK_H;
+  const H=Math.min(frameH,NECK_H*ARP_PREVIEW_MAX_MULT);
+  const key=nextChord+'@'+win.min+'-'+win.max+'@'+H+'@'+(getVisConfig().realisticNeck?'r':'f');
   // Margen izquierdo para el voladizo de la cuerda al aire (cx=leftPad-r-4), igual que el
   // mástil principal: sin él, el <svg> del panel (overflow:hidden por defecto) lo recortaría.
-  svg.setAttribute('viewBox',`-40 0 ${NECK_W+40} ${NECK_H}`);
+  svg.setAttribute('viewBox',`-40 0 ${NECK_W+40} ${H}`);
   svg.setAttribute('preserveAspectRatio','xMidYMid meet');
   if(panel.dataset.chord===key && svg.childElementCount>0){setNeckPreviewShown(true);return;}
   panel.dataset.chord=key;
   svg.innerHTML='';
-  drawUnifiedFretboard(svg,win.min,win.max);
-  nextNotes=relayoutNotes(nextNotes,win,natRange);
+  drawUnifiedFretboard(svg,win.min,win.max,H);
+  nextNotes=relayoutNotes(nextNotes,win,natRange,H);
   const own=getVisConfig().forceOwnNoteStyle===true;
   const isRoot=(n)=>n.isRoot===true||(()=>{const f=(n.fill||'').toLowerCase();return f==='#e53935'||f==='red'||f.includes('229,57,53');})();
   const ndMode=getNoteDisplay(currentChordData?.cycleIdx);
@@ -4562,15 +4613,18 @@ function paintTwoPositions(activeNotes,nextNotes,progress,nextChord){
 
 // Draw the app's standard dark fretboard background into the canvas (unified style).
 // Notes are drawn separately on top. Coordinates match the 1001×394 system.
-function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15){
+function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H){
   const NS='http://www.w3.org/2000/svg';
   // OJO: W/H tenían un 1001/394 copiado a mano en vez de leer NECK_W/NECK_H — al bajar NECK_H
   // (trastes más rectangulares, ver esa constante) las LÍNEAS del mástil (esta función) seguían
   // con la proporción vieja mientras las NOTAS (ssNoteXY, que sí usa el global) ya usaban la
   // nueva — de ahí que se siguiera viendo cuadrado. Mismo bug en los numeritos de traste
   // (add('text',{y:H-10,...})), que con un H desincronizado del viewBox real quedarían fuera.
-  const W=NECK_W,H=NECK_H;
-  const geo=neckGeo(fretMin,fretMax); // MISMA geometría que relayoutNotes → notas alineadas
+  // `H` opcional: SOLO lo pasa renderSVGStatic para "Arpegios en escala" (ver arpNeckH/data-neckh)
+  // cuando el frame activo se generó con un alto adaptativo — el resto de llamadas usan NECK_H.
+  H=H||NECK_H;
+  const W=NECK_W;
+  const geo=neckGeo(fretMin,fretMax,H); // MISMA geometría que relayoutNotes → notas alineadas
   const leftPad=geo.leftPad,rightPad=25,topPad=35,bottomPad=50;
   const fretW=geo.fretW;
   const stringSpacing=(H-topPad-bottomPad)/5;
@@ -4661,7 +4715,10 @@ function renderSVGStatic(parsed){
   updateExerciseBadge(parsed);
   const canvas=document.getElementById('svgCanvas');canvas.innerHTML='';canvas.style.display='block';
   document.getElementById('layerA').style.display='none';document.getElementById('layerB').style.display='none';
-  resetCanvasViewBox();
+  // H horneado del frame (data-neckh, solo Arpegios en escala — ver arpNeckH): el resto de
+  // tipos no lo llevan y usan el NECK_H fijo de siempre.
+  const frameH=parsed.H||NECK_H;
+  resetCanvasViewBox(frameH);
 
   // ── Ventana de trastes efectiva de ESTE frame (v4.2.14) ──────────────────
   // Nativa = la que usó el generador (data-fretrange). Efectiva = nativa + "Zona ampliada"
@@ -4686,7 +4743,7 @@ function renderSVGStatic(parsed){
     // El mástil se dibuja con la ventana EFECTIVA (no con la nativa del SVG): es lo que
     // hace real el recorte de trastes y la zona ampliada. Las notas se recolocan igual.
     const _w=_viewWin||_lastFretRange||{min:0,max:15};
-    drawUnifiedFretboard(canvas,_w.min,_w.max);
+    drawUnifiedFretboard(canvas,_w.min,_w.max,frameH);
   } else {
     // RESPECT SVG: keep the original drawing as it came in the file.
     const doc=new DOMParser().parseFromString(parsed.raw,'image/svg+xml');
@@ -4739,7 +4796,7 @@ function renderSVGStatic(parsed){
   // where the SVG's own note drawing is kept.
   // Radio estándar: el de la ventana EFECTIVA (con menos trastes el hueco es mayor y la
   // nota puede crecer un poco; el tope lo pone la separación entre cuerdas, no el traste).
-  const stdR=(_viewWin?neckGeo(_viewWin.min,_viewWin.max).r:22);
+  const stdR=(_viewWin?neckGeo(_viewWin.min,_viewWin.max,frameH).r:22);
   // Notas recolocadas en la ventana efectiva (idempotente: parte de la celda, no del cx).
   const drawList=useUnified?relayoutNotes(parsed.notes,_viewWin,_lastFretRange):parsed.notes;
   const drawNotes=useUnified||!isGenerated;
@@ -4780,6 +4837,7 @@ function renderSVGStatic(parsed){
 }
 
 // Apply follow highlight AFTER renderSVGStatic — completely decoupled from render timing
+let _lastFollowKey=null;
 function applyFollowHighlight(chord){
   const canvas=document.getElementById('svgCanvas');
   if(!canvas||canvas.style.display==='none'||!chord)return;
@@ -4787,21 +4845,37 @@ function applyFollowHighlight(chord){
   if(!groups.length)return;
   const renderedNotes=groups.map(g=>({label:g.getAttribute('data-label')||''}));
 
-  // Remove existing rings and reset strokes
-  canvas.querySelectorAll('.follow-ring').forEach(r=>r.remove());
-  groups.forEach(g=>{const c=g.querySelector('circle');if(c){const os=c.getAttribute('data-ownstroke');c.setAttribute('stroke',os||c.getAttribute('fill'));c.setAttribute('stroke-width',os?(c.getAttribute('data-ownstrokew')||'2'):'2');}});
-
-  // Draw rings for both voices
   const voices=[
     {selId:'followVoice',  colId:'followColor',   def:'#FFE033'},
     {selId:'followVoice2', colId:'followColor2b',  def:'#FF6B9D'},
   ];
-  voices.forEach(({selId,colId,def})=>{
+  const specs=voices.map(({selId,colId,def})=>{
     const follow=document.getElementById(selId)?.value||'none';
-    if(follow==='none')return;
+    if(follow==='none')return null;
     const followCol=document.getElementById(colId)?.value||def;
     const followIdx=getFollowIndex(renderedNotes,follow,chord);
-    if(followIdx<0)return;
+    if(followIdx<0)return null;
+    return{followIdx,followCol};
+  });
+  // Se llama en CADA cambio de compás, aunque el acorde (y por tanto la nota a seguir) se
+  // repita — antes borraba y recreaba el anillo siempre, un parpadeo apenas visible con el
+  // radio viejo pero muy notorio ahora que las notas son mucho más grandes (bug reportado:
+  // "las notas parecen desaparecer y aparecer"). Si el objetivo no cambió Y el anillo ya está
+  // puesto, no tocar el DOM. `existingRings` en 0 tras un redibujado real (canvas.innerHTML=''
+  // en renderSVGStatic ya se lo llevó) fuerza a recrearlo aunque la clave coincida.
+  const existingRings=canvas.querySelectorAll('.follow-ring');
+  const key=chord+'|'+groups.length+'|'+specs.map(s=>s?s.followIdx+':'+s.followCol:'-').join(',');
+  if(key===_lastFollowKey && existingRings.length===specs.filter(Boolean).length)return;
+  _lastFollowKey=key;
+
+  // Remove existing rings and reset strokes
+  existingRings.forEach(r=>r.remove());
+  groups.forEach(g=>{const c=g.querySelector('circle');if(c){const os=c.getAttribute('data-ownstroke');c.setAttribute('stroke',os||c.getAttribute('fill'));c.setAttribute('stroke-width',os?(c.getAttribute('data-ownstrokew')||'2'):'2');}});
+
+  // Draw rings for both voices
+  specs.forEach(spec=>{
+    if(!spec)return;
+    const{followIdx,followCol}=spec;
     const g=groups[followIdx];
     const circle=g.querySelector('circle');
     if(!circle)return;
@@ -5426,11 +5500,17 @@ function svgStringToParsed(svgStr){
   // real del SVG, para que el visualizador pueda re-dibujar el mismo frame en OTRA ventana
   // (recorte de trastes / zona ampliada) sin depender de las coordenadas ya cocinadas.
   // Ver "Ventana de visualización" (relayoutNotes).
-  const out={W:NECK_W,H:NECK_H,notes,raw:svgStr,generated:true};
+  // data-neckh (solo "Arpegios en escala", ver arpNeckH): alto horneado en el propio SVG con el
+  // que se generó — hay que leerlo AQUÍ para derivar la celda (cuerda,traste) de cada nota con
+  // la MISMA separación de cuerdas que se usó al dibujarlas, si no la celda sale mal calculada
+  // (bug de la misma familia que el de neckGeo/drawUnifiedFretboard, ver comentario ahí).
+  const _nh=(svgStr||'').match(/data-neckh="(\d+)"/);
+  const H=_nh?parseInt(_nh[1],10):NECK_H;
+  const out={W:NECK_W,H,notes,raw:svgStr,generated:true};
   {const _fr2=(svgStr||'').match(/data-fretrange="(-?\d+),(-?\d+)"/);
    const fr={min:_fr2?parseInt(_fr2[1],10):0,max:_fr2?parseInt(_fr2[2],10):15};
    out.fretRange=fr;
-   const g=neckGeo(fr.min,fr.max);
+   const g=neckGeo(fr.min,fr.max,H);
    notes.forEach(n=>{const c=noteCellOf(n,g);if(c){n.fret=c.fret;n.string=c.string;}});}
   // Notas objetivo frames: same coords across frames, only illumination changes.
   if(doc.documentElement&&doc.documentElement.getAttribute('data-tn')==='1')out.tnFrame=true;
@@ -6198,14 +6278,14 @@ function runGenerate(){
 // mostrado no lleva esta marca, el ejercicio activo no es de este tipo y asIntroScaleFrame
 // podría venir de una sesión anterior/otra pestaña).
 function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScaleMode=false){
-  const W=1001,H=394,fretMin=fretStart,fretMax=fretEnd;
+  const W=NECK_W,H=asScaleMode?arpNeckH(fretStart,fretEnd):NECK_H,fretMin=fretStart,fretMax=fretEnd;
   // MISMA geometría que neckGeo/drawUnifiedFretboard (ver comentario en neckGeo): si no, el
   // frame se genera con una geometría y se repinta en el reproductor con otra (drawUnifiedFretboard
   // usa neckGeo) — como relayoutNotes no toca las notas cuando la ventana no cambia (caso normal
   // con "Zona ampliada" desactivada), quedaban desalineadas respecto a la rejilla/trastes en
   // cualquier posición que no arrancara en el traste 0 (bug reportado: "las notas no salen
   // centradas en los trastes").
-  const geo=neckGeo(fretMin,fretMax);
+  const geo=neckGeo(fretMin,fretMax,H);
   const leftPad=geo.leftPad,rightPad=25,topPad=35,bottomPad=50;
   const fretW=geo.fretW;
   const stringSpacing=(H-topPad-bottomPad)/5;
@@ -6213,7 +6293,7 @@ function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScal
   const fretX=f=>leftPad+(f-fretMin)*fretW;
   const r=geo.r;
   // dark style: no white bg, light-on-dark lines (matches sequence player look)
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="arpeggios"${asScaleMode?' data-asscale="1"':''} data-fretrange="${fretMin},${fretMax}">`;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="arpeggios"${asScaleMode?' data-asscale="1"':''} data-fretrange="${fretMin},${fretMax}"${asScaleMode?` data-neckh="${H}"`:''}>`;
   if(fretMin===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
   for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${0.45-si*0.04})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
@@ -6848,6 +6928,23 @@ function tnChordToneMap(chord){
   return{rootPc,map};
 }
 const TN_GUIDE_IVS=['3','b3','7','b7'];
+
+// Pentatónica correspondiente a un acorde real (mismo formato {rootPc,map} que tnChordToneMap,
+// reutilizable tal cual por tnBuildSVG/asBuildArpeggioSVG): mayor si el acorde es mayor (sin 3ª
+// menor), menor en cualquier otro caso (m, m7, dim, m7b5...) — regla deliberadamente simple, ver
+// "Pentatónica (según acorde)" en Arpegios en escala.
+function tnPentaToneMap(chord){
+  const m=(chord||'').match(/^([A-G][b#]?)(.*)/);if(!m)return null;
+  const rootPc=noteToSt(m[1]);if(rootPc<0)return null;
+  const quality=m[2].trim();
+  const ivs=resolveChordDefs(quality);
+  const isMinor=ivs.some(iv=>iv.n==='b3');
+  const formula=isMinor?SEQ_SCALE_FORMULAS.penta_minor:SEQ_SCALE_FORMULAS.penta_major;
+  const labels=isMinor?['R','b3','4','5','b7']:['R','2','3','5','6'];
+  const map={};
+  formula.forEach((st,i)=>{map[(rootPc+st)%12]=labels[i];});
+  return{rootPc,map};
+}
 
 // SVG del preview: mástil oscuro (mismo look que arpBuildZoneSVG), notas de escala
 // tenues, chord tones iluminados (tónica del acorde roja, guías con anillo dorado).
@@ -7900,7 +7997,7 @@ function getTriadSlide(){return getVisConfig().triadSlide!==false;}
 function getTriadCommonAnchor(){return getVisConfig().triadCommonAnchor===true;}
 function getTriadGhostBeats(){const v=parseFloat(localStorage.getItem('gv_triadGhostBeats'));return (isNaN(v)||v<=0)?2:v;}
 function setTriadGhostBeats(v){const n=parseFloat(v);if(!isNaN(n)&&n>0)localStorage.setItem('gv_triadGhostBeats',n);}
-// Tamaño de las miniaturas del editor. Alto proporcional al ratio del SVG del mástil (394/1001).
+// Tamaño de las miniaturas del editor. Alto proporcional al ratio del SVG del mástil (NECK_H/NECK_W).
 // Clave v2 para ignorar valores guardados por versiones anteriores (default más pequeño).
 function getSlotSize(){const v=parseInt(localStorage.getItem('gv_slotSize2'));return (isNaN(v)||v<120)?400:v;}
 function applySlotSize(n){document.documentElement.style.setProperty('--slot-w',n+'px');document.documentElement.style.setProperty('--slot-h',Math.round(n*0.3936)+'px');const r=document.getElementById('slotSizeRange');if(r&&parseInt(r.value)!==n)r.value=n;}
@@ -8120,6 +8217,7 @@ function exArpeggiosApproach(ctx){
           if(fs?.type==='svg'&&fs.svgParsed){changeBarIdx=b;nextPosNotes=fs.svgParsed.notes;nextChord3=ch;
             const _m=(fs.svgParsed.raw||'').match(/data-fretrange="(-?\d+),(-?\d+)"/);
             nextPosNat=_m?{min:parseInt(_m[1],10),max:parseInt(_m[2],10)}:(fs.svgParsed.fretRange||null);
+            if(nextPosNat)nextPosNat.H=fs.svgParsed.H;
             break;}
           // si esta primera candidata no tiene forma todavía, seguir mirando más adelante
         }
@@ -9062,6 +9160,12 @@ function asFillChordSelect(){
   if(prev&&asState.chords.some(c=>c.chord===prev))sel.value=prev;
 }
 
+// Info de resaltado para un acorde según "Resaltar" (paso 1): chord tones (tríadas/tétradas) o
+// la pentatónica que le corresponde — mismo formato {rootPc,map} en ambos casos, ver
+// tnChordToneMap/tnPentaToneMap. Único punto de la pestaña que consulta asState.quality para
+// decidir ESTO (no para elegir el acorde en sí, que en modo tema viene tal cual del XML).
+function asChordInfo(chord){return asState.quality==='pentatonic'?tnPentaToneMap(chord):tnChordToneMap(chord);}
+
 function asRenderPreview(){
   const board=document.getElementById('asBoard'),st=document.getElementById('asStatus');
   if(!board)return;
@@ -9069,10 +9173,12 @@ function asRenderPreview(){
   if(!notes.length){board.innerHTML='';if(st)st.textContent='Genera una posición (paso 1).';return;}
   const chord=document.getElementById('asPreviewChord')?.value||'';
   const labelMode=document.getElementById('asLabelMode')?.value||'interval';
-  const chordInfo=chord?tnChordToneMap(chord):null;
+  const chordInfo=chord?asChordInfo(chord):null;
   const frets=notes.map(n=>n.fret);
   const fretMin=Math.max(0,Math.min(...frets)-1);
-  const fretMax=Math.min(24,Math.max(...frets)+1);
+  // +2 (no +1): un traste vacío de verdad a la derecha de la nota más aguda — con +1 esa nota
+  // cae en la ÚLTIMA casilla dibujada y queda pegada al borde del mástil (bug reportado).
+  const fretMax=Math.min(24,Math.max(...frets)+2);
   board.innerHTML=tnBuildSVG(notes,chordInfo,fretMin,fretMax,labelMode,true);
   if(st){
     if(!asState.chords.length)st.textContent='Esta escala no tiene acordes diatónicos limpios de ese tipo en ningún grado (habitual en pentatónicas/blues) — prueba con tríadas o cambia de escala.';
@@ -9180,10 +9286,10 @@ function asBuildArpeggioSVG(notes,chordInfo,chordName,fretMin,fretMax){
 //  - MODO TEMA (cycles.length>0): respeta los compases/ciclos reales del tema — no
 //    reconstruye totalBars/cycles — y coloca el fotograma de arpegio allí donde el
 //    acorde REAL de ese compás encaja (mismo patrón que tnSendToEditor). Así el
-//    vídeo sigue el audio real completo, con sus repeticiones. El acorde se lee tal
-//    cual está escrito en el XML (tnChordToneMap), no de la lista de grados
-//    diatónicos — por eso el selector "Resaltar" del paso 1 no interviene aquí (sí
-//    en modo diapositivas).
+//    vídeo sigue el audio real completo, con sus repeticiones. El acorde en sí se lee
+//    tal cual está escrito en el XML, no de la lista de grados diatónicos — pero lo
+//    que se resalta de ese acorde (chord tones o su pentatónica) SÍ lo decide el
+//    selector "Resaltar" del paso 1, vía asChordInfo().
 //  - MODO DIAPOSITIVAS (sin tema): progresión sintética de un compás por grado
 //    diatónico (comportamiento original, para probar/grabar sin XML real — ver
 //    createManualExercise).
@@ -9203,37 +9309,29 @@ async function asSendToEditor(){
   // afecta a esa previsualización.
   const frets=notes.map(n=>n.fret);
   const fretMin=Math.max(0,Math.min(...frets)-1);
-  const fretMax=Math.min(24,Math.max(...frets)+1);
+  // +2 (no +1): deja un traste vacío de verdad a la derecha de la nota más aguda en el mástil
+  // principal — con +1 esa nota cae en la ÚLTIMA casilla dibujada y queda pegada al borde.
+  const fretMax=Math.min(24,Math.max(...frets)+2);
   const nameEl=document.getElementById('exerciseName');
-  const exName=`${asState.root} ${SEQ_SCALE_LABELS[asState.scale]||asState.scale} (Forma ${AS_POS_LABELS[asState.posIdx]}) — arpegios diatónicos`;
+  const asFrameLabel=asState.quality==='pentatonic'?'pentatónica':'arpegio';
+  const exName=`${asState.root} ${SEQ_SCALE_LABELS[asState.scale]||asState.scale} (Forma ${AS_POS_LABELS[asState.posIdx]}) — ${asState.quality==='pentatonic'?'pentatónicas en escala':'arpegios diatónicos'}`;
 
-  // Fotograma "localiza la escala": TODAS las notas de la escala en la ventana de trastes de la
-  // posición (no solo las 14 de la forma CAGED fija — si no, quedan huecos, p.ej. el traste más
-  // a la derecha de la ventana, que la forma no usa pero sí pertenece a la escala), iluminadas
-  // con el mismo look que un acorde real (cian, tónica en rojo) — no un fondo tenue, para
-  // identificar la escala de un vistazo. Se usa (a) durante la cuenta atrás de intro (compases
-  // de metrónomo antes de que arranque el tema, ver tick()/getIntroSec — NO son compases del
-  // XML, son un ajuste aparte de "Compases de intro") y (b) para cualquier compás del XML sin
-  // acorde (interludio). Guardado en una variable de módulo porque tick() (motor de
-  // reproducción) no tiene acceso directo al estado de la pestaña "Arpegios en escala".
+  // Fotograma "localiza la escala": las notas de la POSICIÓN (forma CAGED concreta), tónica en
+  // rojo, con el mismo look que un acorde real (cian) — no un fondo tenue, para identificar la
+  // escala de un vistazo. Se usa (a) durante la cuenta atrás de intro (compases de metrónomo
+  // antes de que arranque el tema, ver tick()/getIntroSec — NO son compases del XML, son un
+  // ajuste aparte de "Compases de intro") y (b) para cualquier compás del XML sin acorde
+  // (interludio). Guardado en una variable de módulo porque tick() (motor de reproducción) no
+  // tiene acceso directo al estado de la pestaña "Arpegios en escala".
+  // ANTES recorría cada celda (cuerda,traste) de la ventana buscando cualquier nota diatónica,
+  // no solo las de la forma — a propósito, para no dejar huecos. Pero eso colaba notas de la
+  // escala que NO son de esta posición concreta (p.ej. una nota suelta más allá del último
+  // traste que usa la forma, bug reportado: "esta nota no está en la posición de la escala") —
+  // en este ejercicio (pentatónica/arpegio DENTRO de una posición) esas notas ajenas no
+  // interesan, así que usa directamente las notas de la posición, tal cual.
   {
     const rootPc=noteToSt(asState.root);
-    const formula=SEQ_SCALE_FORMULAS[asState.scale]||SEQ_SCALE_FORMULAS.major;
-    const semiByPc={};formula.forEach(st=>{semiByPc[(rootPc+st)%12]=st;});
-    const scaleNotes=[];
-    for(let s=0;s<6;s++){
-      // fretMin es SOLO el margen de relleno de la "ventana abierta" (una posición a la
-      // izquierda de la nota más grave real, sin línea de traste que la cierre por la
-      // izquierda — ver neckGeo) — no pertenece a la forma dibujada. Si se incluye aquí, se
-      // cuelan notas de la escala ahí (bug reportado: "notas en la zona abierta de la
-      // izquierda que no corresponden a la posición"). Mismo rango que usa buildAutoBg.
-      for(let f=(fretMin===0?0:fretMin+1);f<=fretMax;f++){
-        const pc=getNoteStAtFret(s,f);
-        const semi=semiByPc[pc];if(semi===undefined)continue;
-        const name=spellNote(asState.root,IV_SEMI_LBL[semi]||'R',semi)||NTS[pc];
-        scaleNotes.push({string:s,fret:f,st:pc,note:name,isRoot:pc===rootPc});
-      }
-    }
+    const scaleNotes=notes.map(n=>({...n,isRoot:((n.st%12)+12)%12===rootPc}));
     const svg=arpBuildZoneSVG(scaleNotes,'Escala','',[],fretMin,fretMax,true);
     const parsed=svgStringToParsed(svg);
     let thumb=null;try{thumb=await svgToThumb(svg,320,116);}catch(e){}
@@ -9266,7 +9364,7 @@ async function asSendToEditor(){
         continue;
       }
       if(!(chord in cache)){
-        const info=tnChordToneMap(chord);
+        const info=asChordInfo(chord);
         const svg=asBuildArpeggioSVG(notes,info,chord,fretMin,fretMax);
         if(!svg){if(!unknown.includes(chord))unknown.push(chord);cache[chord]=null;}
         else{
@@ -9280,7 +9378,7 @@ async function asSendToEditor(){
       const loc=barLoc[f.bi];if(!loc)continue;
       const target=getTargetBars(loc.ci);
       if(target&&target[loc.local]){
-        target[loc.local].imgs[slotIdx]={type:'svg',data:c.svg,name:chord+' arpegio (en escala)',thumb:c.thumb,svgParsed:JSON.parse(JSON.stringify(c.parsed))};
+        target[loc.local].imgs[slotIdx]={type:'svg',data:c.svg,name:chord+' '+asFrameLabel+' (en escala)',thumb:c.thumb,svgParsed:JSON.parse(JSON.stringify(c.parsed))};
         applied++;
       }
     }
@@ -9312,13 +9410,13 @@ async function asSendToEditor(){
     let applied=0;
     all.forEach((b,bi)=>{
       const chord=(b.chord||'').trim();if(!chord)return;
-      const info=tnChordToneMap(chord);
+      const info=asChordInfo(chord);
       const svg=asBuildArpeggioSVG(notes,info,chord,fretMin,fretMax);
       if(!svg)return;
       const loc=barLoc[bi];if(!loc)return;
       const target=getTargetBars(loc.ci);
       if(target&&target[loc.local]){
-        target[loc.local].imgs[0]={type:'svg',data:svg,name:chord+' arpegio (en escala)',svgParsed:svgStringToParsed(svg)};
+        target[loc.local].imgs[0]={type:'svg',data:svg,name:chord+' '+asFrameLabel+' (en escala)',svgParsed:svgStringToParsed(svg)};
         applied++;
       }
     });
@@ -9333,7 +9431,10 @@ async function asSendToEditor(){
   // fondo (Editor → "Fondo automático"), mientras el frame de arriba solo dibuja —y anima
   // con zoom/fantasma/crossfade— las que son del arpegio en cada acorde. Sin esto el frame
   // (ahora un subconjunto, no la caja completa) se vería "pelado" sin referencia de escala.
-  bgAuto={mode:'scale',root:asState.root,scale:asState.scale};
+  // En modo Pentatónica NO se quiere esa referencia (feedback de Alberto: "las notas fuera de
+  // esa posición de escala no interesan" — aquí ni siquiera las de la propia posición que no
+  // sean de la pentatónica activa): solo deben verse las notas resaltadas, nada de fondo.
+  bgAuto=asState.quality==='pentatonic'?{mode:'off',root:asState.root,scale:asState.scale}:{mode:'scale',root:asState.root,scale:asState.scale};
   bgAutoSyncUI();
   rebuildBgMapIfVisible();
   showTab('player');
@@ -9814,6 +9915,7 @@ function tick(){
           const firstChordName=allBars.find(b=>(b.imgs||[]).find(s=>s))?.chord||'';
           const _m=(first.svgParsed.raw||'').match(/data-fretrange="(-?\d+),(-?\d+)"/);
           const firstNat=_m?{min:parseInt(_m[1],10),max:parseInt(_m[2],10)}:(first.svgParsed.fretRange||null);
+          if(firstNat)firstNat.H=first.svgParsed.H;
           drawNextPreview(first.svgParsed.notes,firstChordName,firstNat);
         }else if(typeof hideNextPreview==='function')hideNextPreview();
         if(first?.type==='svg'&&first.svgParsed){
@@ -10149,9 +10251,11 @@ function buildAutoBg(bar,activeSlot){
   if(_viewWin){fretMin=_viewWin.min;fretMax=_viewWin.max;}
   // MISMA geometría que neckGeo/drawUnifiedFretboard (ver arpBuildZoneSVG) — si no, el fondo
   // automático (notas fantasma) se pinta con una geometría distinta a la de la rejilla/notas
-  // activas y queda desalineado en cualquier ventana que no arranque en el traste 0.
-  const H=394;
-  const geo=neckGeo(fretMin,fretMax);
+  // activas y queda desalineado en cualquier ventana que no arranque en el traste 0. Lee el H
+  // horneado del frame activo (data-neckh, solo Arpegios en escala) en vez del fijo — si no,
+  // vuelve a desalinearse en cuanto ese frame use un alto adaptativo (ver arpNeckH).
+  const H=activeSlot?.svgParsed?.H||NECK_H;
+  const geo=neckGeo(fretMin,fretMax,H);
   const leftPad=geo.leftPad,fretW=geo.fretW;
   const topPad=35,bottomPad=50;
   const stringSpacing=(H-topPad-bottomPad)/5;
@@ -10210,7 +10314,11 @@ function buildAutoBg(bar,activeSlot){
       t.setAttribute('x',cx);t.setAttribute('y',cy);
       t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
       t.setAttribute('fill','#888');
-      t.setAttribute('font-size',label.length>2?'14':'18');
+      // 14/18 escalado por H/NECK_H: para el resto de tipos (H=NECK_H, fontScale=1) es EXACTAMENTE
+      // el tamaño fijo de siempre. Solo crece con el alto adaptativo de "Arpegios en escala" (ver
+      // arpNeckH) — si no, el círculo fantasma crecía pero la letra se quedaba enana (feedback).
+      const fontScale=H/NECK_H;
+      t.setAttribute('font-size',String(Math.round((label.length>2?14:18)*fontScale)));
       t.setAttribute('font-weight','500');t.setAttribute('font-family','Helvetica,Arial,sans-serif');
       t.setAttribute('pointer-events','none');
       t.textContent=label;
@@ -10364,6 +10472,20 @@ function setChordDisplayMode(mode){
 
 // ── NOTE DISPLAY (Notas / Intervalos) ─────────────────────────────────────
 function getGlobalNoteDisplay(){return document.getElementById('globalNoteDisplay')?.value||'auto';}
+// Repinta el compás activo YA al cambiar "Mástil:" (notas/intervalos) — sin esto el cambio no se
+// veía hasta el siguiente cambio de compás natural (bug reportado: "no hace caso a mostrar solo
+// intervalos" — en realidad sí se aplicaba, solo que con retraso hasta el próximo compás).
+function onGlobalNoteDisplayChange(){
+  try{
+    if(getExerciseType&&getExerciseType()==='scaleStory'){
+      if(typeof ssShowBackground==='function')ssShowBackground();
+    }else if(_lastParsedShown){
+      renderSVGStatic(_lastParsedShown);
+      if(_lastBgArgs)buildBgMap(_lastBgArgs.bar,_lastBgArgs.slot);
+      if(currentChordData&&currentChordData.chord)applyFollowHighlight(currentChordData.chord);
+    }
+  }catch(e){}
+}
 function getNoteDisplay(cycleIdx){
   const ci = cycleIdx !== undefined ? cycleIdx : (curBar>=0?getAllBars()[curBar]?.cycleIdx:0)||0;
   const mode = getGlobalNoteDisplay();
