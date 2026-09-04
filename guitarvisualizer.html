@@ -5251,6 +5251,9 @@ function svgStringToParsed(svgStr){
   // Arpegios en escala: mismo trato que sp — a diferencia de un tn real (Chord tones), SÍ
   // admite "Aplicar estilo propio a las notas" (ver renderSVGStatic/animateVoiceLeading).
   if(doc.documentElement&&doc.documentElement.getAttribute('data-as')==='1')out.asFrame=true;
+  // Procede de "Arpegios en escala" (arpBuildZoneSVG con asScaleMode) — ver tick()/asIntroScaleFrame:
+  // solo se usa el fotograma de intro guardado si el primer compás mostrado lleva esta marca.
+  if(doc.documentElement&&doc.documentElement.getAttribute('data-asscale')==='1')out.asScaleGen=true;
   // "Todo el mástil": marca para que la fantasma de transición se omita (ver spSendToEditor).
   if(doc.documentElement&&doc.documentElement.getAttribute('data-fullneck')==='1')out.fullNeck=true;
   // Procedencia del frame (solo informativa, para el badge "Activo:" — no altera el routing):
@@ -6000,18 +6003,28 @@ function runGenerate(){
   },50);
 }
 
-// Render an arpeggio zone as a full-neck SVG in the dark sequence style
-function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15){
+// Render an arpeggio zone as a full-neck SVG in the dark sequence style. `asScaleMode`: marca
+// el SVG (data-asscale="1") como procedente de "Arpegios en escala" — lo consulta tick() para
+// saber si puede usar asIntroScaleFrame durante la cuenta atrás de intro (si el primer compás
+// mostrado no lleva esta marca, el ejercicio activo no es de este tipo y asIntroScaleFrame
+// podría venir de una sesión anterior/otra pestaña).
+function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScaleMode=false){
   const W=1001,H=394,fretMin=fretStart,fretMax=fretEnd;
-  const nFrets=Math.max(1,fretMax-fretMin);
-  const leftPad=fretMin===0?40:60,rightPad=25,topPad=35,bottomPad=50;
-  const fretW=(W-leftPad-rightPad)/nFrets;
+  // MISMA geometría que neckGeo/drawUnifiedFretboard (ver comentario en neckGeo): si no, el
+  // frame se genera con una geometría y se repinta en el reproductor con otra (drawUnifiedFretboard
+  // usa neckGeo) — como relayoutNotes no toca las notas cuando la ventana no cambia (caso normal
+  // con "Zona ampliada" desactivada), quedaban desalineadas respecto a la rejilla/trastes en
+  // cualquier posición que no arrancara en el traste 0 (bug reportado: "las notas no salen
+  // centradas en los trastes").
+  const geo=neckGeo(fretMin,fretMax);
+  const leftPad=geo.leftPad,rightPad=25,topPad=35,bottomPad=50;
+  const fretW=geo.fretW;
   const stringSpacing=(H-topPad-bottomPad)/5;
   const strY=s=>topPad+(5-s)*stringSpacing;
   const fretX=f=>leftPad+(f-fretMin)*fretW;
-  const r=Math.min(22,fretW*0.38);
+  const r=geo.r;
   // dark style: no white bg, light-on-dark lines (matches sequence player look)
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="arpeggios" data-fretrange="${fretMin},${fretMax}">`;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="arpeggios"${asScaleMode?' data-asscale="1"':''} data-fretrange="${fretMin},${fretMax}">`;
   if(fretMin===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
   for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${0.45-si*0.04})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
@@ -8616,6 +8629,9 @@ function arpBuildDiatonicChords(root,scale,quality){
 // ════════════════════════════════════════════════════════════════════════════
 let asState={root:'C',scale:'major',posIdx:4,quality:'sevenths',notes:[],chords:[],editingOpen:false};
 const AS_POS_LABELS=['E','D','C','A','G'];
+// Fotograma "localiza la escala" (posición completa, tónica destacada) del último
+// asSendToEditor() — usado por tick() durante la cuenta atrás de intro. Ver asSendToEditor.
+let asIntroScaleFrame=null;
 
 // ── Almacén persistente de correcciones de posición (localStorage) ─────────────
 // Indexado por tónica+escala+forma (no por sesión/ejercicio): la próxima vez que se
@@ -8792,7 +8808,7 @@ function asBuildArpeggioSVG(notes,chordInfo,chordName,fretMin,fretMax){
   const tones=notes.filter(n=>chordInfo.map[((n.st%12)+12)%12]!==undefined)
     .map(n=>({...n,isRoot:((n.st%12)+12)%12===chordInfo.rootPc}));
   if(!tones.length)return null;
-  return arpBuildZoneSVG(tones,chordName,'',[],fretMin,fretMax);
+  return arpBuildZoneSVG(tones,chordName,'',[],fretMin,fretMax,true);
 }
 
 // ── 4 · Usar el ejercicio ────────────────────────────────────────────────────
@@ -8827,6 +8843,39 @@ async function asSendToEditor(){
   const nameEl=document.getElementById('exerciseName');
   const exName=`${asState.root} ${SEQ_SCALE_LABELS[asState.scale]||asState.scale} (Forma ${AS_POS_LABELS[asState.posIdx]}) — arpegios diatónicos`;
 
+  // Fotograma "localiza la escala": TODAS las notas de la escala en la ventana de trastes de la
+  // posición (no solo las 14 de la forma CAGED fija — si no, quedan huecos, p.ej. el traste más
+  // a la derecha de la ventana, que la forma no usa pero sí pertenece a la escala), iluminadas
+  // con el mismo look que un acorde real (cian, tónica en rojo) — no un fondo tenue, para
+  // identificar la escala de un vistazo. Se usa (a) durante la cuenta atrás de intro (compases
+  // de metrónomo antes de que arranque el tema, ver tick()/getIntroSec — NO son compases del
+  // XML, son un ajuste aparte de "Compases de intro") y (b) para cualquier compás del XML sin
+  // acorde (interludio). Guardado en una variable de módulo porque tick() (motor de
+  // reproducción) no tiene acceso directo al estado de la pestaña "Arpegios en escala".
+  {
+    const rootPc=noteToSt(asState.root);
+    const formula=SEQ_SCALE_FORMULAS[asState.scale]||SEQ_SCALE_FORMULAS.major;
+    const semiByPc={};formula.forEach(st=>{semiByPc[(rootPc+st)%12]=st;});
+    const scaleNotes=[];
+    for(let s=0;s<6;s++){
+      // fretMin es SOLO el margen de relleno de la "ventana abierta" (una posición a la
+      // izquierda de la nota más grave real, sin línea de traste que la cierre por la
+      // izquierda — ver neckGeo) — no pertenece a la forma dibujada. Si se incluye aquí, se
+      // cuelan notas de la escala ahí (bug reportado: "notas en la zona abierta de la
+      // izquierda que no corresponden a la posición"). Mismo rango que usa buildAutoBg.
+      for(let f=(fretMin===0?0:fretMin+1);f<=fretMax;f++){
+        const pc=getNoteStAtFret(s,f);
+        const semi=semiByPc[pc];if(semi===undefined)continue;
+        const name=spellNote(asState.root,IV_SEMI_LBL[semi]||'R',semi)||NTS[pc];
+        scaleNotes.push({string:s,fret:f,st:pc,note:name,isRoot:pc===rootPc});
+      }
+    }
+    const svg=arpBuildZoneSVG(scaleNotes,'Escala','',[],fretMin,fretMax,true);
+    const parsed=svgStringToParsed(svg);
+    let thumb=null;try{thumb=await svgToThumb(svg,320,116);}catch(e){}
+    asIntroScaleFrame={type:'svg',data:svg,name:'Escala',thumb,svgParsed:parsed};
+  }
+
   if(cycles.length){
     // MODO TEMA
     say('Generando fotogramas…');
@@ -8837,9 +8886,21 @@ async function asSendToEditor(){
     all.forEach((b,bi)=>{getBarSegments(b).forEach(s=>flat.push({bi,chord:s.chord,beat:s.beat||1}));});
     const cache={};
     let applied=0,unknown=[];
+    // Compases SIN acorde DENTRO del tema (interludio real del XML — distinto de los compases
+    // de intro del contador, que no son parte del XML y se tratan en tick()): en vez de dejarlos
+    // sin fotograma, reutiliza el mismo fotograma "localiza la escala" de arriba.
     for(const f of flat){
       const chord=(f.chord||'').trim();
-      if(!chord||chord==='—')continue;
+      if(!chord||chord==='—'){
+        const slotIdx=Math.round((f.beat||1)-1);
+        const loc=barLoc[f.bi];if(!loc)continue;
+        const target=getTargetBars(loc.ci);
+        if(target&&target[loc.local]){
+          target[loc.local].imgs[slotIdx]={type:'svg',data:asIntroScaleFrame.data,name:'Escala (sin acorde)',thumb:asIntroScaleFrame.thumb,svgParsed:JSON.parse(JSON.stringify(asIntroScaleFrame.svgParsed))};
+          applied++;
+        }
+        continue;
+      }
       if(!(chord in cache)){
         const info=tnChordToneMap(chord);
         const svg=asBuildArpeggioSVG(notes,info,chord,fretMin,fretMax);
@@ -9366,12 +9427,29 @@ function tick(){
         seqRenderPlayerBg();seqLastPaintedIdx=-2;
       }else{
         const first=allBars.flatMap(b=>b.imgs||[]).find(s=>s);
-        if(first)showSlot(first,null);
-        buildBgMap(allBars[0], allBars.flatMap(b=>b.imgs||[]).find(s=>s));
+        // "Arpegios en escala": durante la cuenta atrás de intro (compases de metrónomo antes
+        // de que arranque el tema — ver getIntroSec, NO son compases del XML) se muestra la
+        // escala completa de la posición con la tónica destacada, en vez del primer acorde real
+        // — para "ubicar" la escala antes de que entren los arpegios. Solo si el primer compás
+        // mostrado lleva la marca asScaleGen (si no, asIntroScaleFrame podría ser de una sesión
+        // anterior/otro ejercicio — ver arpBuildZoneSVG).
+        const introDisplay=(first?.svgParsed?.asScaleGen===true&&asIntroScaleFrame)?asIntroScaleFrame:first;
+        if(introDisplay)showSlot(introDisplay,null);
+        buildBgMap(allBars[0], introDisplay);
         // During intro: show ONLY the first position (no ghosts — they appear later, just
         // before the first real chord change). Clear any leftover ghost overlay.
         const ov=document.getElementById('ghostCanvas');if(ov)ov.innerHTML='';window._arpGhostEls=null;window._arpGhostChord=null;
-        if(typeof hideNextPreview==='function')hideNextPreview();
+        if(introDisplay===asIntroScaleFrame&&first?.type==='svg'&&first.svgParsed&&getVisConfig().nextPreview===true){
+          // Se está mostrando la escala de intro en vez del primer acorde real: sin la ventana
+          // de "siguiente arpegio" ya desde aquí, aparece de golpe justo cuando arranca el primer
+          // acorde real — un salto de layout (mástil solo → mástil + previsualización) muy
+          // desagradable (bug reportado). Se muestra ya desde la intro, con el primer acorde real
+          // como "siguiente" (que es literalmente lo que viene después de la escala).
+          const firstChordName=allBars.find(b=>(b.imgs||[]).find(s=>s))?.chord||'';
+          const _m=(first.svgParsed.raw||'').match(/data-fretrange="(-?\d+),(-?\d+)"/);
+          const firstNat=_m?{min:parseInt(_m[1],10),max:parseInt(_m[2],10)}:(first.svgParsed.fretRange||null);
+          drawNextPreview(first.svgParsed.notes,firstChordName,firstNat);
+        }else if(typeof hideNextPreview==='function')hideNextPreview();
         if(first?.type==='svg'&&first.svgParsed){
           if((EXERCISES[exFor(first.svgParsed)]||{}).usesZoom===true && getVisConfig().zoomToZone===true){
             // Arpeggios with zoom on: frame the first position plus the next distinct one
@@ -9405,12 +9483,29 @@ function tick(){
     rafId=requestAnimationFrame(tick);return;
   }
   // Leaving intro: remove intro styling so chord shows normally
-  {const c0=document.getElementById('vChord');if(c0)c0.classList.remove('intro-num','intro-pulse','intro-pulse-strong');
+  {const c0=document.getElementById('vChord');
+   if(c0){
+     c0.classList.remove('intro-num','intro-pulse','intro-pulse-strong');
+     // Estilos INLINE de la cuenta atrás (color/resplandor azul, ver arriba) — classList.remove
+     // no los toca. Si no se limpian aquí, el acorde real (ya escrito en #vChord un poco más
+     // abajo) se ve un instante con el color de la intro (bug reportado: "parece que aparece
+     // primero en modo carrusel").
+     c0.style.color='';c0.style.textShadow='';
+   }
    document.querySelectorAll('.chord-center.intro-open,.chord-carousel.intro-open').forEach(e=>e.classList.remove('intro-open'));
-   // Restaura #slotCur y el panel de Compases/Minimalista al estado que le corresponde según el
-   // modo actual (los forzamos/ocultamos durante la cuenta atrás, ver comentarios más arriba) —
-   // reutiliza setChordDisplayMode() en vez de repetir su lógica a mano.
-   setChordDisplayMode(getChordDisplayMode());}
+   // Restaura #slotCur/#slotPrev/#slotNext y el panel de Compases/Minimalista al estado que le
+   // corresponde según el modo actual (los forzamos/ocultamos durante la cuenta atrás, ver
+   // comentarios más arriba) — reutiliza setChordDisplayMode() en vez de repetir su lógica a
+   // mano. .chord-slot lleva "transition:all .35s" (para el deslizamiento del carrusel ENTRE
+   // acordes) que aquí no pinta nada — es un cambio de MODO, no un cambio de acorde — y sin
+   // suprimirla, #slotCur tarda ~350ms en desvanecerse dejando ver el acorde real de fondo
+   // mientras aparece el panel de Compases (el resto del bug reportado).
+   const slots=[document.getElementById('slotPrev'),document.getElementById('slotCur'),document.getElementById('slotNext')].filter(Boolean);
+   const prevT=slots.map(el=>el.style.transition);
+   slots.forEach(el=>el.style.transition='none');
+   setChordDisplayMode(getChordDisplayMode());
+   if(slots.length)void slots[0].offsetWidth; // forzar reflow antes de restaurar la transición
+   slots.forEach((el,i)=>el.style.transition=prevT[i]);}
 
   const prog=elapsed-introSec;
   // Use variable tempo if XML has tempo changes or manual incr is set
@@ -9683,13 +9778,17 @@ function buildAutoBg(bar,activeSlot){
   // (cuerda, traste), así que basta usar la ventana efectiva como marco — los trastes fuera
   // de ella no entran en el bucle. Así comparte geometría con el mástil re-dibujado. v4.2.14.
   if(_viewWin){fretMin=_viewWin.min;fretMax=_viewWin.max;}
-  const W=1001,H=394,nFrets=Math.max(1,fretMax-fretMin);
-  const leftPad=fretMin===0?40:60,rightPad=25,topPad=35,bottomPad=50;
-  const fretW=(W-leftPad-rightPad)/nFrets;
+  // MISMA geometría que neckGeo/drawUnifiedFretboard (ver arpBuildZoneSVG) — si no, el fondo
+  // automático (notas fantasma) se pinta con una geometría distinta a la de la rejilla/notas
+  // activas y queda desalineado en cualquier ventana que no arranque en el traste 0.
+  const H=394;
+  const geo=neckGeo(fretMin,fretMax);
+  const leftPad=geo.leftPad,fretW=geo.fretW;
+  const topPad=35,bottomPad=50;
   const stringSpacing=(H-topPad-bottomPad)/5;
   const strY=s=>topPad+(5-s)*stringSpacing;
   const fretX=f=>leftPad+(f-fretMin)*fretW;
-  const r=Math.min(22,fretW*0.38);
+  const r=geo.r;
   // Exclusión: no repintar encima de las notas de la figura activa. Preferimos la celda
   // EXACTA (cuerda,traste) ya horneada en cada nota (n.string/n.fret, ver svgStringToParsed)
   // en vez de comparar coordenadas en píxeles redondeadas a un cubo de 15: la comparación por
@@ -9701,9 +9800,17 @@ function buildAutoBg(bar,activeSlot){
   // que es inmune a esa clase de desalineación entre navegadores.
   const activeCells=new Set();
   const activePositions=new Set();
+  // Además de la celda exacta: cualquier ALTURA (clase de nota, 0-11) que ya suene como nota
+  // activa se excluye del fondo ENTERO — no solo esa celda concreta. Si no, la misma nota
+  // (p.ej. la tónica de un acorde) puede aparecer SÓLIDA en su celda de la forma CAGED y
+  // TENUE/fantasma en otra cuerda/traste fuera de esa forma — visualmente parece un error
+  // ("¿por qué esta nota del acorde sale como fantasma?", bug reportado) aunque técnicamente
+  // sea una celda distinta: para el oyente/oyente es LA MISMA nota.
+  const activePcs=new Set();
   (activeSlot?.svgParsed?.notes||[]).forEach(n=>{
     if(Number.isFinite(n.string)&&Number.isFinite(n.fret))activeCells.add(`${n.string},${n.fret}`);
     activePositions.add(`${Math.round(n.cx/15)},${Math.round(n.cy/15)}`);
+    if(Number.isFinite(n.st))activePcs.add(((n.st%12)+12)%12);
   });
   const labelMode=getNoteDisplay(bar?.cycleIdx??0); // 'notes' | 'intervals'
   const IV_BY_SEMI={0:'R',1:'b2',2:'2',3:'b3',4:'3',5:'4',6:'b5',7:'5',8:'b6',9:'6',10:'b7',11:'7'};
@@ -9716,7 +9823,7 @@ function buildAutoBg(bar,activeSlot){
     for(let f=(fretMin===0?0:fretMin+1);f<=fretMax;f++){
       const pc=getNoteStAtFret(s,f);
       const p=byPc[pc];if(!p)continue;
-      if(activeCells.has(`${s},${f}`))continue;
+      if(activeCells.has(`${s},${f}`)||activePcs.has(pc))continue;
       const cx=f===0?leftPad-r-4:fretX(f)-fretW/2;
       const cy=strY(s);
       if(activePositions.has(`${Math.round(cx/15)},${Math.round(cy/15)}`))continue;
