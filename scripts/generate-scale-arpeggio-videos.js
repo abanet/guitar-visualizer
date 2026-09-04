@@ -256,6 +256,15 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
         asGenerate(); // recalcula asState con la posición desplazada ya guardada
       }
       if (!asState.chords.length) return { error: 'Esta escala no tiene acordes diatónicos limpios de ese tipo.' };
+      // Deja un traste vacío a la derecha del mástil (si no, la nota más aguda queda pegada al
+      // borde) — "Mostrar el mástil hasta el traste" ya soporta esto (añade trastes vacíos si el
+      // valor es mayor que la nota más alta), solo hay que fijarlo un traste por encima del
+      // mismo fretMax que va a usar asSendToEditor().
+      {
+        const frets = asState.notes.map((n) => n.fret);
+        const fretMax = Math.min(24, Math.max(...frets) + 1);
+        setMaxFretsShown(fretMax + 1);
+      }
       asSendToEditor(); // mismo camino que el botón — genera frames, fija bgAuto, showTab('player')
       return { ok: true, bars: totalBars, chords: asState.chords.map((c) => c.chord) };
     }, { cfg, posLabel, variant });
