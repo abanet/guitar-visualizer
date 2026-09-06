@@ -4659,7 +4659,11 @@ function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H,openRight=false){
   // (una vista de mástil completo como tríadas 0-13 NO debe abrirse aunque 13<24).
   const isOpenRight=openRight===true&&fretMax<24;
   const realistic=getVisConfig().realisticNeck===true;
-  const strRight=isOpenRight?W:(W-rightPad);
+  // fretX(fretMax), NO "W": la casilla abierta debe medir exactamente lo mismo que cualquier
+  // otra (fretW) — extenderla hasta el borde real del lienzo (W) le sumaba además el margen fijo
+  // NECK_RIGHT, quedando más larga que el resto y que su gemela de la izquierda (bug reportado:
+  // "el traste abierto final es más largo que uno normal").
+  const strRight=isOpenRight?fretX(fretMax):(W-rightPad);
   const yTop=topPad,yBot=topPad+5*stringSpacing;
   // primer traste con línea: con cejilla, el 1; con ventana abierta, el propio fretMin.
   const fStart=fretMin===0?1:fretMin;
