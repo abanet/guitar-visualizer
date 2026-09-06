@@ -65,7 +65,16 @@
  *   --audio <path>         Audio compartido para las 5 posiciones (obligatorio)
  *   --bpm <n>               Tempo del audio — obligatorio en modo diapositivas (sin --xml); en
  *                           modo tema se ignora (el tempo, posiblemente variable, lo trae el XML)
- *   --out <dir>             Carpeta de salida (por defecto: ./video-out)
+ *   --out <dir>             Carpeta de salida (por defecto: ./video-out — normalmente conviene
+ *                           apuntarlo a la MISMA carpeta donde están el XML/audio de origen)
+ *   --visconfig <path>      JSON con el "Configuración" (gv_vis) tal cual lo ves en tu propio
+ *                           navegador — Playwright arranca con un perfil limpio, sin ese
+ *                           localStorage, así que sin esto usa los valores por defecto de la app
+ *                           (proporciones de nota, anillo de notas comunes, parpadeo, fantasma
+ *                           de escala, etc. pueden NO coincidir con lo que ves en pantalla).
+ *                           Consíguelo con `localStorage.getItem('gv_vis')` en la consola del
+ *                           navegador donde tengas el ejercicio configurado, y guárdalo en un
+ *                           archivo .json. nextPreview se fuerza a true siempre, encima de esto.
  *   --positions <lista>     Formas a generar, coma-separadas (por defecto: config.positions,
  *                           normalmente E,D,C,A,G)
  *   --no-closed-variant     Para cada posición con cuerdas al aire (detectado en la validación)
@@ -126,7 +135,10 @@ async function getAudioDurationSeconds(audioPath) {
 // subconjunto de chord tones caiga dentro de esa posición (exactamente lo que asBuildArpeggioSVG
 // necesita para no devolver null, ver guitarvisualizer.html).
 async function validatePositions({ appUrl, cfg, positions }) {
-  const browser = await chromium.launch({ headless: true });
+  // channel:'chrome' usa el Chrome del sistema en vez del Chromium propio de Playwright — este
+  // último dejó de tener build para macOS 13 en versiones recientes de Playwright ("Playwright
+  // does not support chromium on mac13"), y el Chrome instalado no tiene ese problema.
+  const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   const page = await browser.newPage();
   const results = [];
   try {
@@ -195,11 +207,14 @@ function printValidationReport(results) {
   return { hardFail, anyWarn };
 }
 
-async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir }) {
+async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig }) {
   const tag = variant === 'closed12' ? `forma${posLabel}_cerrada` : `forma${posLabel}`;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
-  const browser = await chromium.launch({ headless: true });
+  // channel:'chrome' usa el Chrome del sistema en vez del Chromium propio de Playwright — este
+  // último dejó de tener build para macOS 13 en versiones recientes de Playwright ("Playwright
+  // does not support chromium on mac13"), y el Chrome instalado no tiene ese problema.
+  const browser = await chromium.launch({ headless: true, channel: 'chrome' });
   const context = await browser.newContext({
     viewport: { width, height },
     recordVideo: { dir: tmpDir, size: { width, height } },
@@ -217,8 +232,12 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
     await page.goto(appUrl);
     await page.waitForFunction(() => typeof asGenerate === 'function', null, { timeout: 20000 });
     // Miniatura de la siguiente posición: apagada por defecto en la app (hay que activarla en
-    // Configuración) — para estos vídeos la queremos siempre encendida.
-    await page.evaluate(() => localStorage.setItem('gv_vis', JSON.stringify({ ...getVisConfig(), nextPreview: true })));
+    // Configuración) — para estos vídeos la queremos siempre encendida. Si se pasó --visconfig
+    // (el "Configuración" exacto que se ve en pantalla en el navegador real — Playwright arranca
+    // con un perfil nuevo, sin ese localStorage), se aplica ENCIMA de los valores por defecto de
+    // la app y nextPreview se fuerza siempre a true por último, para que --visconfig no pueda
+    // desactivarlo sin querer.
+    await page.evaluate((vc) => localStorage.setItem('gv_vis', JSON.stringify({ ...getVisConfig(), ...(vc || {}), nextPreview: true })), visConfig || null);
 
     if (xmlPath) {
       // MODO TEMA: carga el XML real ANTES de generar la posición, para que cycles.length>0 y
@@ -290,17 +309,39 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
     // buffering del m4a). Si no se corrige, el vídeo (recortado en este instante de reloj) queda
     // desplazado esa misma cantidad respecto al audio real (bug reportado: cambios de compás
     // desincronizados, "en el tiempo y" — sonaba justo esa fracción de negra de retraso).
+    // v2 (bug reportado: "el vídeo va ~1.1s por delante del audio en todo el ejercicio, como si
+    // el compás fuera de 3/4"): una única muestra justo al detectar 'playing' seguía sin ser
+    // fiable — el arranque del decodificador puede dejar audioEl.currentTime desfasado más de lo
+    // que una sola lectura corrige. Se toman DOS muestras (tiempo real, posición de audio) ya con
+    // la reproducción estable (400ms y 900ms tras 'playing') y se extrapola hacia atrás el
+    // instante en que currentTime habría sido 0 — cancela cualquier sesgo fijo de una lectura
+    // única, siempre que la velocidad de reproducción sea 1 (siempre lo es aquí).
     const stampInfo = await page.evaluate(() => new Promise((resolve) => {
-      const stamp = () => resolve({ t: performance.timeOrigin + performance.now(), c: audioEl.currentTime });
+      const sample = () => ({ t: performance.timeOrigin + performance.now(), c: audioEl.currentTime });
+      const afterPlaying = () => {
+        setTimeout(() => {
+          const s1 = sample();
+          setTimeout(() => {
+            const s2 = sample();
+            resolve({ s1, s2 });
+          }, 500);
+        }, 400);
+      };
       startIt();
-      if (!audioEl.paused && audioEl.currentTime > 0) { stamp(); return; }
-      const onPlaying = () => { audioEl.removeEventListener('playing', onPlaying); stamp(); };
+      if (!audioEl.paused && audioEl.currentTime > 0) { afterPlaying(); return; }
+      const onPlaying = () => { audioEl.removeEventListener('playing', onPlaying); afterPlaying(); };
       audioEl.addEventListener('playing', onPlaying);
-      setTimeout(stamp, 2000);
+      setTimeout(afterPlaying, 2000);
     }));
-    playStartAt = stampInfo.t;
-    playStartCurrentTime = stampInfo.c || 0;
-    log(`audio ya iba en ${playStartCurrentTime.toFixed(3)}s cuando se capturó el arranque (se compensa al recortar)`);
+    // t0 = instante real (wall clock) en que audioEl.currentTime habría sido 0, extrapolado desde
+    // dos muestras reales ya estables — equivalente a resolver la recta t = t0 + c*1000 con dos
+    // puntos, asumiendo velocidad de reproducción 1 (constante entre las dos muestras).
+    const { s1, s2 } = stampInfo;
+    const dt = s2.t - s1.t, dc = (s2.c - s1.c) * 1000;
+    const t0 = (dc > 100) ? (s1.t - s1.c * (dt / dc) * 1000) : (s1.t - s1.c * 1000);
+    playStartAt = t0;
+    playStartCurrentTime = 0;
+    log(`arranque real extrapolado: muestra1=${s1.c.toFixed(3)}s, muestra2=${s2.c.toFixed(3)}s (¿avanzan ~0.5s en ~0.5s reales? si no, algo va mal)`);
     await page.waitForTimeout(total * 1000);
     await page.evaluate(() => { if (typeof pauseIt === 'function') pauseIt(); });
   } catch (e) {
@@ -359,6 +400,7 @@ async function main() {
   const cfg = args.config
     ? JSON.parse(fs.readFileSync(path.resolve(args.config), 'utf8'))
     : { root: args.root, scale: args.scale, quality: args.quality || 'sevenths', positions: AS_POS_LABELS, customNotesByPosition: {} };
+  const visConfig = args.visconfig ? JSON.parse(fs.readFileSync(path.resolve(args.visconfig), 'utf8')) : null;
   const audioPath = path.resolve(args.audio);
   const outDir = path.resolve(args.out || './video-out');
   fs.mkdirSync(outDir, { recursive: true });
@@ -402,7 +444,7 @@ async function main() {
   async function worker() {
     while (idx < jobs.length) {
       const { posLabel, variant } = jobs[idx++];
-      const out = await runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir });
+      const out = await runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig });
       results.push(out);
     }
   }

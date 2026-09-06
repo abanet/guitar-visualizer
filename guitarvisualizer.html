@@ -10045,7 +10045,19 @@ function tick(){
   const varBi=hasTempoVar?getBarIndexAt(elapsed):null;
   const bi=varBi!==null?varBi:Math.floor(prog/barSec);
   const currentBarSec=hasTempoVar?getBarSecAt(elapsed):barSec;
-  if(bi>=allBars.length){stopAll();return;}
+  if(bi>=allBars.length){
+    // No pares aquí con stopAll(): si el audio tiene cola después del último compás notado
+    // (silencio final, cola de reverb, etc. — habitual en un render real) esto se disparaba en
+    // cuanto se acababan los compases, mucho antes del final real del audio — reseteaba curBar y
+    // limpiaba la visualización de golpe (bug reportado: pantalla en blanco "Asigna imágenes en
+    // el editor" antes de que terminase el audio) y, al no seguir llamando a tick(), armEndFade()
+    // (que vive al principio de esta función) nunca llegaba a dispararse — ni fundido a negro ni
+    // logo. Se deja el último compás tal cual en pantalla y sigue el bucle; el final real
+    // (audioEl.onended) ya llama a stopAll() en su momento, después de que el fundido haya tenido
+    // su ventana (ver END_FADE_SEC/armEndFade).
+    rafId=requestAnimationFrame(tick);
+    return;
+  }
   const bar=allBars[bi];
   const imgs=bar.imgs||[null,null,null,null];
   const barBeats=getBeatsAtBar(bi); // tiempos reales de ESTE compás (4 si no hay <time> en el XML)
