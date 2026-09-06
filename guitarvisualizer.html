@@ -4628,7 +4628,7 @@ function paintTwoPositions(activeNotes,nextNotes,progress,nextChord){
 
 // Draw the app's standard dark fretboard background into the canvas (unified style).
 // Notes are drawn separately on top. Coordinates match the 1001×394 system.
-function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H){
+function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H,openRight=false){
   const NS='http://www.w3.org/2000/svg';
   // OJO: W/H tenían un 1001/394 copiado a mano en vez de leer NECK_W/NECK_H — al bajar NECK_H
   // (trastes más rectangulares, ver esa constante) las LÍNEAS del mástil (esta función) seguían
@@ -4651,11 +4651,21 @@ function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H){
   // línea de fretMin (a su derecha) — así la zona abierta mide 1 traste, no 2.
   const openLeft=fretMin>0;
   const strLeft=openLeft?0:leftPad;
+  // Traste final "abierto" (prueba, feedback de Alberto 2026-09-06): igual que el hueco de la
+  // izquierda cuando la ventana no empieza en la cejilla (fretMin>0), el traste vacío de margen
+  // de la derecha (ver asSendToEditor, "+1") tampoco es el final real del mástil (que sigue hasta
+  // el 24) — se omite su línea de cierre y las cuerdas sangran hasta el borde, en vez de sugerir
+  // que el mástil termina justo ahí. Lo decide el llamador (openRight), no fretMax por sí solo
+  // (una vista de mástil completo como tríadas 0-13 NO debe abrirse aunque 13<24).
+  const isOpenRight=openRight===true&&fretMax<24;
   const realistic=getVisConfig().realisticNeck===true;
-  const strRight=W-rightPad;
+  const strRight=isOpenRight?W:(W-rightPad);
   const yTop=topPad,yBot=topPad+5*stringSpacing;
   // primer traste con línea: con cejilla, el 1; con ventana abierta, el propio fretMin.
   const fStart=fretMin===0?1:fretMin;
+  // último traste con línea: normalmente fretMax; con el borde derecho abierto, se omite (mismo
+  // criterio que fStart para el borde izquierdo).
+  const fEnd=isOpenRight?fretMax-1:fretMax;
   // Número de traste: con alto adaptativo (H!==NECK_H, ver arpNeckH) la última cuerda queda
   // más abajo y sus notas, más grandes, tapaban el número a "H-10" (bug reportado: "la nota se
   // monta sobre el traste") — se acerca más al borde inferior real. Con H===NECK_H, como siempre.
@@ -4691,7 +4701,7 @@ function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H){
     const rect=(x,y,w,h,fill,rx)=>add('rect',{x:x.toFixed(1),y:y.toFixed(1),width:Math.max(0,w).toFixed(1),height:h.toFixed(2),fill,rx:rx||h/2,ry:rx||h/2});
     // frets (barras metálicas). Con ventana abierta se omite la de fretMin.
     const fw=Math.max(3,Math.min(6,fretW*0.05));
-    for(let f=fStart;f<=fretMax;f++){const x=fretX(f);rect(x-fw/2,yTop-2,fw,(yBot-yTop)+4,`url(#fg_${uid})`,1.5);}
+    for(let f=fStart;f<=fEnd;f++){const x=fretX(f);rect(x-fw/2,yTop-2,fw,(yBot-yTop)+4,`url(#fg_${uid})`,1.5);}
     // nut (cejilla)
     if(fretMin===0){const nw=8;rect(leftPad-nw/2,yTop-3,nw,(yBot-yTop)+6,`url(#ng_${uid})`,2);}
     // strings (cilindros): 6ª (abajo) gruesa → 1ª (arriba) fina. Sombra sutil debajo + cuerpo con gradiente.
@@ -4703,11 +4713,11 @@ function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H){
     // inlays (nácar)
     const dotR2=Math.min(12,Math.max(7,fretW*0.16));
     const dot=(x,y)=>{add('circle',{cx:x.toFixed(1),cy:y.toFixed(1),r:dotR2,fill:`url(#dg_${uid})`,stroke:'rgba(255,255,255,.18)','stroke-width':1});};
-    [3,5,7,9,15,17,19,21].forEach(f=>{if(f>fretMin&&f<=fretMax)dot(fretX(f)-fretW/2,topPad+2.5*stringSpacing);});
-    if(12>fretMin&&12<=fretMax){const x=fretX(12)-fretW/2;dot(x,topPad+1.5*stringSpacing);dot(x,topPad+3.5*stringSpacing);}
+    [3,5,7,9,15,17,19,21].forEach(f=>{if(f>fretMin&&f<=fEnd)dot(fretX(f)-fretW/2,topPad+2.5*stringSpacing);});
+    if(12>fretMin&&12<=fEnd){const x=fretX(12)-fretW/2;dot(x,topPad+1.5*stringSpacing);dot(x,topPad+3.5*stringSpacing);}
     // fret numbers
     const NUM_FRETS_R=[3,5,7,9,12,15,17,19,21];
-    NUM_FRETS_R.forEach(f=>{if(f>=fretMin&&f<=fretMax){const x=fretX(f)-fretW/2;add('text',{x,y:fretNumY,'text-anchor':'middle','font-size':17,fill:'rgba(255,255,255,.55)','font-family':'Arial'}).textContent=f;}});
+    NUM_FRETS_R.forEach(f=>{if(f>=fretMin&&f<=fEnd){const x=fretX(f)-fretW/2;add('text',{x,y:fretNumY,'text-anchor':'middle','font-size':17,fill:'rgba(255,255,255,.55)','font-family':'Arial'}).textContent=f;}});
     return;
   }
 
@@ -4715,18 +4725,18 @@ function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H){
   // nut (only if showing from fret 0)
   if(fretMin===0)add('line',{x1:leftPad,y1:topPad,x2:leftPad,y2:topPad+5*stringSpacing,stroke:'rgba(255,255,255,.9)','stroke-width':6});
   // frets — con ventana abierta se omite la línea de fretMin (borde de cierre)
-  for(let f=fStart;f<=fretMax;f++){const x=fretX(f);add('line',{x1:x,y1:topPad,x2:x,y2:topPad+5*stringSpacing,stroke:'rgba(255,255,255,.4)','stroke-width':1.5});}
+  for(let f=fStart;f<=fEnd;f++){const x=fretX(f);add('line',{x1:x,y1:topPad,x2:x,y2:topPad+5*stringSpacing,stroke:'rgba(255,255,255,.4)','stroke-width':1.5});}
   // strings — 6ª (abajo, si=0) más gruesa y brillante; 1ª (arriba, si=5) más fina y tenue.
-  for(let si=0;si<6;si++){const y=strY(si);add('line',{x1:strLeft,y1:y,x2:W-rightPad,y2:y,stroke:`rgba(255,255,255,${(0.6-si*0.05).toFixed(3)})`,'stroke-width':(4.2-si*0.62).toFixed(2)});}
+  for(let si=0;si<6;si++){const y=strY(si);add('line',{x1:strLeft,y1:y,x2:strRight,y2:y,stroke:`rgba(255,255,255,${(0.6-si*0.05).toFixed(3)})`,'stroke-width':(4.2-si*0.62).toFixed(2)});}
   // inlays (puntos de traste) — más grandes, escalando un poco con el ancho de traste
   const INLAY_FRETS=[3,5,7,9,15,17,19,21];
   const dotR=Math.min(11,Math.max(7,fretW*0.15));
-  INLAY_FRETS.forEach(f=>{if(f>fretMin&&f<=fretMax){const x=fretX(f)-fretW/2;add('circle',{cx:x,cy:topPad+2.5*stringSpacing,r:dotR,fill:'rgba(255,255,255,.22)'});}});
+  INLAY_FRETS.forEach(f=>{if(f>fretMin&&f<=fEnd){const x=fretX(f)-fretW/2;add('circle',{cx:x,cy:topPad+2.5*stringSpacing,r:dotR,fill:'rgba(255,255,255,.22)'});}});
   // doble punto en el 12
-  if(12>fretMin&&12<=fretMax){const x=fretX(12)-fretW/2;add('circle',{cx:x,cy:topPad+1.5*stringSpacing,r:dotR,fill:'rgba(255,255,255,.22)'});add('circle',{cx:x,cy:topPad+3.5*stringSpacing,r:dotR,fill:'rgba(255,255,255,.22)'});}
+  if(12>fretMin&&12<=fEnd){const x=fretX(12)-fretW/2;add('circle',{cx:x,cy:topPad+1.5*stringSpacing,r:dotR,fill:'rgba(255,255,255,.22)'});add('circle',{cx:x,cy:topPad+3.5*stringSpacing,r:dotR,fill:'rgba(255,255,255,.22)'});}
   // fret numbers — SOLO en los trastes con punto (5, 7, 9, 12…), como en un diapasón real
   const NUM_FRETS=[3,5,7,9,12,15,17,19,21];
-  NUM_FRETS.forEach(f=>{if(f>=fretMin&&f<=fretMax){const x=fretX(f)-fretW/2;add('text',{x,y:fretNumY,'text-anchor':'middle','font-size':17,fill:'rgba(255,255,255,.55)','font-family':'Arial'}).textContent=f;}});
+  NUM_FRETS.forEach(f=>{if(f>=fretMin&&f<=fEnd){const x=fretX(f)-fretW/2;add('text',{x,y:fretNumY,'text-anchor':'middle','font-size':17,fill:'rgba(255,255,255,.55)','font-family':'Arial'}).textContent=f;}});
 }
 
 function renderSVGStatic(parsed){
@@ -4762,7 +4772,11 @@ function renderSVGStatic(parsed){
     // El mástil se dibuja con la ventana EFECTIVA (no con la nativa del SVG): es lo que
     // hace real el recorte de trastes y la zona ampliada. Las notas se recolocan igual.
     const _w=_viewWin||_lastFretRange||{min:0,max:15};
-    drawUnifiedFretboard(canvas,_w.min,_w.max,frameH);
+    // openRight (prueba): solo en "Arpegios en escala" (parsed.asScaleGen) — es la única vista
+    // cuyo traste final SIEMPRE es un margen artificial (nota más aguda +1, ver asSendToEditor),
+    // nunca el final real del mástil. Tríadas/chord tones/secuencias en mástil completo (0-13,
+    // 0-15) no deben abrirse aunque su fretMax tampoco sea el 24 real.
+    drawUnifiedFretboard(canvas,_w.min,_w.max,frameH,parsed.asScaleGen===true);
   } else {
     // RESPECT SVG: keep the original drawing as it came in the file.
     const doc=new DOMParser().parseFromString(parsed.raw,'image/svg+xml');
