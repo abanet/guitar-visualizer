@@ -4340,11 +4340,19 @@ function animateCrossfade(activeNotes,nextNotes,durationMs,nextChord){
 function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,colorProg){
   const overlay=document.getElementById('ghostCanvas');
   const svgCanvas=document.getElementById('svgCanvas');
-  if(!overlay||!svgCanvas||!getArpShowGhost()||!nextNotes)return;
+  if(!overlay||!svgCanvas||!nextNotes)return;
   activeNotes=relayoutNotes(activeNotes);nextNotes=relayoutNotes(nextNotes);
   const g1=Math.max(0,Math.min(1,ghostProg==null?0:ghostProg));
   const g2=Math.max(0,Math.min(1,fadeProg==null?0:fadeProg));
   const isCommon=(n,arr)=>arr&&arr.some(c=>Math.abs(c.cx-n.cx)<6&&Math.abs(c.cy-n.cy)<6);
+  const showGhost=getArpShowGhost();
+  // El anillo de "notas comunes" (más abajo) vive en el mástil principal (svgCanvas), no en
+  // el overlay de fantasmas — no depende de que "Mostrar notas fantasma de la siguiente
+  // posición" esté activado (bug reportado: "las notas comunes solo se anclan si el fantasma
+  // también está activado"). Solo la creación/animación de los círculos fantasma de abajo
+  // necesita esa opción.
+  if(!showGhost){overlay.innerHTML='';overlay.style.display='none';window._arpGhostEls=null;window._arpGhostChord=null;}
+  else{
   const dark=getVisConfig().darkFretboard!==false;
   const gFill=dark?'rgba(120,140,160,0.38)':'rgba(120,120,120,0.3)';
   const gStroke=dark?'rgba(200,210,225,0.85)':'rgba(80,80,80,0.7)';
@@ -4429,11 +4437,13 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
     o.t.setAttribute('fill',`rgba(${tr},${tg},${tb},${textA})`);
     o.t.setAttribute('opacity','1');
   });
+  } // fin if(showGhost)
   // CURRENT notes: commons never fade (siguen sonando); el anillo blanco que las resalta
   // depende de "Notas comunes — anclarlas..." (hintCommonRing); el destello es un extra
   // aparte (hintCommonPulse) que solo tiene efecto si el anillo está activado — antes ambas
   // cosas dependían de la MISMA casilla, así que no había forma de tener el anillo fijo sin
-  // el destello (o viceversa).
+  // el destello (o viceversa). Y ninguna de las dos depende de "Mostrar notas fantasma..."
+  // (ver showGhost arriba): viven en el mástil principal, no en el overlay de fantasmas.
   const ringOn=getVisConfig().hintCommonRing!==false;
   const pulseOn=ringOn&&getVisConfig().hintCommonPulse!==false;
   // a gentle pulse 0→1→0 (~1.1s period) for the common-note rings
@@ -8264,7 +8274,12 @@ function exArpeggiosApproach(ctx){
       // Corner preview of the next position's complete shape (optional).
       if(getVisConfig().nextPreview===true && validNext){drawNextPreview(nextPosNotes,nextChord3,nextPosNat);}
       else hideNextPreview();
-      if(getArpShowGhost() && validNext){
+      // Antes esta rama entera dependía de getArpShowGhost(): con el fantasma desactivado,
+      // paintArpeggioGhosts/markCommonNotes ni se llamaban, así que el anillo de "notas
+      // comunes" tampoco se anclaba nunca (bug reportado). paintArpeggioGhosts ya decide por
+      // dentro si dibuja o no el overlay de fantasmas según esa opción — aquí basta con que
+      // haya una posición siguiente válida.
+      if(validNext){
         const act=(vlCurrentNotes&&vlCurrentNotes.length)?vlCurrentNotes:(curSlot3?.svgParsed?.notes||null);
         if(act){
           const timeToChange=getBarStartTime(changeBarIdx)-elapsed; // seconds until the new arpeggio sounds
