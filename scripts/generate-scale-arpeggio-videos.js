@@ -282,8 +282,14 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
       // borde) — "Mostrar el mástil hasta el traste" ya soporta esto (añade trastes vacíos si el
       // valor es mayor que la nota más alta), solo hay que fijarlo igual al mismo fretMax que
       // va a usar asSendToEditor() (+1, no +2 — ver ese mismo comentario allí).
+      // OJO: asState.notes es SIEMPRE la forma CAGED recién generada (sin desplazar) — asGenerate()
+      // no consulta la corrección manual, solo asActiveNotes() lo hace. En la variante 'closed12'
+      // esto calculaba el tope sobre la posición SIN desplazar (frets 0-3) en vez de la desplazada
+      // (frets 12-16 reales), dejando un tope demasiado bajo que luego "Zona ampliada" recortaba a
+      // una ventana de un solo traste (bug reportado: "todas las notas amontonadas en una columna
+      // en la forma C cerrada"). asActiveNotes() usa la posición real (desplazada o no) siempre.
       {
-        const frets = asState.notes.map((n) => n.fret);
+        const frets = asActiveNotes().map((n) => n.fret);
         const fretMax = Math.min(24, Math.max(...frets) + 1);
         setMaxFretsShown(fretMax);
       }
