@@ -1,0 +1,20 @@
+{
+  "C|major|D": [
+    {"string":0,"fret":10},
+    {"string":0,"fret":12},
+    {"string":1,"fret":10},
+    {"string":1,"fret":12},
+    {"string":2,"fret":9},
+    {"string":2,"fret":10},
+    {"string":2,"fret":12},
+    {"string":3,"fret":9},
+    {"string":3,"fret":10},
+    {"string":3,"fret":12},
+    {"string":4,"fret":10},
+    {"string":4,"fret":12},
+    {"string":4,"fret":13},
+    {"string":5,"fret":10},
+    {"string":5,"fret":12},
+    {"string":5,"fret":13}
+  ]
+}

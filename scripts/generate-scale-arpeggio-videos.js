@@ -75,6 +75,18 @@
  *                           Consíguelo con `localStorage.getItem('gv_vis')` en la consola del
  *                           navegador donde tengas el ejercicio configurado, y guárdalo en un
  *                           archivo .json. nextPreview se fuerza a true siempre, encima de esto.
+ *   --positions-lib <path>  JSON con las formas CAGED corregidas a mano (mismo formato exacto
+ *                           que localStorage['gv_arpscale_positions'] del navegador: claves
+ *                           "root|scale|posLabel" → [{string,fret},...]) — se inyecta en el
+ *                           localStorage de la página ANTES de generar cada posición, así que
+ *                           asActiveNotes() la usa exactamente igual que en tu navegador, sin
+ *                           tener que repetir --config por cada tónica/escala. Por defecto usa
+ *                           scripts/lib/caged-scale-positions.json si existe (ahí vive la
+ *                           librería versionada del repo — commitéala cuando corrijas una forma
+ *                           nueva en el navegador: `localStorage.getItem('gv_arpscale_positions')`
+ *                           te da el JSON completo). --config sigue funcionando igual y, si
+ *                           trae su propia customNotesByPosition, gana sobre la librería para
+ *                           esa forma concreta.
  *   --positions <lista>     Formas a generar, coma-separadas (por defecto: config.positions,
  *                           normalmente E,D,C,A,G)
  *   --no-closed-variant     Para cada posición con cuerdas al aire (detectado en la validación)
@@ -134,7 +146,7 @@ async function getAudioDurationSeconds(audioPath) {
 // de la app, que hay algo que mostrar: notas de posición + al menos un acorde diatónico cuyo
 // subconjunto de chord tones caiga dentro de esa posición (exactamente lo que asBuildArpeggioSVG
 // necesita para no devolver null, ver guitarvisualizer.html).
-async function validatePositions({ appUrl, cfg, positions }) {
+async function validatePositions({ appUrl, cfg, positions, positionsLib }) {
   // channel:'chrome' usa el Chrome del sistema en vez del Chromium propio de Playwright — este
   // último dejó de tener build para macOS 13 en versiones recientes de Playwright ("Playwright
   // does not support chromium on mac13"), y el Chrome instalado no tiene ese problema.
@@ -144,6 +156,9 @@ async function validatePositions({ appUrl, cfg, positions }) {
   try {
     await page.goto(appUrl);
     await page.waitForFunction(() => typeof asGenerate === 'function', null, { timeout: 20000 });
+    // Librería de formas corregidas a mano (ver --positions-lib) — misma clave/formato que el
+    // propio localStorage del navegador, así asActiveNotes() la usa sin más.
+    if (positionsLib) await page.evaluate((lib) => localStorage.setItem('gv_arpscale_positions', JSON.stringify(lib)), positionsLib);
     for (const posLabel of positions) {
       const r = await page.evaluate(({ cfg, posLabel }) => {
         showTab('arpscale'); // asegura que #asScale tiene sus <option> (asInit) antes de fijar el valor
@@ -207,7 +222,7 @@ function printValidationReport(results) {
   return { hardFail, anyWarn };
 }
 
-async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig }) {
+async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig, positionsLib }) {
   const tag = variant === 'closed12' ? `forma${posLabel}_cerrada` : `forma${posLabel}`;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
@@ -238,6 +253,9 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
     // la app y nextPreview se fuerza siempre a true por último, para que --visconfig no pueda
     // desactivarlo sin querer.
     await page.evaluate((vc) => localStorage.setItem('gv_vis', JSON.stringify({ ...getVisConfig(), ...(vc || {}), nextPreview: true })), visConfig || null);
+    // Librería de formas corregidas a mano (ver --positions-lib) — misma clave/formato que el
+    // propio localStorage del navegador, así asActiveNotes() la usa sin más.
+    if (positionsLib) await page.evaluate((lib) => localStorage.setItem('gv_arpscale_positions', JSON.stringify(lib)), positionsLib);
 
     if (xmlPath) {
       // MODO TEMA: carga el XML real ANTES de generar la posición, para que cycles.length>0 y
@@ -272,7 +290,12 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
         // Variante "cerrada": la MISMA forma CAGED, 12 trastes más arriba (una octava), sin
         // cuerdas al aire — se usa el propio mecanismo de "corrección manual" (paso 2) para
         // que asActiveNotes()/asSendToEditor() la traten exactamente igual que la abierta.
-        const shifted = asState.notes.map((n) => ({ string: n.string, fret: n.fret + 12 }));
+        // asActiveNotes(), NO asState.notes: este último es SIEMPRE la forma generada en bruto
+        // (asGenerate() no consulta corrección alguna) — si había una corrección a mano o de la
+        // librería (--positions-lib) para esta forma, desplazar asState.notes la habría ignorado
+        // y la cerrada habría salido con la forma SIN corregir +12 (bug reportado en la práctica:
+        // ver el mismo fallo ya corregido para el tope de trastes, línea de arriba en el historial).
+        const shifted = asActiveNotes().map((n) => ({ string: n.string, fret: n.fret + 12 }));
         if (shifted.some((n) => n.fret > 24)) return { error: 'La variante cerrada (+12) se sale del mástil modelado (traste 24).' };
         asSetCustomNotes(cfg.root, cfg.scale, posLabel, shifted);
         asGenerate(); // recalcula asState con la posición desplazada ya guardada
@@ -407,6 +430,14 @@ async function main() {
     ? JSON.parse(fs.readFileSync(path.resolve(args.config), 'utf8'))
     : { root: args.root, scale: args.scale, quality: args.quality || 'sevenths', positions: AS_POS_LABELS, customNotesByPosition: {} };
   const visConfig = args.visconfig ? JSON.parse(fs.readFileSync(path.resolve(args.visconfig), 'utf8')) : null;
+  // --positions-lib: por defecto, la librería versionada del repo (scripts/lib/caged-scale-
+  // positions.json) si existe — así cualquier forma corregida a mano por Alberto en su
+  // navegador y guardada ahí se aplica siempre, sin tener que pasar --config cada vez.
+  const positionsLibPath = args['positions-lib']
+    ? path.resolve(args['positions-lib'])
+    : path.join(__dirname, 'lib', 'caged-scale-positions.json');
+  const positionsLib = fs.existsSync(positionsLibPath) ? JSON.parse(fs.readFileSync(positionsLibPath, 'utf8')) : null;
+  if (positionsLib) console.log(`Librería de formas corregidas: ${positionsLibPath} (${Object.keys(positionsLib).length} entrada[s])`);
   const audioPath = path.resolve(args.audio);
   const outDir = path.resolve(args.out || './video-out');
   fs.mkdirSync(outDir, { recursive: true });
@@ -427,7 +458,7 @@ async function main() {
   let jobs = positions.map((posLabel) => ({ posLabel, variant: 'open' }));
   if (!args['skip-validate']) {
     console.log('Validando las posiciones antes de grabar nada…');
-    const results = await validatePositions({ appUrl, cfg, positions });
+    const results = await validatePositions({ appUrl, cfg, positions, positionsLib });
     const { hardFail, anyWarn } = printValidationReport(results);
     if (hardFail) { console.error('Hay posiciones sin nada que mostrar — corrígelas en la pestaña (paso 2) y vuelve a exportar el config.json.'); process.exit(1); }
     if (anyWarn && args.strict) { console.error('Hay acordes sueltos sin nota en común con su posición y se pasó --strict — abortando.'); process.exit(1); }
@@ -450,7 +481,7 @@ async function main() {
   async function worker() {
     while (idx < jobs.length) {
       const { posLabel, variant } = jobs[idx++];
-      const out = await runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig });
+      const out = await runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig, positionsLib });
       results.push(out);
     }
   }

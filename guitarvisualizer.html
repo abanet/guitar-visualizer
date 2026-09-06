@@ -7489,6 +7489,12 @@ function seqBuildCagedPosition(rootRaw,scaleKey,posIndex){
       if(scaleSts.includes(st))notes.push(mk(string,f));
     }
   }
+  // Revertido el intento de "extender por cuerda" cuando el borde de la caja enlaza por
+  // semitono con el siguiente traste (ver historial): un caso real corregido a mano por Alberto
+  // demostró que el criterio puramente diatónico no basta — añadía una nota (Mi grave, traste
+  // 13) que él, como guitarrista, no considera parte de esa forma aunque sea diatónicamente
+  // válida. La geometría automática se deja tal cual (aproximación de partida); las correcciones
+  // reales viven en la librería de posiciones (ver scripts/lib/caged-scale-positions.json).
   // sort by pitch: string desc (low to high), fret asc
   notes.sort((a,b)=> (a.string-b.string)|| (a.fret-b.fret));
   return notes;
