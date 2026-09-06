@@ -3772,8 +3772,11 @@ function neckGeo(fretMin,fretMax,H){
   // se ve enorme y las notas enanas"). El *0.88 es un pequeño recorte sobre la escala 1:1 (feedback
   // de Alberto tras probarlo: "las notas un poco más pequeñas, pero poco").
   const noteScale=H===NECK_H?1:0.88;
+  // stringSpacing*0.45 (antes 0.42): notas un poco más grandes (feedback de Alberto,
+  // 2026-09-06) — deja hueco de todas formas entre dos notas en cuerdas sucesivas y mismo
+  // traste (diámetro 0.9*stringSpacing, ~10% de separación libre).
   return{fretMin,fretMax,leftPad,fretW,
-         r:Math.min(24*(H/NECK_H),fretW*0.38,stringSpacing*0.42)*noteScale,stringSpacing,topPad:NECK_TOP};
+         r:Math.min(24*(H/NECK_H),fretW*0.38,stringSpacing*0.45)*noteScale,stringSpacing,topPad:NECK_TOP};
 }
 // Alto adaptativo del mástil SOLO para "Arpegios en escala": con pocos trastes visibles, un
 // NECK_H fijo (pensado para ~15 trastes) deja casillas muy anchas con las notas (tope de radio
@@ -3783,9 +3786,11 @@ function neckGeo(fretMin,fretMax,H){
 // aunque "Zona ampliada" recorte la ventana visible acorde a acorde) y se hornea en el propio SVG
 // (data-neckh) para que el resto de funciones (buildAutoBg, drawUnifiedFretboard, layoutNeckBox)
 // LEAN ese mismo valor en vez de recalcularlo cada una por su cuenta — evita que diverjan.
-const ARP_NECKH_REF_FRETS=15,ARP_NECKH_MIN_FRETS=4,ARP_NECKH_MAX_MULT=1.9;
-// Tope, más modesto, para el panel "Siguiente" (ver drawNextPreview): es un rincón pequeño, no
-// el mástil principal — dejarlo crecer hasta ARP_NECKH_MAX_MULT lo desbordaba de su recuadro.
+// Mismo tope para el mástil principal y el panel "Siguiente" (antes 1.9 vs 1.5): con 1.9 el
+// mástil principal se veía demasiado alto/estrecho en posiciones cortas — desproporcionado
+// frente al panel "Siguiente", cuya proporción (más ancha, más parecida al mástil real de una
+// eléctrica) le gustaba más a Alberto (feedback 2026-09-06).
+const ARP_NECKH_REF_FRETS=15,ARP_NECKH_MIN_FRETS=4,ARP_NECKH_MAX_MULT=1.5;
 const ARP_PREVIEW_MAX_MULT=1.5;
 function arpNeckH(fretMin,fretMax){
   const n=Math.max(1,fretMax-fretMin);
@@ -4641,6 +4646,10 @@ function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H){
   const yTop=topPad,yBot=topPad+5*stringSpacing;
   // primer traste con línea: con cejilla, el 1; con ventana abierta, el propio fretMin.
   const fStart=fretMin===0?1:fretMin;
+  // Número de traste: con alto adaptativo (H!==NECK_H, ver arpNeckH) la última cuerda queda
+  // más abajo y sus notas, más grandes, tapaban el número a "H-10" (bug reportado: "la nota se
+  // monta sobre el traste") — se acerca más al borde inferior real. Con H===NECK_H, como siempre.
+  const fretNumY=H===NECK_H?H-10:H-4;
 
   if(realistic){
     // ── Modo realista: cuerdas metálicas con volumen y trastes/cejilla con brillo ──────
@@ -4688,7 +4697,7 @@ function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H){
     if(12>fretMin&&12<=fretMax){const x=fretX(12)-fretW/2;dot(x,topPad+1.5*stringSpacing);dot(x,topPad+3.5*stringSpacing);}
     // fret numbers
     const NUM_FRETS_R=[3,5,7,9,12,15,17,19,21];
-    NUM_FRETS_R.forEach(f=>{if(f>=fretMin&&f<=fretMax){const x=fretX(f)-fretW/2;add('text',{x,y:H-10,'text-anchor':'middle','font-size':17,fill:'rgba(255,255,255,.55)','font-family':'Arial'}).textContent=f;}});
+    NUM_FRETS_R.forEach(f=>{if(f>=fretMin&&f<=fretMax){const x=fretX(f)-fretW/2;add('text',{x,y:fretNumY,'text-anchor':'middle','font-size':17,fill:'rgba(255,255,255,.55)','font-family':'Arial'}).textContent=f;}});
     return;
   }
 
@@ -4707,7 +4716,7 @@ function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H){
   if(12>fretMin&&12<=fretMax){const x=fretX(12)-fretW/2;add('circle',{cx:x,cy:topPad+1.5*stringSpacing,r:dotR,fill:'rgba(255,255,255,.22)'});add('circle',{cx:x,cy:topPad+3.5*stringSpacing,r:dotR,fill:'rgba(255,255,255,.22)'});}
   // fret numbers — SOLO en los trastes con punto (5, 7, 9, 12…), como en un diapasón real
   const NUM_FRETS=[3,5,7,9,12,15,17,19,21];
-  NUM_FRETS.forEach(f=>{if(f>=fretMin&&f<=fretMax){const x=fretX(f)-fretW/2;add('text',{x,y:H-10,'text-anchor':'middle','font-size':17,fill:'rgba(255,255,255,.55)','font-family':'Arial'}).textContent=f;}});
+  NUM_FRETS.forEach(f=>{if(f>=fretMin&&f<=fretMax){const x=fretX(f)-fretW/2;add('text',{x,y:fretNumY,'text-anchor':'middle','font-size':17,fill:'rgba(255,255,255,.55)','font-family':'Arial'}).textContent=f;}});
 }
 
 function renderSVGStatic(parsed){
@@ -5507,6 +5516,13 @@ function svgStringToParsed(svgStr){
   const _nh=(svgStr||'').match(/data-neckh="(\d+)"/);
   const H=_nh?parseInt(_nh[1],10):NECK_H;
   const out={W:NECK_W,H,notes,raw:svgStr,generated:true};
+  // data-posbox (solo "Arpegios en escala", ver arpBuildZoneSVG): celdas exactas de la forma
+  // generada — buildAutoBg lo usa para no salirse de la posición al pintar el fantasma de escala.
+  // ARRAY, no Set: los fotogramas "sin acorde" reutilizan este svgParsed vía
+  // JSON.parse(JSON.stringify(...)) (ver asSendToEditor) y un Set se serializa como "{}",
+  // perdiendo .has() (bug reportado: "posBox.has is not a function").
+  {const _pb=(svgStr||'').match(/data-posbox="([^"]*)"/);
+   if(_pb&&_pb[1])out.posBox=_pb[1].split(',').filter(Boolean);}
   {const _fr2=(svgStr||'').match(/data-fretrange="(-?\d+),(-?\d+)"/);
    const fr={min:_fr2?parseInt(_fr2[1],10):0,max:_fr2?parseInt(_fr2[2],10):15};
    out.fretRange=fr;
@@ -6277,8 +6293,14 @@ function runGenerate(){
 // saber si puede usar asIntroScaleFrame durante la cuenta atrás de intro (si el primer compás
 // mostrado no lleva esta marca, el ejercicio activo no es de este tipo y asIntroScaleFrame
 // podría venir de una sesión anterior/otra pestaña).
-function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScaleMode=false){
+function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScaleMode=false,posBox=null){
   const W=NECK_W,H=asScaleMode?arpNeckH(fretStart,fretEnd):NECK_H,fretMin=fretStart,fretMax=fretEnd;
+  // posBox (solo "Arpegios en escala"): celdas (cuerda,traste) EXACTAS de la posición/forma
+  // generada, hobreadas aquí como data-posbox para que buildAutoBg (fondo automático de
+  // escala) restrinja el fantasma a esta forma concreta — si no, al escanear toda la ventana
+  // visible (que incluye el traste de margen a cada lado) colaba notas de fuera de la forma
+  // (bug reportado: "sale una nota que no está en la posición de escala generada").
+  const posBoxAttr=posBox&&posBox.length?` data-posbox="${posBox.map(n=>n.string+':'+n.fret).join(',')}"`:'';
   // MISMA geometría que neckGeo/drawUnifiedFretboard (ver comentario en neckGeo): si no, el
   // frame se genera con una geometría y se repinta en el reproductor con otra (drawUnifiedFretboard
   // usa neckGeo) — como relayoutNotes no toca las notas cuando la ventana no cambia (caso normal
@@ -6293,12 +6315,16 @@ function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScal
   const fretX=f=>leftPad+(f-fretMin)*fretW;
   const r=geo.r;
   // dark style: no white bg, light-on-dark lines (matches sequence player look)
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="arpeggios"${asScaleMode?' data-asscale="1"':''} data-fretrange="${fretMin},${fretMax}"${asScaleMode?` data-neckh="${H}"`:''}>`;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="arpeggios"${asScaleMode?' data-asscale="1"':''} data-fretrange="${fretMin},${fretMax}"${asScaleMode?` data-neckh="${H}"`:''}${posBoxAttr}>`;
   if(fretMin===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
   for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${0.45-si*0.04})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
   [3,5,7,9,12,15,17,19,21].forEach(f=>{if(f>fretMin&&f<=fretMax){const x=fretX(f)-fretW/2;s+=`<circle cx="${x}" cy="${topPad+2.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;if(f===12){s+=`<circle cx="${x}" cy="${topPad+1.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/><circle cx="${x}" cy="${topPad+3.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;}}});
-  for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${H-10}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
+  // Número de traste: con el alto adaptativo (H!==NECK_H) la última cuerda queda más abajo y
+  // sus notas, más grandes, tapaban el número a "H-10" (bug reportado: "la nota se monta sobre
+  // el traste") — se acerca más al borde inferior real. Con H===NECK_H se deja como siempre.
+  const fretNumY=H===NECK_H?H-10:H-4;
+  for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${fretNumY}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
   notes.forEach(n=>{
     const x=n.fret===0?leftPad-r-4:fretX(n.fret)-fretW/2;
     const y=strY(n.string);
@@ -6949,23 +6975,35 @@ function tnPentaToneMap(chord){
 // SVG del preview: mástil oscuro (mismo look que arpBuildZoneSVG), notas de escala
 // tenues, chord tones iluminados (tónica del acorde roja, guías con anillo dorado).
 function tnBuildSVG(notes,chordInfo,fretMin,fretMax,labelMode,asMode){
-  const W=NECK_W,H=NECK_H;
-  const nFrets=Math.max(1,fretMax-fretMin);
-  const leftPad=fretMin===0?40:60,rightPad=25,topPad=35,bottomPad=50;
-  const fretW=(W-leftPad-rightPad)/nFrets;
-  const stringSpacing=(H-topPad-bottomPad)/5;
+  const W=NECK_W;
+  // Alto adaptativo (mismo criterio que arpBuildZoneSVG/arpNeckH — "Notas objetivo" y el
+  // preview de "Arpegios en escala" SIEMPRE muestran una ventana estrecha, nunca el mástil
+  // completo, así que se benefician igual del mástil más alto y notas más grandes (feedback
+  // de Alberto 2026-09-06: generalizar la proporción de "Arpegios en escala" a toda vista
+  // parcial del mástil). Con fretMax-fretMin>=15 (mástil completo) esto satura a NECK_H, sin
+  // cambio — por eso no hace falta distinguir casos aquí.
+  const H=arpNeckH(fretMin,fretMax);
+  const geo=neckGeo(fretMin,fretMax,H);
+  const leftPad=geo.leftPad,rightPad=25,topPad=geo.topPad;
+  const fretW=geo.fretW;
+  const stringSpacing=geo.stringSpacing;
   const strY=s=>topPad+(5-s)*stringSpacing;
   const fretX=f=>leftPad+(f-fretMin)*fretW;
-  const r=Math.min(22,fretW*0.38);
+  const r=geo.r;
   // data-as="1" (solo desde "Arpegios en escala"): a diferencia de un tn real (Chord tones),
   // aquí SÍ debe admitir "Aplicar estilo propio a las notas" — ver renderSVGStatic/
   // animateVoiceLeading (mismo trato que ya recibe data-sp="1" y por la misma razón).
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-tn="1"${asMode?' data-as="1"':''} data-gen="${asMode?'as':'tn'}" data-fretrange="${fretMin},${fretMax}">`;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-tn="1"${asMode?' data-as="1"':''} data-gen="${asMode?'as':'tn'}" data-fretrange="${fretMin},${fretMax}" data-neckh="${H}">`;
   if(fretMin===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
   for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${0.45-si*0.04})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
   [3,5,7,9,12,15,17,19,21].forEach(f=>{if(f>fretMin&&f<=fretMax){const x=fretX(f)-fretW/2;s+=`<circle cx="${x}" cy="${topPad+2.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;if(f===12){s+=`<circle cx="${x}" cy="${topPad+1.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/><circle cx="${x}" cy="${topPad+3.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;}}});
-  for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${H-10}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
+  // Número de traste: con el alto adaptativo (H!==NECK_H) la última cuerda queda más abajo y
+  // sus notas, más grandes, tapaban el número a "H-10" (bug reportado: "la nota se monta sobre
+  // el traste") — se acerca más al borde inferior real. Con H===NECK_H (mástil completo) se
+  // deja exactamente igual que siempre.
+  const fretNumY=H===NECK_H?H-10:H-4;
+  for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${fretNumY}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
   notes.forEach(n=>{
     const x=n.fret===0?leftPad-r-4:fretX(n.fret)-fretW/2;
     const y=strY(n.string);
@@ -9176,9 +9214,9 @@ function asRenderPreview(){
   const chordInfo=chord?asChordInfo(chord):null;
   const frets=notes.map(n=>n.fret);
   const fretMin=Math.max(0,Math.min(...frets)-1);
-  // +2 (no +1): un traste vacío de verdad a la derecha de la nota más aguda — con +1 esa nota
-  // cae en la ÚLTIMA casilla dibujada y queda pegada al borde del mástil (bug reportado).
-  const fretMax=Math.min(24,Math.max(...frets)+2);
+  // +1: un traste vacío de verdad a la derecha de la nota más aguda (feedback de Alberto:
+  // con +2 sobraban dos trastes vacíos, demasiado hueco muerto en el mástil).
+  const fretMax=Math.min(24,Math.max(...frets)+1);
   board.innerHTML=tnBuildSVG(notes,chordInfo,fretMin,fretMax,labelMode,true);
   if(st){
     if(!asState.chords.length)st.textContent='Esta escala no tiene acordes diatónicos limpios de ese tipo en ningún grado (habitual en pentatónicas/blues) — prueba con tríadas o cambia de escala.';
@@ -9278,7 +9316,7 @@ function asBuildArpeggioSVG(notes,chordInfo,chordName,fretMin,fretMax){
   const tones=notes.filter(n=>chordInfo.map[((n.st%12)+12)%12]!==undefined)
     .map(n=>({...n,isRoot:((n.st%12)+12)%12===chordInfo.rootPc}));
   if(!tones.length)return null;
-  return arpBuildZoneSVG(tones,chordName,'',[],fretMin,fretMax,true);
+  return arpBuildZoneSVG(tones,chordName,'',[],fretMin,fretMax,true,notes);
 }
 
 // ── 4 · Usar el ejercicio ────────────────────────────────────────────────────
@@ -9309,9 +9347,9 @@ async function asSendToEditor(){
   // afecta a esa previsualización.
   const frets=notes.map(n=>n.fret);
   const fretMin=Math.max(0,Math.min(...frets)-1);
-  // +2 (no +1): deja un traste vacío de verdad a la derecha de la nota más aguda en el mástil
-  // principal — con +1 esa nota cae en la ÚLTIMA casilla dibujada y queda pegada al borde.
-  const fretMax=Math.min(24,Math.max(...frets)+2);
+  // +1: deja un traste vacío de verdad a la derecha de la nota más aguda (feedback de Alberto:
+  // con +2 sobraban dos trastes vacíos, demasiado hueco muerto en el mástil).
+  const fretMax=Math.min(24,Math.max(...frets)+1);
   const nameEl=document.getElementById('exerciseName');
   const asFrameLabel=asState.quality==='pentatonic'?'pentatónica':'arpegio';
   const exName=`${asState.root} ${SEQ_SCALE_LABELS[asState.scale]||asState.scale} (Forma ${AS_POS_LABELS[asState.posIdx]}) — ${asState.quality==='pentatonic'?'pentatónicas en escala':'arpegios diatónicos'}`;
@@ -9332,7 +9370,7 @@ async function asSendToEditor(){
   {
     const rootPc=noteToSt(asState.root);
     const scaleNotes=notes.map(n=>({...n,isRoot:((n.st%12)+12)%12===rootPc}));
-    const svg=arpBuildZoneSVG(scaleNotes,'Escala','',[],fretMin,fretMax,true);
+    const svg=arpBuildZoneSVG(scaleNotes,'Escala','',[],fretMin,fretMax,true,notes);
     const parsed=svgStringToParsed(svg);
     let thumb=null;try{thumb=await svgToThumb(svg,320,116);}catch(e){}
     asIntroScaleFrame={type:'svg',data:svg,name:'Escala',thumb,svgParsed:parsed};
@@ -9431,10 +9469,13 @@ async function asSendToEditor(){
   // fondo (Editor → "Fondo automático"), mientras el frame de arriba solo dibuja —y anima
   // con zoom/fantasma/crossfade— las que son del arpegio en cada acorde. Sin esto el frame
   // (ahora un subconjunto, no la caja completa) se vería "pelado" sin referencia de escala.
-  // En modo Pentatónica NO se quiere esa referencia (feedback de Alberto: "las notas fuera de
-  // esa posición de escala no interesan" — aquí ni siquiera las de la propia posición que no
-  // sean de la pentatónica activa): solo deben verse las notas resaltadas, nada de fondo.
-  bgAuto=asState.quality==='pentatonic'?{mode:'off',root:asState.root,scale:asState.scale}:{mode:'scale',root:asState.root,scale:asState.scale};
+  // Corrección 2026-09-06 (feedback de Alberto): en modo Pentatónica TAMBIÉN se quiere esta
+  // referencia — las notas de la escala que no son de la pentatónica activa deben verse
+  // siempre como fantasma, igual que en modo Arpegio/chord tones. Antes se apagaba aquí
+  // ({mode:'off'}) por una decisión previa contraria ya revertida — no confundir con la
+  // opción "Mostrar notas fantasma de la siguiente posición" (arpShowGhost/paintArpeggioGhosts),
+  // que es un mecanismo totalmente distinto (fantasma del PRÓXIMO acorde) y no debe afectar aquí.
+  bgAuto={mode:'scale',root:asState.root,scale:asState.scale};
   bgAutoSyncUI();
   rebuildBgMapIfVisible();
   showTab('player');
@@ -9465,20 +9506,26 @@ function asExportConfigFile(){
 // data-sp (los fills SON el ejercicio, como los tn reales → sin forceOwnNoteStyle).
 // data-tn="1" siempre, a propósito: ver nota en EXERCISES.
 function spBuildSVG(notes,fretMin,fretMax,labelMode,lit){
-  const W=NECK_W,H=NECK_H;
-  const nFrets=Math.max(1,fretMax-fretMin);
-  const leftPad=fretMin===0?40:60,rightPad=25,topPad=35,bottomPad=50;
-  const fretW=(W-leftPad-rightPad)/nFrets;
-  const stringSpacing=(H-topPad-bottomPad)/5;
+  const W=NECK_W;
+  // Alto adaptativo (mismo criterio que tnBuildSVG/arpBuildZoneSVG — ver comentario en
+  // tnBuildSVG): con "Ajustar mástil a la zona usada" la ventana puede quedar bien estrecha,
+  // y se beneficia igual del mástil más alto y notas más grandes. Sin ese ajuste (ventana
+  // ancha/mástil completo) esto satura a NECK_H, sin cambio.
+  const H=arpNeckH(fretMin,fretMax);
+  const geo=neckGeo(fretMin,fretMax,H);
+  const leftPad=geo.leftPad,rightPad=25,topPad=geo.topPad;
+  const fretW=geo.fretW;
+  const stringSpacing=geo.stringSpacing;
   const strY=s=>topPad+(5-s)*stringSpacing;
   const fretX=f=>leftPad+(f-fretMin)*fretW;
-  const r=Math.min(22,fretW*0.38);
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-tn="1"${lit?'':' data-sp="1"'} data-gen="sp" data-fretrange="${fretMin},${fretMax}">`;
+  const r=geo.r;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-tn="1"${lit?'':' data-sp="1"'} data-gen="sp" data-fretrange="${fretMin},${fretMax}" data-neckh="${H}">`;
   if(fretMin===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
   for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${0.45-si*0.04})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
   [3,5,7,9,12,15,17,19,21].forEach(f=>{if(f>fretMin&&f<=fretMax){const x=fretX(f)-fretW/2;s+=`<circle cx="${x}" cy="${topPad+2.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;if(f===12){s+=`<circle cx="${x}" cy="${topPad+1.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/><circle cx="${x}" cy="${topPad+3.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;}}});
-  for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${H-10}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
+  const fretNumY=H===NECK_H?H-10:H-4;
+  for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${fretNumY}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
   notes.forEach(n=>{
     const x=n.fret===0?leftPad-r-4:fretX(n.fret)-fretW/2;
     const y=strY(n.string);
@@ -10288,12 +10335,22 @@ function buildAutoBg(bar,activeSlot){
   const labelMode=getNoteDisplay(bar?.cycleIdx??0); // 'notes' | 'intervals'
   const IV_BY_SEMI={0:'R',1:'b2',2:'2',3:'b3',4:'3',5:'4',6:'b5',7:'5',8:'b6',9:'6',10:'b7',11:'7'};
   const byPc={};info.pcs.forEach(p=>{byPc[p.pc]=p;});
+  // posBox (solo "Arpegios en escala", ver arpBuildZoneSVG/svgStringToParsed): celdas exactas
+  // de la forma generada. Sin esto el bucle de abajo escanea TODA la ventana visible (que
+  // incluye el traste de margen a cada lado del recuadro), colando notas de la escala que
+  // están fuera de la forma concreta (bug reportado: "sale una nota que no está en la posición
+  // de escala generada"). Con posBox presente, solo se pintan celdas que son literalmente parte
+  // de esa forma — para el resto de usos de "Fondo automático: Escala" (fuera de Arpegios en
+  // escala, sin posBox) se mantiene el escaneo de toda la ventana, como siempre.
+  const posBoxArr=activeSlot?.svgParsed?.posBox||null;
+  const posBox=posBoxArr?new Set(posBoxArr):null;
   el.innerHTML='';
   let painted=0;
   for(let s=0;s<6;s++){
     // Con fretMin>0 la nota del traste fretMin caería MEDIO FUERA del borde izquierdo
     // (su hueco queda antes de la primera línea dibujada): el primer traste visible es fretMin+1.
     for(let f=(fretMin===0?0:fretMin+1);f<=fretMax;f++){
+      if(posBox&&!posBox.has(`${s}:${f}`))continue;
       const pc=getNoteStAtFret(s,f);
       const p=byPc[pc];if(!p)continue;
       if(activeCells.has(`${s},${f}`)||activePcs.has(pc))continue;
