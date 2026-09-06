@@ -2,6 +2,7 @@
   "C|major|D": [
     {"string":0,"fret":10},
     {"string":0,"fret":12},
+    {"string":0,"fret":13},
     {"string":1,"fret":10},
     {"string":1,"fret":12},
     {"string":2,"fret":9},

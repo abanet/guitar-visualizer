@@ -3962,7 +3962,12 @@ function computePreviewWin(notes,nat){
     const frets=notes.map(n=>noteCellOf(n,g)).filter(Boolean).map(c=>c.fret);
     if(frets.length){
       const a=Math.min(...frets),b=Math.max(...frets);
-      const win=windowAroundFrets(a,b,N,1,2,VIEW_MIN_FRETS);
+      // Sin margen (0,0) y sin suelo mínimo — a diferencia del mástil principal (que sí deja un
+      // traste vacío a cada lado para dar contexto), en el rincón pequeño de "Siguiente" cada
+      // píxel cuenta más que el contexto: mejor mostrar SOLO los trastes que realmente tienen
+      // notas (feedback de Alberto 2026-09-06: "en la miniatura igual queda mejor mostrar solo
+      // los trastes con notas, no dejar vacíos").
+      const win=windowAroundFrets(a,b,N,0,0,0);
       lo=win.lo;hi=win.hi;
     }
   }
@@ -4529,7 +4534,17 @@ function drawNextPreview(nextNotes,nextChord,nat){
     spanU.style.textTransform='uppercase';
     spanU.textContent='Siguiente';
     lbl.appendChild(spanU);
-    lbl.appendChild(document.createTextNode(': '+(nextChord||'')));
+    // Estructuras en escala + Resaltar:Pentatónica: en vez de solo la tónica del acorde ("F"),
+    // el nombre completo de la pentatónica que viene ("Pentatónica mayor de F") — en su propia
+    // línea (el panel es estrecho, no cabe junto a "SIGUIENTE:", ver feedback de Alberto
+    // 2026-09-06). Fuera de ese contexto, igual que siempre.
+    const scaleName=asScaleNameFor(nextChord);
+    if(scaleName){
+      lbl.appendChild(document.createElement('br'));
+      lbl.appendChild(document.createTextNode(scaleName));
+    }else{
+      lbl.appendChild(document.createTextNode(': '+(nextChord||'')));
+    }
   }
   setNeckPreviewShown(true);
 }
@@ -9533,6 +9548,16 @@ async function asSendToEditor(){
   bgAuto={mode:'scale',root:asState.root,scale:asState.scale};
   bgAutoSyncUI();
   rebuildBgMapIfVisible();
+  // "Mensajes/consejos" (showMsg) ON por defecto con Resaltar:Pentatónica — sin ella, la zona de
+  // texto (#vMsgText/msg-zone) donde sale "Pentatónica mayor de X" (ver asScaleNameFor,
+  // renderMsg) se queda oculta si el usuario nunca tocó esa casilla, y el aviso pasa
+  // desapercibido (pedido de Alberto 2026-09-06: activarla por defecto para este ejercicio).
+  if(asState.quality==='pentatonic'){
+    const cfg={...getVisConfig(),showMsg:true};
+    localStorage.setItem('gv_vis',JSON.stringify(cfg));
+    applyVisConfig(cfg);
+    const cb=document.getElementById('toggle_showMsg');if(cb)cb.checked=true;
+  }
   showTab('player');
 }
 
@@ -10191,7 +10216,14 @@ function tick(){
     renderScaleHint(getScaleHint(barChordNow,fn,bar.scaleText||''), fn!=='x'?getClr(fn):null);
     // Auto message: generate inversion message if this cycle OR any sibling cycle is in 'inversions' mode
     const isInversionsExercise=getGlobalNoteDisplay()==='inversions';
-    const autoMsg=bar.msgText||(isInversionsExercise?getAutoMsg(slot,barChordNow):'');
+    // Estructuras en escala + Resaltar:Pentatónica: nombre de la pentatónica que suena ahora
+    // ("Pentatónica mayor de F"), en la misma zona de título/comentario que ya usan otros
+    // ejercicios (feedback de Alberto 2026-09-06: "creo que ya tenemos una zona para eso encima
+    // del mástil" — es esta, #vMsgText/msg-zone, NO el recuadro "Ahora" del modo Compases). Va
+    // DESPUÉS de bar.msgText/inversions en la prioridad: un comentario manual del usuario para
+    // ese compás sigue ganando.
+    const isAsScale=slot?.svgParsed?.asScaleGen===true;
+    const autoMsg=bar.msgText||(isInversionsExercise?getAutoMsg(slot,barChordNow):'')||(isAsScale?asScaleNameFor(barChordNow):'');
     renderMsg(allBars,bi,autoMsg);
     const prevBar=allBars[bi-1];const prevSlot=prevBar?.imgs?.filter(s=>s).slice(-1)[0]||null;
     if(seqActive){
@@ -10742,6 +10774,20 @@ function renderBarBeats(containerId, bar, activeBeat, beats){
   }
 }
 
+// Nombre de la pentatónica/escala que suena para un acorde dado ("Pentatónica mayor de F"),
+// SOLO en "Estructuras en escala" con "Resaltar: Pentatónica" — es la raíz del ACORDE (no de la
+// tonalidad de fondo, ver Tonalidad: arriba a la izquierda), igual que asChordInfo/tnPentaToneMap
+// deciden qué se resalta. Fuera de ese contexto no hay nada nuevo que aportar (el acorde/arpegio
+// ya lo dice la letra grande) — se deja vacío. Usado en el texto de la escala actual (ver
+// renderMsg/autoMsg) y en la etiqueta de la miniatura "Siguiente" (ver drawNextPreview).
+function asScaleNameFor(chordName){
+  if(typeof asState==='undefined'||!asState||asState.quality!=='pentatonic')return '';
+  if(!chordName)return '';
+  const m=(chordName||'').match(/^([A-G][b#]?)(.*)/);if(!m)return '';
+  const quality=m[2].trim();
+  const isMinor=resolveChordDefs(quality).some(d=>d.n==='b3');
+  return (isMinor?'Pentatónica menor de ':'Pentatónica mayor de ')+m[1];
+}
 function updateBarsMinimal(curChord,nextChord,fn,allBars,bi,beatInBar){
   // Beat slots for current and next bar
   if(getChordDisplayMode()==='bars'){
