@@ -71,7 +71,8 @@
  *                           navegador — Playwright arranca con un perfil limpio, sin ese
  *                           localStorage, así que sin esto usa los valores por defecto de la app
  *                           (proporciones de nota, anillo de notas comunes, parpadeo, fantasma
- *                           de escala, etc. pueden NO coincidir con lo que ves en pantalla).
+ *                           de escala, "Mástil:" notas/intervalos/auto/inversiones (noteDisplay),
+ *                           etc. pueden NO coincidir con lo que ves en pantalla).
  *                           Consíguelo con `localStorage.getItem('gv_vis')` en la consola del
  *                           navegador donde tengas el ejercicio configurado, y guárdalo en un
  *                           archivo .json. nextPreview se fuerza a true siempre, encima de esto.
@@ -91,7 +92,7 @@
  *                           normalmente E,D,C,A,G)
  *   --no-closed-variant     Para cada posición con cuerdas al aire (detectado en la validación)
  *                           se genera TAMBIÉN su gemela cerrada: la misma forma CAGED 12 trastes
- *                           más arriba, sin cuerdas al aire (arpegios_formaX_cerrada.mp4). Esta
+ *                           más arriba, sin cuerdas al aire (<nombre>_formaX_cerrada.mp4). Esta
  *                           flag lo desactiva y genera solo la variante abierta de siempre.
  *                           Requiere la validación (no funciona con --skip-validate).
  *   --extra <seg>           Segundos extra al final de cada vídeo (por defecto: 2)
@@ -222,6 +223,44 @@ function printValidationReport(results) {
   return { hardFail, anyWarn };
 }
 
+// Busca, en el vídeo silencioso YA grabado, el primer fotograma en el que la marca de
+// calibración (cuadro blanco pintado en la esquina superior izquierda, ver runOne) aparece —
+// devuelve su pts_time (segundos, en la propia línea de tiempo del vídeo crudo) o null si por lo
+// que sea no se detecta (p.ej. si la marca se quitó antes de que se grabase ni un solo fotograma).
+async function detectMarkerFrameTime(videoPath, tmpDir) {
+  const statsPath = path.join(tmpDir, `marker-stats-${process.pid}-${Date.now()}.log`);
+  try {
+    await execFileP('ffmpeg', [
+      '-i', videoPath,
+      '-vf', `crop=48:48:0:0,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=${statsPath}`,
+      '-f', 'null', '-',
+    ]);
+    const text = fs.readFileSync(statsPath, 'utf8');
+    const lines = text.split('\n');
+    // OJO: Chromium pinta en BLANCO (about:blank) los primerísimos fotogramas de cualquier
+    // página, ANTES de que el CSS de la app (tema oscuro) llegue a aplicarse — como la grabación
+    // empieza en cuanto se crea la página (antes incluso de navegar a la URL), el fotograma 0 casi
+    // siempre YA sale "blanco" por esto, sin relación ninguna con nuestra marca (bug encontrado:
+    // detectaba t=0.000s SIEMPRE, dando un recorte demasiado CORTO — vídeo por detrás del audio en
+    // vez de por delante). Por eso no basta con el primer fotograma "brillante": hace falta haber
+    // visto ANTES un fotograma realmente OSCURO (el tema oscuro de la app ya pintado, cuadro en su
+    // estado negro) — solo entonces cuenta el siguiente salto a blanco como nuestra marca real.
+    let sawDark = false;
+    for (let i = 0; i < lines.length; i++) {
+      const pm = lines[i].match(/pts_time:([0-9.]+)/);
+      if (!pm) continue;
+      const vm = (lines[i + 1] || '').match(/YAVG=([0-9.]+)/);
+      if (!vm) continue;
+      const y = parseFloat(vm[1]);
+      if (!sawDark) { if (y < 60) sawDark = true; continue; }
+      if (y > 180) return parseFloat(pm[1]); // blanco (255) tras haber confirmado el fondo oscuro
+    }
+    return null;
+  } finally {
+    fs.unlink(statsPath, () => {});
+  }
+}
+
 async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig, positionsLib }) {
   const tag = variant === 'closed12' ? `forma${posLabel}_cerrada` : `forma${posLabel}`;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
@@ -242,17 +281,55 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
   let playStartAt = null;
   let playStartCurrentTime = 0;
   let stepError = null;
+  let flipTimestamp = null;
   try {
     log('cargando app…');
     await page.goto(appUrl);
     await page.waitForFunction(() => typeof asGenerate === 'function', null, { timeout: 20000 });
+    // v5 — CALIBRACIÓN POR MARCA VISUAL (bug reportado: incluso esperando 4s a que el audio se
+    // estabilice antes de medir, quedaba un adelanto residual de ~0.3s, constante y reproducible
+    // — el propio arranque del grabador de vídeo de Playwright/Chromium tarda un poco en empezar
+    // a capturar fotogramas de verdad, y ESE retraso no tiene nada que ver con el audio, así que
+    // ninguna mejora del lado del audio podía corregirlo). En vez de asumir que el fotograma 0 del
+    // vídeo crudo corresponde al instante en que Node leyó recordStartAt (Date.now() tras el
+    // await de newPage(), con su propio retraso variable de ida y vuelta al navegador — ver el
+    // mismo problema ya documentado y resuelto para el audio en scripts/lib/batch-sessions.js),
+    // se pinta un cuadrado blanco en la esquina superior izquierda en un instante conocido con
+    // precisión (performance.now() DENTRO del navegador) y luego, sobre el vídeo YA grabado, se
+    // busca el fotograma exacto en el que ese cuadrado aparece (ver más abajo, tras cerrar la
+    // página) — así el "instante real del fotograma 0" se mide directamente en el propio vídeo,
+    // sin depender de ninguna suposición sobre cuánto tarda en arrancar el grabador.
+    flipTimestamp = await page.evaluate(() => new Promise((resolve) => {
+      const marker = document.createElement('div');
+      marker.id = '__syncMarker';
+      marker.style.cssText = 'position:fixed;top:0;left:0;width:48px;height:48px;background:#000;z-index:2147483647;pointer-events:none;';
+      document.body.appendChild(marker);
+      // Doble rAF: dejar que el navegador pinte el cuadro NEGRO al menos una vez antes de pasar a
+      // blanco — si se cambia a blanco en el mismo fotograma en que se crea el elemento, con mala
+      // suerte el vídeo podría no llegar a capturar nunca el estado "negro" de referencia.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          marker.style.background = '#fff';
+          resolve(performance.timeOrigin + performance.now());
+        });
+      });
+    }));
+    // Ya no hace falta el cuadro en pantalla (ni en el resto del vídeo ni en la miniatura) — el
+    // recorte inicial (más abajo) de sobra se lo lleva por delante de todas formas, pero quitarlo
+    // ya evita depender de eso.
+    await page.evaluate(() => { const m = document.getElementById('__syncMarker'); if (m) m.remove(); });
     // Miniatura de la siguiente posición: apagada por defecto en la app (hay que activarla en
     // Configuración) — para estos vídeos la queremos siempre encendida. Si se pasó --visconfig
     // (el "Configuración" exacto que se ve en pantalla en el navegador real — Playwright arranca
     // con un perfil nuevo, sin ese localStorage), se aplica ENCIMA de los valores por defecto de
     // la app y nextPreview se fuerza siempre a true por último, para que --visconfig no pueda
     // desactivarlo sin querer.
-    await page.evaluate((vc) => localStorage.setItem('gv_vis', JSON.stringify({ ...getVisConfig(), ...(vc || {}), nextPreview: true })), visConfig || null);
+    // applyVisConfig() (no solo localStorage.setItem) para que el DOM refleje el config YA en
+    // este load — si no, campos que no son casillas simples de "Elementos" (p.ej. el <select>
+    // "Mástil:" notas/intervalos, cfg.noteDisplay) se quedan con el valor por defecto del HTML
+    // hasta que algo más los repinte (bug reportado: "eso tiene que ir en el fichero de
+    // configuración" — ya vive en gv_vis, pero aplicar solo el localStorage no bastaba).
+    await page.evaluate((vc) => { const cfg = { ...getVisConfig(), ...(vc || {}), nextPreview: true }; localStorage.setItem('gv_vis', JSON.stringify(cfg)); applyVisConfig(cfg); }, visConfig || null);
     // Librería de formas corregidas a mano (ver --positions-lib) — misma clave/formato que el
     // propio localStorage del navegador, así asActiveNotes() la usa sin más.
     if (positionsLib) await page.evaluate((lib) => localStorage.setItem('gv_arpscale_positions', JSON.stringify(lib)), positionsLib);
@@ -341,20 +418,38 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
     // v2 (bug reportado: "el vídeo va ~1.1s por delante del audio en todo el ejercicio, como si
     // el compás fuera de 3/4"): una única muestra justo al detectar 'playing' seguía sin ser
     // fiable — el arranque del decodificador puede dejar audioEl.currentTime desfasado más de lo
-    // que una sola lectura corrige. Se toman DOS muestras (tiempo real, posición de audio) ya con
-    // la reproducción estable (400ms y 900ms tras 'playing') y se extrapola hacia atrás el
-    // instante en que currentTime habría sido 0 — cancela cualquier sesgo fijo de una lectura
-    // única, siempre que la velocidad de reproducción sea 1 (siempre lo es aquí).
+    // que una sola lectura corrige.
+    // v3 (bug reportado: "la sincronización de los vídeos era perfecta" y ahora el primer golpe
+    // de audio ya suena con el mástil mostrando el SIGUIENTE tiempo — vídeo adelantado desde el
+    // primer compás, en audios .m4a reales largos ~5min): dos muestras a solo 400-900ms de
+    // 'playing' seguían cayendo dentro de la ventana en la que el decodificador de un m4a real
+    // puede tener un micro-parón de calentamiento — extrapolar desde ahí hacia atrás SOBRESTIMA
+    // t0 (recorta de más, el vídeo queda adelantado exactamente lo que duró ese parón). Probado
+    // con 12 muestras cada 150ms en 0.6s-2.4s tras 'playing' — MISMO bug (confirmado a mano,
+    // fotograma a fotograma: la transición real de la cuenta atrás cae ~0.58s ANTES en el vídeo
+    // que en el audio real): ese parón de calentamiento dura más de los 600ms con los que
+    // empezaba a muestrear — cualquier regresión hecha ENTERAMENTE dentro del tramo posterior al
+    // parón reproduce el mismo sesgo, tome las muestras que tome, porque ya no puede "ver" cuánto
+    // duró el parón que quedó ANTES de la primera muestra.
+    // v4: en vez de extrapolar hacia atrás desde muestras tempranas, se espera LARGO (4s tras
+    // 'playing' — de sobra para que cualquier parón de arranque del decodificador ya haya
+    // terminado) y solo ENTONCES se muestrea, varias veces seguidas (100ms aparte, para promediar
+    // el ruido de redondeo sin volver a acercarse a la zona de riesgo). Con reproducción ya
+    // completamente estable, t0 = t_muestra - c_muestra*1000 de CADA muestra por separado
+    // (asumiendo velocidad de reproducción exactamente 1, garantizado en audio HTML normal) y se
+    // usa la MEDIANA — inmune a que la ventana de muestreo temprana capturase o no un parón.
     const stampInfo = await page.evaluate(() => new Promise((resolve) => {
       const sample = () => ({ t: performance.timeOrigin + performance.now(), c: audioEl.currentTime });
       const afterPlaying = () => {
-        setTimeout(() => {
-          const s1 = sample();
-          setTimeout(() => {
-            const s2 = sample();
-            resolve({ s1, s2 });
-          }, 500);
-        }, 400);
+        const samples = [];
+        let n = 0;
+        const tick = () => {
+          samples.push(sample());
+          n++;
+          if (n < 6) setTimeout(tick, 100);
+          else resolve(samples);
+        };
+        setTimeout(tick, 4000);
       };
       startIt();
       if (!audioEl.paused && audioEl.currentTime > 0) { afterPlaying(); return; }
@@ -362,15 +457,15 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
       audioEl.addEventListener('playing', onPlaying);
       setTimeout(afterPlaying, 2000);
     }));
-    // t0 = instante real (wall clock) en que audioEl.currentTime habría sido 0, extrapolado desde
-    // dos muestras reales ya estables — equivalente a resolver la recta t = t0 + c*1000 con dos
-    // puntos, asumiendo velocidad de reproducción 1 (constante entre las dos muestras).
-    const { s1, s2 } = stampInfo;
-    const dt = s2.t - s1.t, dc = (s2.c - s1.c) * 1000;
-    const t0 = (dc > 100) ? (s1.t - s1.c * (dt / dc) * 1000) : (s1.t - s1.c * 1000);
+    // t0 = instante real (wall clock) en que audioEl.currentTime habría sido 0 — mediana de
+    // (muestra.t - muestra.c*1000) sobre todas las muestras, ya con reproducción estable.
+    const t0Candidates = stampInfo.map((s) => s.t - s.c * 1000).sort((a, b) => a - b);
+    const nS = t0Candidates.length;
+    const t0 = nS % 2 ? t0Candidates[(nS - 1) / 2] : (t0Candidates[nS / 2 - 1] + t0Candidates[nS / 2]) / 2;
     playStartAt = t0;
     playStartCurrentTime = 0;
-    log(`arranque real extrapolado: muestra1=${s1.c.toFixed(3)}s, muestra2=${s2.c.toFixed(3)}s (¿avanzan ~0.5s en ~0.5s reales? si no, algo va mal)`);
+    const spread = t0Candidates[nS - 1] - t0Candidates[0]; // ms — debería ser pequeño (<50ms)
+    log(`arranque real (t0) de ${nS} muestras estables (audio en ${stampInfo[0].c.toFixed(3)}s-${stampInfo[nS - 1].c.toFixed(3)}s) · dispersión=${spread.toFixed(1)}ms (¿pequeña? si no, algo va mal)`);
     await page.waitForTimeout(total * 1000);
     await page.evaluate(() => { if (typeof pauseIt === 'function') pauseIt(); });
   } catch (e) {
@@ -385,9 +480,38 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
   if (stepError) throw stepError;
   if (!videoObj) throw new Error('No se generó ningún vídeo (context sin recordVideo).');
   const silentPath = await videoObj.path();
-  const trimOffsetSec = Math.max(0, ((playStartAt || recordStartAt) - recordStartAt) / 1000 - playStartCurrentTime);
+  // T_v = instante real (wall clock) del fotograma 0 del vídeo crudo — calibrado con la marca
+  // visual (ver arriba) en vez de asumido igual a recordStartAt (Date.now() justo tras el await
+  // de newPage(), que no tiene por qué coincidir con cuándo el grabador empezó a capturar de
+  // verdad — precisamente la causa del adelanto residual de ~0.3s ya confirmado a mano). Con
+  // fallback a recordStartAt si la marca no se detecta, para no romper el vídeo por completo.
+  let videoStartRef = recordStartAt;
+  if (flipTimestamp != null) {
+    try {
+      const markerPtsTime = await detectMarkerFrameTime(silentPath, tmpDir);
+      if (markerPtsTime != null) {
+        videoStartRef = flipTimestamp - markerPtsTime * 1000;
+        log(`marca de calibración detectada en t=${markerPtsTime.toFixed(3)}s del vídeo crudo`);
+      } else {
+        log('aviso: no se detectó la marca de calibración en el vídeo crudo — uso recordStartAt (menos preciso)');
+      }
+    } catch (e) {
+      log('aviso: fallo detectando la marca de calibración (' + e.message + ') — uso recordStartAt (menos preciso)');
+    }
+  }
+  const trimOffsetSec = Math.max(0, ((playStartAt || videoStartRef) - videoStartRef) / 1000 - playStartCurrentTime);
 
-  const outPath = path.join(outDir, `arpegios_${tag}.mp4`);
+  // Nombre base = el del XML (modo tema) o, sin XML (modo diapositivas), el del audio — así el
+  // vídeo queda emparejado con el ejercicio de esa carpeta en vez de un genérico "arpegios_..."
+  // igual en las tres carpetas de un lote (pedido: "quiero que sea el mismo del xml que esté en
+  // el directorio seguida de _formaC").
+  const baseName = path.basename(xmlPath || audioPath, path.extname(xmlPath || audioPath));
+  // "Mástil:" (noteDisplay, ver --visconfig) también en el nombre — así un lote en Notas y otro en
+  // Intervalos del mismo ejercicio no se pisan entre sí (pedido: "que el nombre lleve la palabra
+  // Notas"/"Intervalos" según la opción usada).
+  const noteDisplayLabels = { notes: 'Notas', intervals: 'Intervalos', auto: 'Auto', inversions: 'Inversiones' };
+  const noteDisplayTag = noteDisplayLabels[(visConfig && visConfig.noteDisplay) || 'auto'] || 'Auto';
+  const outPath = path.join(outDir, `${baseName}_${noteDisplayTag}_${tag}.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
   // Recorte EXACTO por timestamp de fotograma (filtro trim+setpts), no por keyframe: "-ss" ANTES
   // de "-i" busca al keyframe más cercano y puede desviarse del punto real hasta un GOP entero —

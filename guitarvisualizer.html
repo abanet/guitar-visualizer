@@ -10645,6 +10645,10 @@ function getGlobalNoteDisplay(){return document.getElementById('globalNoteDispla
 // intervalos" — en realidad sí se aplicaba, solo que con retraso hasta el próximo compás).
 function onGlobalNoteDisplayChange(){
   try{
+    const gnd=document.getElementById('globalNoteDisplay');
+    if(gnd){const cfg=getVisConfig();cfg.noteDisplay=gnd.value;localStorage.setItem('gv_vis',JSON.stringify(cfg));}
+  }catch(e){}
+  try{
     if(getExerciseType&&getExerciseType()==='scaleStory'){
       if(typeof ssShowBackground==='function')ssShowBackground();
     }else if(_lastParsedShown){
@@ -11275,6 +11279,8 @@ function saveVisConfig(){
     const inp=document.getElementById('scaleDefault'+fn);
     if(inp)cfg['scaleDefault'+fn]=inp.value;
   });
+  const gnd=document.getElementById('globalNoteDisplay');
+  if(gnd)cfg.noteDisplay=gnd.value;
   localStorage.setItem('gv_vis',JSON.stringify(cfg));
   applyVisConfig(cfg);
 }
@@ -11283,10 +11289,17 @@ function getVisConfig(){
   const cfg={};
   VIS_ELEMENTS.forEach(el=>cfg[el.id]=el.id in saved?saved[el.id]:el.def);
   ['I','II','III','IV','V','VI','VII','X'].forEach(fn=>cfg['scaleDefault'+fn]=saved['scaleDefault'+fn]||'');
+  // "Mástil:" (notas/intervalos/auto/inversiones) — igual que showMsg/showNotes/etc., para que
+  // --visconfig (generate-scale-arpeggio-videos.js) pueda fijarlo en vídeos generados en lote sin
+  // depender de un flag de script aparte (bug reportado: "eso tiene que ir en el fichero de
+  // configuración" — antes vivía SOLO en el <select> del DOM, sin persistencia ninguna).
+  cfg.noteDisplay='noteDisplay' in saved?saved.noteDisplay:'auto';
   return cfg;
 }
 function applyVisConfig(cfg){
   if(!cfg)cfg=getVisConfig();
+  const gnd=document.getElementById('globalNoteDisplay');
+  if(gnd&&cfg.noteDisplay&&gnd.value!==cfg.noteDisplay){gnd.value=cfg.noteDisplay;onGlobalNoteDisplayChange();}
   const show=(id,el)=>{if(el)el.style.display=cfg[id]===false?'none':'';}
   const vis=(id,el)=>{if(el)el.style.visibility=cfg[id]===false?'hidden':'visible';}
   // Key
