@@ -498,7 +498,7 @@ body.presentation #channelWatermark{display:flex;}
     <div class="tab" title="Genera posiciones de arpegio, una por acorde (ruta de arpegios: zoom, preview, crossfade)." onclick="showTab('generate')"><i class="ti ti-wand"></i> Arpegios</div>
     <div class="tab" title="Secuencia nota a nota sobre un fondo de escala (ruta propia, nota a nota)." onclick="showTab('sequence')"><i class="ti ti-arrow-bar-to-right"></i> Secuencias</div>
     <div class="tab" title="Chord tones: caja de escala de fondo + notas del acorde iluminadas en cada acorde." onclick="showTab('targets')"><i class="ti ti-target"></i> Chord tones</div>
-    <div class="tab" title="Progresión diatónica completa de una escala (tríadas o tétradas) sobre una posición CAGED, sin dibujar ninguna forma de arpegio: el arpegio es siempre un subconjunto de las notas de la escala." onclick="showTab('arpscale')"><i class="ti ti-guitar-pick"></i> Arpegios en escala</div>
+    <div class="tab" title="Progresión diatónica completa de una escala (tríadas o tétradas) sobre una posición CAGED, sin dibujar ninguna forma de arpegio: el arpegio es siempre un subconjunto de las notas de la escala." onclick="showTab('arpscale')"><i class="ti ti-guitar-pick"></i> Estructuras en escala</div>
     <div class="tab" title="Build-up narrado: revela una caja pentatónica CAGED en pasos (tríada por grupos de cuerdas → +7ª → +4ª → caja completa), sincronizado a un backing track, con texto de apoyo." onclick="showTab('scalestory')"><i class="ti ti-stack-2"></i> Historia de escala</div>
     <div class="tab" title="Asigna una escala y su posición a cada rango de compases del ciclo." onclick="showTab('scales')"><i class="ti ti-timeline"></i> Escalas</div>
     <div class="tab" onclick="showTab('help')"><i class="ti ti-help"></i> Ayuda</div>
@@ -1644,7 +1644,7 @@ body.presentation #channelWatermark{display:flex;}
 <!-- ARPEGIOS EN ESCALA (progresión diatónica automática, sin dibujar formas a mano) -->
 <div class="panel" id="tab-arpscale" style="display:none;padding:20px;">
   <div style="max-width:1100px;margin:0 auto;">
-    <h2 style="margin:0 0 6px;font-size:18px;"><i class="ti ti-guitar-pick"></i> Arpegios dentro de escala</h2>
+    <h2 style="margin:0 0 6px;font-size:18px;"><i class="ti ti-guitar-pick"></i> Estructuras en escala</h2>
     <div class="tab-help"><div><span class="th-k">Qué genera</span>La <b>progresión diatónica completa</b> de una escala (un acorde por grado, tríada o tétrada) sobre una <b>posición CAGED</b>, resaltando en cada paso qué notas de esa misma posición corresponden al acorde — sin dibujar ninguna forma de arpegio: el resaltado siempre es un subconjunto de las notas de la escala.</div><div><span class="th-k">Resaltar → Pentatónica</span>En vez de las notas del propio acorde, resalta la <b>pentatónica</b> que le corresponde (mayor si el acorde es mayor, menor en cualquier otro caso), siempre dentro de la misma posición CAGED.</div><div><span class="th-k">Si la posición no es correcta</span>Corrígela a mano en "2 · Corregir posición" — igual que el editor de caja personalizada de Escalas por tramos.</div><div><span class="th-k">"Ver en Visualizador" (paso 4)</span>Si ya cargaste un <b>tema (XML)</b> en Audio &amp; XML, respeta SUS compases/ciclos y coloca el fotograma allí donde el acorde real de cada compás encaje — el acorde en sí se lee tal cual está en el XML (no se reconstruye del grado diatónico), pero el selector "Resaltar" sí decide qué se ilumina de ese acorde (sus notas o su pentatónica). Sin tema cargado, crea un ejercicio corto de un compás por grado ("modo diapositivas").</div><div><span class="th-k">Para generar en lote</span>Exporta el config.json (paso 4) y úsalo con <code>scripts/generate-scale-arpeggio-videos.js</code> (ese script siempre usa el modo diapositivas + un audio compartido, no el tema cargado).</div></div>
 
     <div class="card">
@@ -4854,6 +4854,22 @@ function renderSVGStatic(parsed){
       if(note.stroke){circle.setAttribute('data-ownstroke',note.stroke);if(note.strokeWidth)circle.setAttribute('data-ownstrokew',note.strokeWidth);}
     }
     g.appendChild(circle);
+    // Anillo de tónica de ESCALA (prueba, feedback de Alberto 2026-09-06): separado del relleno
+    // rojo (que marca la tónica del ACORDE activo, cambia con cada acorde) — un anillo dorado
+    // fijo alrededor de cualquier nota que sea la tónica de la escala/tonalidad (bgAuto.root),
+    // esté o no sonando ahora mismo, para no perder de vista en qué tonalidad estamos aunque el
+    // acorde activo sea otro. Solo en "Arpegios en escala" (asScaleGen) — el resto de vistas no
+    // tienen este concepto de tonalidad de fondo.
+    if(parsed.asScaleGen===true&&getVisConfig().scaleTonicRing!==false&&Number.isFinite(note.st)&&bgAuto&&bgAuto.root){
+      const scaleRootPc=noteToSt(bgAuto.root);
+      if(scaleRootPc>=0&&((note.st%12)+12)%12===scaleRootPc){
+        const ring=document.createElementNS(NS,'circle');
+        ring.setAttribute('cx',note.cx);ring.setAttribute('cy',note.cy);ring.setAttribute('r',rr+4);
+        ring.setAttribute('fill','none');ring.setAttribute('stroke','#FFC94A');ring.setAttribute('stroke-width','2.5');
+        ring.setAttribute('class','tonic-ring');ring.setAttribute('pointer-events','none');
+        g.appendChild(ring);
+      }
+    }
     const displayLabel=noteDisplayLabel(note,ndMode,chord);
     const t=document.createElementNS(NS,'text');t.setAttribute('x',note.cx);t.setAttribute('y',note.cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
     const _dimTN=isTNparsed&&!ownStyle&&(note.fill||'').indexOf('255,255,255')>=0;
@@ -8131,7 +8147,7 @@ const EX_BADGE_LABELS={
   sp:'Escalas por tramos',
   rhythm:'Ritmo',
   realrhythm:'Ritmos Reales',
-  as:'Arpegios en escala',
+  as:'Estructuras en escala',
   scaleStory:'Historia de escala',
 };
 function exBadgeKind(parsed){
@@ -10404,10 +10420,22 @@ function buildAutoBg(bar,activeSlot){
       const g=document.createElementNS(NS,'g');
       const c=document.createElementNS(NS,'circle');
       c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r',r);
-      c.setAttribute('fill',p.semi===0?'rgba(229,57,53,0.10)':'rgba(150,150,150,0.12)');
-      c.setAttribute('stroke',p.semi===0?'rgba(229,57,53,0.55)':'#999');
+      // Mismo tenue gris para toda nota de fondo, tónica de escala incluida (antes iba en
+      // rojizo — se confundía con el rojo de la tónica del ACORDE activo, que es una cosa
+      // distinta y cambia con cada acorde). La tónica de escala se marca aparte con el anillo
+      // dorado de abajo (mismo criterio que en las notas activas, ver renderSVGStatic) —
+      // prueba/feedback de Alberto 2026-09-06.
+      c.setAttribute('fill','rgba(150,150,150,0.12)');
+      c.setAttribute('stroke','#999');
       c.setAttribute('stroke-width','2');c.setAttribute('stroke-dasharray','5,4');
       g.appendChild(c);
+      if(p.semi===0&&activeSlot?.svgParsed?.asScaleGen===true&&getVisConfig().scaleTonicRing!==false){
+        const ring=document.createElementNS(NS,'circle');
+        ring.setAttribute('cx',cx);ring.setAttribute('cy',cy);ring.setAttribute('r',r+4);
+        ring.setAttribute('fill','none');ring.setAttribute('stroke','#FFC94A');ring.setAttribute('stroke-width','2');
+        ring.setAttribute('stroke-opacity','.75');ring.setAttribute('class','tonic-ring');ring.setAttribute('pointer-events','none');
+        g.appendChild(ring);
+      }
       const t=document.createElementNS(NS,'text');
       t.setAttribute('x',cx);t.setAttribute('y',cy);
       t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
@@ -11172,6 +11200,7 @@ const VIS_ELEMENTS=[
   {id:'hintIntervalLabel',label:'Etiqueta del intervalo del movimiento (ej. 3→7) sobre las flechas', def:true, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'hintCommonRing',label:'Notas comunes — anclarlas con anillo blanco (lo que se queda entre posiciones)', def:true, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'hintCommonPulse',label:'Notas comunes — destello durante el cambio (necesita el anillo activado)', def:true, group:'Transición · Arpegios', xtype:'arpeggios'},
+  {id:'scaleTonicRing',label:'Estructuras en escala — anillo dorado fijo en la tónica de la escala (aunque no sea la del acorde activo)', def:true, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'commonsAlways',label:'Notas comunes — marcarlas siempre (no solo durante el cambio)', def:false, group:'Transición · Arpegios', xtype:'arpeggios'},
 ];
 
