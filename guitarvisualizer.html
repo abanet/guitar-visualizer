@@ -835,9 +835,24 @@ body.presentation #channelWatermark{display:flex;}
             <div id="ssTitleText" style="color:#fff;font:700 clamp(20px,4vw,38px)/1.35 Helvetica,Arial,sans-serif;text-align:center;text-shadow:0 2px 10px rgba(0,0,0,.65);padding:0 6%;"></div>
           </div>
           <!-- Next-arpeggio preview (forma completa de la siguiente posición) -->
-          <div id="nextPreview" style="position:absolute;top:2%;right:1.5%;width:26%;max-width:340px;display:none;pointer-events:none;z-index:8;background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px 6px;backdrop-filter:blur(3px);">
-            <div id="nextPreviewLabel" style="font:600 12px Helvetica,Arial,sans-serif;color:rgba(255,255,255,.75);letter-spacing:.05em;margin-bottom:4px;text-align:center;"><span style="text-transform:uppercase;">Siguiente</span></div>
-            <svg id="nextPreviewSvg" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;"></svg>
+          <div id="nextPreview" style="position:absolute;top:2%;right:1.5%;width:26%;max-width:340px;display:none;pointer-events:none;z-index:8;">
+            <div style="background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px 6px;backdrop-filter:blur(3px);">
+              <div id="nextPreviewLabel" style="font:600 12px Helvetica,Arial,sans-serif;color:rgba(255,255,255,.75);letter-spacing:.05em;margin-bottom:4px;text-align:center;"><span style="text-transform:uppercase;">Siguiente</span></div>
+              <svg id="nextPreviewSvg" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block;"></svg>
+            </div>
+            <!-- Leyenda de colores (opcional, ver VIS_ELEMENTS 'legendIntro'): solo los primeros
+                 segundos de reproducción, con fundido — pensada para quien ve el vídeo sin haber
+                 visto nunca la app, no para reproducción interactiva repetida. Caja PROPIA, fuera
+                 del recuadro de la figura (feedback de Alberto: "tiene que estar fuera de ese
+                 cuadrado") — antes vivía dentro del mismo panel bordeado que la miniatura. -->
+            <div id="nextPreviewLegend" style="display:none;margin-top:40px;background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 16px;font:16px/1.7 Helvetica,Arial,sans-serif;color:rgba(255,255,255,.85);backdrop-filter:blur(3px);">
+              <div style="font:600 12px Helvetica,Arial,sans-serif;color:rgba(255,255,255,.75);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;text-align:center;">Notación</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:#E53935;"></span>Tónica de la pentatónica</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:transparent;border:3px solid #FFC94A;box-sizing:border-box;"></span>Tónica de la escala</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(38,198,218,.5);border:1px solid rgba(255,255,255,.25);box-sizing:border-box;"></span>Activa en la posición actual</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(38,198,218,.5);border:2px solid #ffffff;box-sizing:border-box;"></span>Seguirá activa en siguiente posición</div>
+              <div style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.14);border:2px dashed rgba(255,255,255,.6);box-sizing:border-box;"></span>Se activará en la siguiente posición</div>
+            </div>
           </div>
         </div>
         <div class="vis-bottom"><div class="strip" id="vStrip"></div></div>
@@ -3828,7 +3843,15 @@ function relayoutNotes(notes,win,srcRange,dstH){
   if(!w)return notes;
   const src=srcRange||_lastFretRange||{min:0,max:15};
   if(src.min===w.min&&src.max===w.max&&dstH==null)return notes;
-  const sg=neckGeo(src.min,src.max),dg=neckGeo(w.min,w.max,dstH);
+  // Sin dstH explícito (todos los llamadores salvo drawNextPreview), había que usar la MISMA
+  // H adaptativa que el frame activo (arpNeckH, solo "Arpegios en escala") — dejar que neckGeo
+  // cayera en su default (NECK_H=300) aquí desalineaba a las notas recolocadas (p.ej. al
+  // activar "Zona ampliada"/zoomToZone, que fuerza este camino con una ventana distinta a la
+  // nativa) del resto del frame, dibujado con la H real: las notas quedaban comprimidas en una
+  // franja más corta que la separación de cuerdas real, montándose unas sobre otras (bug
+  // reportado en vídeo real: "hay figuras que has cortado notas").
+  const effDstH=dstH!=null?dstH:(_lastParsedShown?.H||NECK_H);
+  const sg=neckGeo(src.min,src.max),dg=neckGeo(w.min,w.max,effDstH);
   const out=[];
   for(const n of notes){
     const c=noteCellOf(n,sg);
@@ -4547,6 +4570,19 @@ function drawNextPreview(nextNotes,nextChord,nat){
     }
   }
   setNeckPreviewShown(true);
+}
+// Leyenda de colores del panel de previsualización (VIS_ELEMENTS 'legendIntro'): fundido lineal
+// entre LEGEND_FADE_START y LEGEND_FADE_END segundos de audioEl.currentTime — pensado para un
+// vídeo lineal que se ve una sola vez desde el principio, no para una app interactiva (si el
+// espectador salta hacia delante en el primer visionado, se la pierde; asunción aceptada).
+const LEGEND_FADE_START=25,LEGEND_FADE_END=30;
+function updateNextPreviewLegend(elapsed){
+  const el=document.getElementById('nextPreviewLegend');if(!el)return;
+  if(getVisConfig().legendIntro!==true){el.style.display='none';return;}
+  el.style.display='';
+  const e=elapsed==null?(audioEl?.currentTime||0):elapsed;
+  const op=e>=LEGEND_FADE_END?0:(e<=LEGEND_FADE_START?1:1-(e-LEGEND_FADE_START)/(LEGEND_FADE_END-LEGEND_FADE_START));
+  el.style.opacity=String(op);
 }
 function setNeckPreviewShown(v){
   const p=document.getElementById('nextPreview');if(!p)return;
@@ -9389,6 +9425,49 @@ function asBuildArpeggioSVG(notes,chordInfo,chordName,fretMin,fretMax){
   return arpBuildZoneSVG(tones,chordName,'',[],fretMin,fretMax,true,notes);
 }
 
+// "Resaltar: Pentatónica" — bug real corregido (feedback de Alberto): la pentatónica de un
+// acorde NO es "el subconjunto de la caja de escala mayor cuyas notas caen en esa pentatónica"
+// (lo que se hacía antes, vía tnPentaToneMap+asBuildArpeggioSVG) — son 5 formas FIJAS e
+// independientes de la tónica (siempre 2 notas por cuerda, exactamente como las toca un
+// guitarrista), y esa caja compartida casi nunca coincide con ninguna de las 5. Intentar
+// "ensanchar" la caja compartida para que cupiera falló en la práctica (bug reportado: "notas
+// de más" — un traste añadido para completar la pentatónica de un acorde le daba 3 notas a
+// OTRO acorde en esa misma cuerda, porque la caja se comparte entre los 7 acordes diatónicos).
+// La solución real: cada acorde genera su PROPIA caja con seqBuildPentaBox (ya usada por
+// Secuencias, 2 notas/cuerda por construcción), eligiendo de sus 5 posiciones la más cercana
+// a la zona de la posición de escala activa (para que el vídeo no salte de un extremo al otro
+// del mástil entre acordes). El fondo tenue de la escala (posBox) sigue siendo la posición CAGED
+// original completa — decisión ya tomada el 2026-09-06 (ver comentario en asSendToEditor): las
+// notas de escala que no son de la pentatónica activa se ven igualmente como referencia.
+function asPickPentaBox(chord,refLo,refHi){
+  const m=(chord||'').match(/^([A-G][b#]?)(.*)/);if(!m)return null;
+  const rootRaw=m[1];
+  const ivs=resolveChordDefs(m[2].trim());
+  const isMinor=ivs.some(iv=>iv.n==='b3');
+  const scaleKey=isMinor?'penta_minor':'penta_major';
+  let best=null,bestScore=-Infinity;
+  for(let pos=0;pos<5;pos++){
+    const boxNotes=seqBuildPentaBox(rootRaw,scaleKey,pos);
+    if(!boxNotes||!boxNotes.length)continue;
+    const lo=Math.min(...boxNotes.map(n=>n.fret)),hi=Math.max(...boxNotes.map(n=>n.fret));
+    // seqBuildPentaBox puede degenerar en una forma discontinua (bug real, ya existente en
+    // Secuencias: findFretForSt salta lejos al no encontrar la nota objetivo cerca, partiendo
+    // la caja en dos zonas del mástil) — una caja real nunca pasa de 6 trastes de punta a punta.
+    if(hi-lo>6)continue;
+    const overlap=Math.min(hi,refHi)-Math.max(lo,refLo);
+    const score=overlap>=0?overlap:-Math.abs((lo+hi)/2-(refLo+refHi)/2);
+    if(score>bestScore){bestScore=score;best={notes:boxNotes,lo,hi};}
+  }
+  return best;
+}
+function asBuildPentaBoxSVG(chord,bgNotes,refLo,refHi){
+  const picked=asPickPentaBox(chord,refLo,refHi);
+  if(!picked)return null;
+  const fretMin=Math.max(0,Math.min(refLo,picked.lo)-1);
+  const fretMax=Math.min(24,Math.max(refHi,picked.hi)+1);
+  return arpBuildZoneSVG(picked.notes,chord,'',[],fretMin,fretMax,true,bgNotes);
+}
+
 // ── 4 · Usar el ejercicio ────────────────────────────────────────────────────
 // Dos modos, según si ya hay un tema (XML) cargado en Audio & XML:
 //  - MODO TEMA (cycles.length>0): respeta los compases/ciclos reales del tema — no
@@ -9420,6 +9499,9 @@ async function asSendToEditor(){
   // +1: deja un traste vacío de verdad a la derecha de la nota más aguda (feedback de Alberto:
   // con +2 sobraban dos trastes vacíos, demasiado hueco muerto en el mástil).
   const fretMax=Math.min(24,Math.max(...frets)+1);
+  // Región de referencia SIN el margen de +-1 de arriba (ver asPickPentaBox/asBuildPentaBoxSVG):
+  // solo pentatónica, para elegir de las 5 cajas fijas la más cercana a la posición de escala.
+  const scaleLo=Math.min(...frets),scaleHi=Math.max(...frets);
   const nameEl=document.getElementById('exerciseName');
   const asFrameLabel=asState.quality==='pentatonic'?'pentatónica':'arpegio';
   const exName=`${asState.root} ${SEQ_SCALE_LABELS[asState.scale]||asState.scale} (Forma ${AS_POS_LABELS[asState.posIdx]}) — ${asState.quality==='pentatonic'?'pentatónicas en escala':'arpegios diatónicos'}`;
@@ -9472,8 +9554,9 @@ async function asSendToEditor(){
         continue;
       }
       if(!(chord in cache)){
-        const info=asChordInfo(chord);
-        const svg=asBuildArpeggioSVG(notes,info,chord,fretMin,fretMax);
+        const svg=asState.quality==='pentatonic'
+          ?asBuildPentaBoxSVG(chord,notes,scaleLo,scaleHi)
+          :asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax);
         if(!svg){if(!unknown.includes(chord))unknown.push(chord);cache[chord]=null;}
         else{
           const parsed=svgStringToParsed(svg);
@@ -9518,8 +9601,9 @@ async function asSendToEditor(){
     let applied=0;
     all.forEach((b,bi)=>{
       const chord=(b.chord||'').trim();if(!chord)return;
-      const info=asChordInfo(chord);
-      const svg=asBuildArpeggioSVG(notes,info,chord,fretMin,fretMax);
+      const svg=asState.quality==='pentatonic'
+        ?asBuildPentaBoxSVG(chord,notes,scaleLo,scaleHi)
+        :asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax);
       if(!svg)return;
       const loc=barLoc[bi];if(!loc)return;
       const target=getTargetBars(loc.ci);
@@ -9987,6 +10071,7 @@ function tick(){
   if(!isPlaying)return;
   if(!audioEl){rafId=requestAnimationFrame(tick);return;}
   const elapsed=audioEl.currentTime;
+  updateNextPreviewLegend(elapsed);
   armEndFade();
   const introSec=getIntroSec()+getOffSec();
   const barSec=getBarSec();
@@ -11253,6 +11338,7 @@ const VIS_ELEMENTS=[
   // ── ARPEGGIOS / SCALES: transition between positions ──
   {id:'zoomToZone',label:'Zona ampliada: encuadra y centra la zona que se está trabajando (más grande)', def:false, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'nextPreview',label:'Previsualización del siguiente arpegio (forma completa, en la esquina)', def:false, group:'Transición · Arpegios', xtype:'arpeggios'},
+  {id:'legendIntro',label:'Leyenda de colores en la previsualización (rojo/anillo blanco/anillo dorado/fantasma) durante los primeros segundos, con fundido — para vídeos pensados para quien no conoce la app; necesita la previsualización activada', def:true, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'previewZoomToZone',label:'Previsualización: encuadrar y centrar en la zona de sus notas (independiente del mástil)', def:false, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'arpShowGhost',label:'Mostrar notas fantasma de la siguiente posición (fundido suave de aparición; las comunes se anclan)', def:true, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'arpGhostAlways',label:'Notas fantasma de la siguiente posición: mantenerlas SIEMPRE visibles (tenues desde el inicio, intensifican al acercarse el cambio) — necesita las fantasmas activadas', def:false, group:'Transición · Arpegios', xtype:'arpeggios'},
@@ -11339,6 +11425,7 @@ function applyVisConfig(cfg){
   }
   // Re-render scale row so chord-scale toggle takes effect immediately
   if(currentChordData&&typeof renderScaleRow==='function')renderScaleRow(currentChordData.chord,currentChordData.fn);
+  updateNextPreviewLegend();
 }
 function getScaleHint(chord,fn,barScaleText){
   const cfg=getVisConfig();
