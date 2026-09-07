@@ -1,21 +1,554 @@
 {
+  "C|major|G": [
+    {
+      "string": 0,
+      "fret": 5
+    },
+    {
+      "string": 0,
+      "fret": 7
+    },
+    {
+      "string": 0,
+      "fret": 8
+    },
+    {
+      "string": 1,
+      "fret": 5
+    },
+    {
+      "string": 1,
+      "fret": 7
+    },
+    {
+      "string": 1,
+      "fret": 8
+    },
+    {
+      "string": 2,
+      "fret": 5
+    },
+    {
+      "string": 2,
+      "fret": 7
+    },
+    {
+      "string": 3,
+      "fret": 4
+    },
+    {
+      "string": 3,
+      "fret": 5
+    },
+    {
+      "string": 3,
+      "fret": 7
+    },
+    {
+      "string": 4,
+      "fret": 5
+    },
+    {
+      "string": 4,
+      "fret": 6
+    },
+    {
+      "string": 4,
+      "fret": 8
+    },
+    {
+      "string": 5,
+      "fret": 5
+    },
+    {
+      "string": 5,
+      "fret": 7
+    },
+    {
+      "string": 5,
+      "fret": 8
+    }
+  ],
   "C|major|D": [
-    {"string":0,"fret":10},
-    {"string":0,"fret":12},
-    {"string":0,"fret":13},
-    {"string":1,"fret":10},
-    {"string":1,"fret":12},
-    {"string":2,"fret":9},
-    {"string":2,"fret":10},
-    {"string":2,"fret":12},
-    {"string":3,"fret":9},
-    {"string":3,"fret":10},
-    {"string":3,"fret":12},
-    {"string":4,"fret":10},
-    {"string":4,"fret":12},
-    {"string":4,"fret":13},
-    {"string":5,"fret":10},
-    {"string":5,"fret":12},
-    {"string":5,"fret":13}
+    {
+      "string": 0,
+      "fret": 10
+    },
+    {
+      "string": 0,
+      "fret": 12
+    },
+    {
+      "string": 0,
+      "fret": 13
+    },
+    {
+      "string": 1,
+      "fret": 10
+    },
+    {
+      "string": 1,
+      "fret": 12
+    },
+    {
+      "string": 2,
+      "fret": 9
+    },
+    {
+      "string": 2,
+      "fret": 10
+    },
+    {
+      "string": 2,
+      "fret": 12
+    },
+    {
+      "string": 3,
+      "fret": 9
+    },
+    {
+      "string": 3,
+      "fret": 10
+    },
+    {
+      "string": 3,
+      "fret": 12
+    },
+    {
+      "string": 4,
+      "fret": 10
+    },
+    {
+      "string": 4,
+      "fret": 12
+    },
+    {
+      "string": 4,
+      "fret": 13
+    },
+    {
+      "string": 5,
+      "fret": 10
+    },
+    {
+      "string": 5,
+      "fret": 12
+    },
+    {
+      "string": 5,
+      "fret": 13
+    }
+  ],
+  "C|major|A": [
+    {
+      "string": 0,
+      "fret": 3
+    },
+    {
+      "string": 0,
+      "fret": 5
+    },
+    {
+      "string": 1,
+      "fret": 2
+    },
+    {
+      "string": 1,
+      "fret": 3
+    },
+    {
+      "string": 1,
+      "fret": 5
+    },
+    {
+      "string": 2,
+      "fret": 2
+    },
+    {
+      "string": 2,
+      "fret": 3
+    },
+    {
+      "string": 2,
+      "fret": 5
+    },
+    {
+      "string": 3,
+      "fret": 2
+    },
+    {
+      "string": 3,
+      "fret": 4
+    },
+    {
+      "string": 3,
+      "fret": 5
+    },
+    {
+      "string": 4,
+      "fret": 3
+    },
+    {
+      "string": 4,
+      "fret": 5
+    },
+    {
+      "string": 4,
+      "fret": 6
+    },
+    {
+      "string": 5,
+      "fret": 3
+    },
+    {
+      "string": 5,
+      "fret": 5
+    }
+  ],
+  "A|minor|E": [
+    {
+      "string": 0,
+      "fret": 5
+    },
+    {
+      "string": 0,
+      "fret": 7
+    },
+    {
+      "string": 1,
+      "fret": 5
+    },
+    {
+      "string": 1,
+      "fret": 7
+    },
+    {
+      "string": 2,
+      "fret": 5
+    },
+    {
+      "string": 2,
+      "fret": 7
+    },
+    {
+      "string": 3,
+      "fret": 4
+    },
+    {
+      "string": 3,
+      "fret": 5
+    },
+    {
+      "string": 3,
+      "fret": 7
+    },
+    {
+      "string": 4,
+      "fret": 5
+    },
+    {
+      "string": 4,
+      "fret": 6
+    },
+    {
+      "string": 5,
+      "fret": 5
+    },
+    {
+      "string": 5,
+      "fret": 7
+    },
+    {
+      "string": 0,
+      "fret": 8
+    },
+    {
+      "string": 1,
+      "fret": 8
+    },
+    {
+      "string": 4,
+      "fret": 8
+    },
+    {
+      "string": 5,
+      "fret": 8
+    }
+  ],
+  "A|minor|D": [
+    {
+      "string": 0,
+      "fret": 7
+    },
+    {
+      "string": 0,
+      "fret": 8
+    },
+    {
+      "string": 1,
+      "fret": 7
+    },
+    {
+      "string": 1,
+      "fret": 8
+    },
+    {
+      "string": 2,
+      "fret": 7
+    },
+    {
+      "string": 2,
+      "fret": 9
+    },
+    {
+      "string": 3,
+      "fret": 7
+    },
+    {
+      "string": 3,
+      "fret": 9
+    },
+    {
+      "string": 4,
+      "fret": 8
+    },
+    {
+      "string": 5,
+      "fret": 7
+    },
+    {
+      "string": 5,
+      "fret": 8
+    },
+    {
+      "string": 0,
+      "fret": 10
+    },
+    {
+      "string": 1,
+      "fret": 10
+    },
+    {
+      "string": 2,
+      "fret": 10
+    },
+    {
+      "string": 3,
+      "fret": 10
+    },
+    {
+      "string": 4,
+      "fret": 10
+    },
+    {
+      "string": 5,
+      "fret": 10
+    }
+  ],
+  "A|minor|C": [
+    {
+      "string": 0,
+      "fret": 10
+    },
+    {
+      "string": 0,
+      "fret": 12
+    },
+    {
+      "string": 1,
+      "fret": 10
+    },
+    {
+      "string": 1,
+      "fret": 12
+    },
+    {
+      "string": 2,
+      "fret": 9
+    },
+    {
+      "string": 2,
+      "fret": 10
+    },
+    {
+      "string": 2,
+      "fret": 12
+    },
+    {
+      "string": 3,
+      "fret": 9
+    },
+    {
+      "string": 3,
+      "fret": 10
+    },
+    {
+      "string": 3,
+      "fret": 12
+    },
+    {
+      "string": 4,
+      "fret": 10
+    },
+    {
+      "string": 4,
+      "fret": 12
+    },
+    {
+      "string": 5,
+      "fret": 10
+    },
+    {
+      "string": 5,
+      "fret": 12
+    },
+    {
+      "string": 0,
+      "fret": 13
+    },
+    {
+      "string": 4,
+      "fret": 13
+    },
+    {
+      "string": 5,
+      "fret": 13
+    }
+  ],
+  "A|minor|A": [
+    {
+      "string": 0,
+      "fret": 12
+    },
+    {
+      "string": 0,
+      "fret": 13
+    },
+    {
+      "string": 1,
+      "fret": 12
+    },
+    {
+      "string": 1,
+      "fret": 14
+    },
+    {
+      "string": 2,
+      "fret": 12
+    },
+    {
+      "string": 2,
+      "fret": 14
+    },
+    {
+      "string": 3,
+      "fret": 12
+    },
+    {
+      "string": 3,
+      "fret": 14
+    },
+    {
+      "string": 4,
+      "fret": 12
+    },
+    {
+      "string": 4,
+      "fret": 13
+    },
+    {
+      "string": 5,
+      "fret": 12
+    },
+    {
+      "string": 5,
+      "fret": 13
+    },
+    {
+      "string": 0,
+      "fret": 15
+    },
+    {
+      "string": 1,
+      "fret": 15
+    },
+    {
+      "string": 2,
+      "fret": 15
+    },
+    {
+      "string": 4,
+      "fret": 15
+    },
+    {
+      "string": 5,
+      "fret": 15
+    }
+  ],
+  "A|minor|G": [
+    {
+      "string": 0,
+      "fret": 3
+    },
+    {
+      "string": 0,
+      "fret": 5
+    },
+    {
+      "string": 1,
+      "fret": 2
+    },
+    {
+      "string": 1,
+      "fret": 3
+    },
+    {
+      "string": 1,
+      "fret": 5
+    },
+    {
+      "string": 2,
+      "fret": 2
+    },
+    {
+      "string": 2,
+      "fret": 3
+    },
+    {
+      "string": 2,
+      "fret": 5
+    },
+    {
+      "string": 3,
+      "fret": 2
+    },
+    {
+      "string": 3,
+      "fret": 4
+    },
+    {
+      "string": 3,
+      "fret": 5
+    },
+    {
+      "string": 4,
+      "fret": 3
+    },
+    {
+      "string": 4,
+      "fret": 5
+    },
+    {
+      "string": 5,
+      "fret": 3
+    },
+    {
+      "string": 5,
+      "fret": 5
+    },
+    {
+      "string": 4,
+      "fret": 6
+    }
   ]
 }

@@ -851,7 +851,7 @@ body.presentation #channelWatermark{display:flex;}
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:transparent;border:3px solid #FFC94A;box-sizing:border-box;"></span>Tónica de la escala</div>
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(38,198,218,.5);border:1px solid rgba(255,255,255,.25);box-sizing:border-box;"></span>Activa en la posición actual</div>
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(38,198,218,.5);border:2px solid #ffffff;box-sizing:border-box;"></span>Seguirá activa en siguiente posición</div>
-              <div style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.14);border:2px dashed rgba(255,255,255,.6);box-sizing:border-box;"></span>Se activará en la siguiente posición</div>
+              <div style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.14);border:2px dashed rgba(255,255,255,.6);box-sizing:border-box;"></span>Nota de la escala fuera de la pentatónica</div>
             </div>
           </div>
         </div>
@@ -3082,6 +3082,21 @@ function loadXML(input){
           dk=isMinor?root+'m':root;
         }
       }
+      // <fifths> por sí solo no distingue una tonalidad mayor de su relativa menor (0 alteraciones
+      // vale tanto para Do mayor como para La menor) — MusicXML sí podría llevar <mode>, pero BiaB
+      // no lo exporta (bug reportado: pieza en La menor mostrando "Tonalidad: C"). Si el primer
+      // acorde es menor y su tónica es justo la relativa menor de la tonalidad detectada por
+      // fifths, se corrige a esa relativa menor (mismo criterio que el fallback de arriba, pero
+      // aplicado también cuando fifths SÍ dio una lectura, no solo cuando faltaba del todo).
+      if(dk&&!dk.endsWith('m')&&parsed.length>0){
+        const first=parsed[0].chord;
+        const rootM=first.match(/^([A-G][b#]?)/);
+        if(rootM){
+          const quality=first.slice(rootM[1].length).toLowerCase();
+          const isMinorChord=quality.startsWith('m')&&!quality.startsWith('maj');
+          if(isMinorChord&&noteToSt(rootM[1])===((noteToSt(dk)-3)%12+12)%12)dk=rootM[1]+'m';
+        }
+      }
       if(!dk)dk='C';
       if(parsed.length>0){
         // Don't wipe slots if an exercise with images is already loaded and chords match
@@ -4724,7 +4739,9 @@ function drawUnifiedFretboard(canvas,fretMin=0,fretMax=15,H,openRight=false){
   // Número de traste: con alto adaptativo (H!==NECK_H, ver arpNeckH) la última cuerda queda
   // más abajo y sus notas, más grandes, tapaban el número a "H-10" (bug reportado: "la nota se
   // monta sobre el traste") — se acerca más al borde inferior real. Con H===NECK_H, como siempre.
-  const fretNumY=H===NECK_H?H-10:H-4;
+  // +5 extra (feedback de Alberto): el anillo dorado de tónica de escala (r+4, solo "Arpegios en
+  // escala") en la 6ª cuerda seguía rozando el número con el H-4 de arriba.
+  const fretNumY=H===NECK_H?H-10:H+1;
 
   if(realistic){
     // ── Modo realista: cuerdas metálicas con volumen y trastes/cejilla con brillo ──────
@@ -9425,49 +9442,6 @@ function asBuildArpeggioSVG(notes,chordInfo,chordName,fretMin,fretMax){
   return arpBuildZoneSVG(tones,chordName,'',[],fretMin,fretMax,true,notes);
 }
 
-// "Resaltar: Pentatónica" — bug real corregido (feedback de Alberto): la pentatónica de un
-// acorde NO es "el subconjunto de la caja de escala mayor cuyas notas caen en esa pentatónica"
-// (lo que se hacía antes, vía tnPentaToneMap+asBuildArpeggioSVG) — son 5 formas FIJAS e
-// independientes de la tónica (siempre 2 notas por cuerda, exactamente como las toca un
-// guitarrista), y esa caja compartida casi nunca coincide con ninguna de las 5. Intentar
-// "ensanchar" la caja compartida para que cupiera falló en la práctica (bug reportado: "notas
-// de más" — un traste añadido para completar la pentatónica de un acorde le daba 3 notas a
-// OTRO acorde en esa misma cuerda, porque la caja se comparte entre los 7 acordes diatónicos).
-// La solución real: cada acorde genera su PROPIA caja con seqBuildPentaBox (ya usada por
-// Secuencias, 2 notas/cuerda por construcción), eligiendo de sus 5 posiciones la más cercana
-// a la zona de la posición de escala activa (para que el vídeo no salte de un extremo al otro
-// del mástil entre acordes). El fondo tenue de la escala (posBox) sigue siendo la posición CAGED
-// original completa — decisión ya tomada el 2026-09-06 (ver comentario en asSendToEditor): las
-// notas de escala que no son de la pentatónica activa se ven igualmente como referencia.
-function asPickPentaBox(chord,refLo,refHi){
-  const m=(chord||'').match(/^([A-G][b#]?)(.*)/);if(!m)return null;
-  const rootRaw=m[1];
-  const ivs=resolveChordDefs(m[2].trim());
-  const isMinor=ivs.some(iv=>iv.n==='b3');
-  const scaleKey=isMinor?'penta_minor':'penta_major';
-  let best=null,bestScore=-Infinity;
-  for(let pos=0;pos<5;pos++){
-    const boxNotes=seqBuildPentaBox(rootRaw,scaleKey,pos);
-    if(!boxNotes||!boxNotes.length)continue;
-    const lo=Math.min(...boxNotes.map(n=>n.fret)),hi=Math.max(...boxNotes.map(n=>n.fret));
-    // seqBuildPentaBox puede degenerar en una forma discontinua (bug real, ya existente en
-    // Secuencias: findFretForSt salta lejos al no encontrar la nota objetivo cerca, partiendo
-    // la caja en dos zonas del mástil) — una caja real nunca pasa de 6 trastes de punta a punta.
-    if(hi-lo>6)continue;
-    const overlap=Math.min(hi,refHi)-Math.max(lo,refLo);
-    const score=overlap>=0?overlap:-Math.abs((lo+hi)/2-(refLo+refHi)/2);
-    if(score>bestScore){bestScore=score;best={notes:boxNotes,lo,hi};}
-  }
-  return best;
-}
-function asBuildPentaBoxSVG(chord,bgNotes,refLo,refHi){
-  const picked=asPickPentaBox(chord,refLo,refHi);
-  if(!picked)return null;
-  const fretMin=Math.max(0,Math.min(refLo,picked.lo)-1);
-  const fretMax=Math.min(24,Math.max(refHi,picked.hi)+1);
-  return arpBuildZoneSVG(picked.notes,chord,'',[],fretMin,fretMax,true,bgNotes);
-}
-
 // ── 4 · Usar el ejercicio ────────────────────────────────────────────────────
 // Dos modos, según si ya hay un tema (XML) cargado en Audio & XML:
 //  - MODO TEMA (cycles.length>0): respeta los compases/ciclos reales del tema — no
@@ -9499,9 +9473,6 @@ async function asSendToEditor(){
   // +1: deja un traste vacío de verdad a la derecha de la nota más aguda (feedback de Alberto:
   // con +2 sobraban dos trastes vacíos, demasiado hueco muerto en el mástil).
   const fretMax=Math.min(24,Math.max(...frets)+1);
-  // Región de referencia SIN el margen de +-1 de arriba (ver asPickPentaBox/asBuildPentaBoxSVG):
-  // solo pentatónica, para elegir de las 5 cajas fijas la más cercana a la posición de escala.
-  const scaleLo=Math.min(...frets),scaleHi=Math.max(...frets);
   const nameEl=document.getElementById('exerciseName');
   const asFrameLabel=asState.quality==='pentatonic'?'pentatónica':'arpegio';
   const exName=`${asState.root} ${SEQ_SCALE_LABELS[asState.scale]||asState.scale} (Forma ${AS_POS_LABELS[asState.posIdx]}) — ${asState.quality==='pentatonic'?'pentatónicas en escala':'arpegios diatónicos'}`;
@@ -9554,9 +9525,7 @@ async function asSendToEditor(){
         continue;
       }
       if(!(chord in cache)){
-        const svg=asState.quality==='pentatonic'
-          ?asBuildPentaBoxSVG(chord,notes,scaleLo,scaleHi)
-          :asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax);
+        const svg=asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax);
         if(!svg){if(!unknown.includes(chord))unknown.push(chord);cache[chord]=null;}
         else{
           const parsed=svgStringToParsed(svg);
@@ -9601,9 +9570,7 @@ async function asSendToEditor(){
     let applied=0;
     all.forEach((b,bi)=>{
       const chord=(b.chord||'').trim();if(!chord)return;
-      const svg=asState.quality==='pentatonic'
-        ?asBuildPentaBoxSVG(chord,notes,scaleLo,scaleHi)
-        :asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax);
+      const svg=asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax);
       if(!svg)return;
       const loc=barLoc[bi];if(!loc)return;
       const target=getTargetBars(loc.ci);
