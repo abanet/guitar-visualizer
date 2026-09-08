@@ -848,10 +848,11 @@ body.presentation #channelWatermark{display:flex;}
             <div id="nextPreviewLegend" style="display:none;margin-top:40px;background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 16px;font:16px/1.7 Helvetica,Arial,sans-serif;color:rgba(255,255,255,.85);backdrop-filter:blur(3px);">
               <div style="font:600 12px Helvetica,Arial,sans-serif;color:rgba(255,255,255,.75);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;text-align:center;">Notación</div>
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:#E53935;"></span>Tónica de la pentatónica</div>
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:transparent;border:3px solid #FFC94A;box-sizing:border-box;"></span>Tónica de la escala</div>
+              <div class="legend-scale-only" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:transparent;border:3px solid #FFC94A;box-sizing:border-box;"></span>Tónica de la escala</div>
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(38,198,218,.5);border:1px solid rgba(255,255,255,.25);box-sizing:border-box;"></span>Activa en la posición actual</div>
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(38,198,218,.5);border:2px solid #ffffff;box-sizing:border-box;"></span>Seguirá activa en siguiente posición</div>
-              <div style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.14);border:2px dashed rgba(255,255,255,.6);box-sizing:border-box;"></span>Nota de la escala fuera de la pentatónica</div>
+              <div class="legend-scale-only" style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.14);border:2px dashed rgba(255,255,255,.6);box-sizing:border-box;"></span>Nota de la escala fuera de la pentatónica</div>
+              <div class="legend-ghost-only" style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.12);border:2px dashed rgba(38,198,218,.65);box-sizing:border-box;"></span>Se activará en la siguiente posición</div>
             </div>
           </div>
         </div>
@@ -1439,6 +1440,10 @@ body.presentation #channelWatermark{display:flex;}
           séptima (B7, D7, G7…) en Forma A usará esa misma estructura a partir de ahí — pulsa este botón otra vez
           después de corregir para aplicarlo a todo el tema de golpe.
         </p>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-bottom:10px;">
+          <input type="checkbox" id="ashUsePenta" style="width:15px;height:15px;cursor:pointer;">
+          Pentatónica del acorde en vez de arpegio (mayor si el acorde es mayor, menor en cualquier otro caso — sin patrón corregible a mano, siempre por geometría)
+        </label>
         <div class="field-row" style="gap:10px;align-items:center;">
           <button class="btn accent" onclick="ashAutoGenerateForTheme()"><i class="ti ti-bolt"></i> Generar automáticamente para el tema</button>
           <span id="ashAutoStatus" style="font-size:12px;color:var(--text2);"></span>
@@ -3780,11 +3785,20 @@ const VIEW_MIN_FRETS=5;
 // `H` opcional (por defecto NECK_H): SOLO lo usa "Arpegios en escala" (ver arpNeckH) para una
 // separación de cuerdas más alta cuando la posición cabe en pocos trastes — el resto de
 // llamadas, sin H, se comportan exactamente igual que antes.
-function neckGeo(fretMin,fretMax,H){
+// forceFloating (opcional, def. false): usa SIEMPRE la fórmula de leftPad/fretW de "ventana
+// abierta" (más abajo), aunque fretMin sea 0 — para que varias posiciones de una MISMA tanda que
+// comparten ancho (mismo fretMax-fretMin) pero no todas tocan la cejilla no acaben con geometrías
+// distintas entre sí (leftPad fijo=40 vs leftPad=fretW). Ver ashSendToEditor ("Pentatónica del
+// acorde"): con el ancho ya igualado, el salto de tamaño seguía dándose justo en las posiciones
+// que SÍ tocaban traste 0 frente a las que no (bug reportado, confirmado por Alberto: "ocurre
+// cuando hay cuerdas al aire"). Solo lo usa ese llamador; el resto de la app (una única posición
+// fija por ejercicio, sin este problema) sigue con la fórmula de siempre.
+function neckGeo(fretMin,fretMax,H,forceFloating){
+  if(forceFloating===undefined)forceFloating=(typeof _lastForceFloating!=='undefined'&&_lastForceFloating===true);
   H=H||NECK_H;
   const n=Math.max(1,fretMax-fretMin);
   let leftPad,fretW;
-  if(fretMin===0){
+  if(fretMin===0&&!forceFloating){
     leftPad=40;fretW=(NECK_W-leftPad-NECK_RIGHT)/n;
   }else{
     // Ventana "abierta" (no empieza en la cejilla): se reserva UNA casilla de traste a la
@@ -3937,6 +3951,15 @@ function onPreviewFretsInputChange(id,value){
   setPreviewMaxFrets(value);
 }
 let _lastFretRange=null;    // {min,max} NATIVO del último frame mostrado (el de su data-fretrange)
+// true si el ÚLTIMO frame mostrado se generó con forceFloating (ver neckGeo/arpBuildZoneSVG —
+// "Pentatónica del acorde"). neckGeo lo consulta como valor por defecto cuando el llamador no
+// pasa el argumento explícito (todos los existentes salvo arpBuildZoneSVG/ashSendToEditor, que sí
+// controlan el suyo propio) — así drawUnifiedFretboard/computeViewWin/relayoutNotes (que NUNCA lo
+// pasaban) usan automáticamente la MISMA geometría con la que se hornearon las notas del frame
+// activo, sin tener que tocar cada llamada una por una (bug reportado: "se descolocan las notas
+// del mástil" — la rejilla se dibujaba con leftPad=40 fijo mientras las notas usaban leftPad
+// flotante, en cuanto la ventana compartida llegaba a tocar el traste 0).
+let _lastForceFloating=false;
 let _lastZoomNotes=null;    // notas que encuadra "Zona ampliada" (activa + siguiente posición)
 let _viewWin=null;          // {min,max} ventana efectiva actualmente dibujada
 let _lastParsedShown=null;  // último parsed pintado (para re-dibujar al cambiar la ventana)
@@ -3964,7 +3987,15 @@ function windowAroundFrets(a,b,nat,padFront,padBack,minFrets){
   // arbitrario sin límite físico real. Si el cálculo deja lo=1, se trata igual que lo=0 (cejilla
   // cerrada) en vez de como una ventana "abierta" — antes se veía como cualquier otro recorte
   // intermedio, sin cejilla, aunque el traste 1 estuviera realmente a la vista (bug reportado).
-  if(lo===1)lo=0;
+  // OJO: solo tiene sentido si `nat` (la ventana NATIVA del frame) también arranca en el traste 0
+  // — es decir, la cejilla real está dentro del rango direccionable de este frame. Con
+  // "Pentatónica del acorde" cada acorde tiene su PROPIA ventana nativa, deliberadamente sin
+  // llegar al 0 (para compartir el mismo ancho entre acordes, ver ashSendToEditor) — nat.min=1
+  // ahí NO es "un scroll cualquiera que casualmente llegó cerca de la cejilla", es el límite
+  // legítimo de esa forma concreta, y colapsarlo a 0 se sale de esa ventana (bug reportado: "de
+  // Gm a Dm hay un salto en el tamaño del mástil" — la ventana calculada [0,7] no correspondía a
+  // NINGUNA de las dos formas reales, ver arpBuildZoneSVG/neckGeo).
+  if(lo===1&&nat.min===0)lo=0;
   return{lo,hi};
 }
 // Ventana efectiva a partir del rango nativo del frame + (opcional) las notas a encuadrar.
@@ -4032,21 +4063,49 @@ function getArpZoneUnionNotes(){
     const all=getAllBars();
     if(!all||!all.length)return null;
     const notes=[];
+    let commonRange=undefined,homogeneous=true;
     all.forEach(b=>(b.imgs||[]).forEach(s=>{
-      if(s&&s.type==='svg'&&s.svgParsed&&s.svgParsed.notes)notes.push(...s.svgParsed.notes);
+      if(s&&s.type==='svg'&&s.svgParsed&&s.svgParsed.notes){
+        notes.push(...s.svgParsed.notes);
+        // Esta unión solo tiene sentido si TODOS los frames comparten la MISMA ventana nativa
+        // (fretMin/fretMax): sus (cx,cy) horneados están en ese caso en un único sistema de
+        // coordenadas compartido (caso de siempre: "Estructuras en escala", una sola posición
+        // fija para todo el ejercicio). Con "Pentatónica del acorde" (varias posiciones reales,
+        // cada una con su propia ventana) mezclar esas coordenadas sin más da fretos/posiciones
+        // sin sentido al reinterpretarlas — bug reportado: "de Gm a Dm hay un salto en el
+        // tamaño del mástil, algo cambia" (cada cambio de compás recalculaba esta unión con
+        // datos ya corruptos). Si las ventanas nativas difieren, no hay unión fiable: se
+        // devuelve null y el llamador (applyZoomToZone) cae al camino normal, por-frame.
+        const fr=s.svgParsed.fretRange;
+        if(fr){
+          const key=fr.min+','+fr.max;
+          if(commonRange===undefined)commonRange=key;
+          else if(commonRange!==key)homogeneous=false;
+        }
+      }
     }));
+    if(!homogeneous)return null;
     return notes.length?notes:null;
   }catch(e){return null;}
 }
 // Punto de entrada de "Zona ampliada" (se llama en cada cambio de compás con las notas de la
 // posición actual + la siguiente, o con null para volver al mástil entero). Ya NO toca el
 // viewBox: recalcula la ventana y, SOLO si ha cambiado, re-dibuja el frame con la nueva.
-function applyZoomToZone(notesList){
+// explicitNat (opcional): rango nativo a usar en vez del global _lastFretRange. Este último se
+// actualiza en renderSVGStatic al pintar el frame — si applyZoomToZone se llama justo en el
+// cambio de compás ANTES de que ese pintado haya corrido para el frame NUEVO, _lastFretRange
+// todavía describe el frame ANTERIOR (p.ej. Gm) mientras notesList ya trae las notas del NUEVO
+// (Dm): windowAroundFrets reinterpreta esas coordenadas con la ventana equivocada y calcula un
+// _viewWin que ya no coincide con ninguna de las dos ventanas reales (bug reportado: "de Gm a Dm
+// hay un salto en el tamaño del mástil" — esta carrera, no la mezcla ya corregida, era la causa).
+// Los llamadores que YA conocen con certeza la ventana nativa del frame activo (ver
+// exArpeggiosApproach) la pasan aquí explícitamente en vez de fiarse de ese global mutable.
+function applyZoomToZone(notesList,explicitNat){
   // Si hay un tema de arpegios cargado, la unión de todo el ejercicio manda sobre el par
   // activo/siguiente que pasan las llamadas — ver comentario de getArpZoneUnionNotes arriba.
   const union=notesList?getArpZoneUnionNotes():null;
   _lastZoomNotes=(union&&union.length)?union:((notesList&&notesList.length)?notesList:null);
-  const win=computeViewWin(_lastFretRange,_lastZoomNotes);
+  const win=computeViewWin(explicitNat||_lastFretRange,_lastZoomNotes);
   if(_viewWin&&_viewWin.min===win.min&&_viewWin.max===win.max)return;
   _viewWin=win;
   if(_relayouting||!_lastParsedShown)return;
@@ -4380,11 +4439,22 @@ function animateCrossfade(activeNotes,nextNotes,durationMs,nextChord){
 //   ghostProg (0→1 over the last 3 beats): next position's ghosts form — faint→full color.
 //   fadeProg  (0→1 over the last 1 beat):  old non-common notes fade out.
 // Common notes stay fully visible the whole time (no fade). Called every frame.
-function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,colorProg){
+// nextNat (opcional): rango de trastes NATIVO en el que se generó nextNotes (data-fretrange del
+// frame de la posición siguiente, igual que ya recibe drawNextPreview) — necesario cuando cada
+// posición tiene su propia ventana de trastes en vez de compartir una fija para todo el ejercicio
+// (p.ej. "Pentatónica del acorde", donde cada acorde real mueve la caja). Sin esto, relayoutNotes
+// interpretaba las coordenadas de nextNotes como si vinieran de la ventana de la posición ACTUAL
+// (_lastFretRange) — con ventanas distintas por acorde, eso descolocaba las fantasmas del todo
+// (bug reportado: "problemas con posición de notas fantasma").
+function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,colorProg,nextNat){
   const overlay=document.getElementById('ghostCanvas');
   const svgCanvas=document.getElementById('svgCanvas');
   if(!overlay||!svgCanvas||!nextNotes)return;
-  activeNotes=relayoutNotes(activeNotes);nextNotes=relayoutNotes(nextNotes);
+  // dstH se deja SIN especificar (undefined): las fantasmas se pintan sobre el mástil ACTUAL, así
+  // que tienen que usar SU alto de destino (el de la posición activa, vía _lastParsedShown), no
+  // el de origen de nextNotes — solo el RANGO de trastes de origen (nextNat) es el de la posición
+  // siguiente, para interpretar bien sus coordenadas horneadas.
+  activeNotes=relayoutNotes(activeNotes);nextNotes=relayoutNotes(nextNotes,null,nextNat||null);
   const g1=Math.max(0,Math.min(1,ghostProg==null?0:ghostProg));
   const g2=Math.max(0,Math.min(1,fadeProg==null?0:fadeProg));
   const isCommon=(n,arr)=>arr&&arr.some(c=>Math.abs(c.cx-n.cx)<6&&Math.abs(c.cy-n.cy)<6);
@@ -4576,7 +4646,7 @@ function drawNextPreview(nextNotes,nextChord,nat){
     // el nombre completo de la pentatónica que viene ("Pentatónica mayor de F") — en su propia
     // línea (el panel es estrecho, no cabe junto a "SIGUIENTE:", ver feedback de Alberto
     // 2026-09-06). Fuera de ese contexto, igual que siempre.
-    const scaleName=asScaleNameFor(nextChord);
+    const scaleName=asScaleNameFor(nextChord)||(nat&&nat.pentaName)||'';
     if(scaleName){
       lbl.appendChild(document.createElement('br'));
       lbl.appendChild(document.createTextNode(scaleName));
@@ -4595,6 +4665,17 @@ function updateNextPreviewLegend(elapsed){
   const el=document.getElementById('nextPreviewLegend');if(!el)return;
   if(getVisConfig().legendIntro!==true){el.style.display='none';return;}
   el.style.display='';
+  // "Tónica de la escala" / "Nota de la escala fuera de la pentatónica" solo tienen sentido con
+  // un fondo de escala fija de verdad detrás (bgAuto.mode==='scale', ver bgAuto más abajo) —
+  // "Estructuras en escala"/"Resaltar: Pentatónica". El resto de vistas de arpegios (incl.
+  // "Pentatónica del acorde" de la pestaña Arpegios) no tienen ningún fondo de escala, así que
+  // esas dos filas no aplican ahí — y sí tienen, en cambio, la fantasma real (arpShowGhost) que
+  // ninguna fila describía hasta ahora.
+  const hasScaleBg=typeof bgAuto!=='undefined'&&bgAuto&&bgAuto.mode==='scale';
+  const scaleOnly=document.querySelectorAll('#nextPreviewLegend .legend-scale-only');
+  const ghostOnly=document.querySelectorAll('#nextPreviewLegend .legend-ghost-only');
+  scaleOnly.forEach(r=>{r.style.display=hasScaleBg?'flex':'none';});
+  ghostOnly.forEach(r=>{r.style.display=hasScaleBg?'none':'flex';});
   const e=elapsed==null?(audioEl?.currentTime||0):elapsed;
   const op=e>=LEGEND_FADE_END?0:(e<=LEGEND_FADE_START?1:1-(e-LEGEND_FADE_START)/(LEGEND_FADE_END-LEGEND_FADE_START));
   el.style.opacity=String(op);
@@ -4609,10 +4690,10 @@ function hideNextPreview(){const p=document.getElementById('nextPreview');if(p)p
 
 // Mark the common notes (between the current position and the next distinct one) with the
 // white anchor ring — used to keep them highlighted at all times, outside the change window.
-function markCommonNotes(activeNotes,nextNotes){
+function markCommonNotes(activeNotes,nextNotes,nextNat){
   const svgCanvas=document.getElementById('svgCanvas');
   if(!svgCanvas||!nextNotes)return;
-  nextNotes=relayoutNotes(nextNotes);
+  nextNotes=relayoutNotes(nextNotes,null,nextNat||null);
   const isCommon=(n,arr)=>arr&&arr.some(c=>Math.abs(c.cx-n.cx)<6&&Math.abs(c.cy-n.cy)<6);
   const ringOn=getVisConfig().hintCommonRing!==false;
   const pulseOn=ringOn&&getVisConfig().hintCommonPulse!==false;
@@ -4829,6 +4910,7 @@ function renderSVGStatic(parsed){
   {const _fr=(parsed.raw||'').match(/data-fretrange="(-?\d+),(-?\d+)"/);
    _lastFretRange=_fr?{min:parseInt(_fr[1],10),max:parseInt(_fr[2],10)}
                     :(parsed.fretRange||null);}
+  _lastForceFloating=parsed.forceFloating===true;
   {const _usesZoom=(EXERCISES[exFor(parsed)]||{}).usesZoom===true;
    if(!_usesZoom)_lastZoomNotes=null; // tríadas/sp/chord tones: mástil entero, sin zoom dinámico
    _viewWin=computeViewWin(_lastFretRange,_lastZoomNotes);}
@@ -4932,7 +5014,12 @@ function renderSVGStatic(parsed){
     // esté o no sonando ahora mismo, para no perder de vista en qué tonalidad estamos aunque el
     // acorde activo sea otro. Solo en "Arpegios en escala" (asScaleGen) — el resto de vistas no
     // tienen este concepto de tonalidad de fondo.
-    if(parsed.asScaleGen===true&&getVisConfig().scaleTonicRing!==false&&Number.isFinite(note.st)&&bgAuto&&bgAuto.root){
+    // bgAuto.mode==='scale' (no solo bgAuto.root, siempre truthy por el valor por defecto
+    // {mode:'off',root:'C',...}): sin este chequeo, cualquier vista con asScaleGen=true pero SIN
+    // fondo de escala activado (p.ej. "Pentatónica del acorde" de la pestaña Arpegios, que
+    // reutiliza asScaleGen solo por sus proporciones de mástil) pintaría un anillo dorado
+    // espurio en cualquier nota de clase de altura C (bug latente: root:'C' por defecto).
+    if(parsed.asScaleGen===true&&getVisConfig().scaleTonicRing!==false&&Number.isFinite(note.st)&&bgAuto&&bgAuto.mode==='scale'&&bgAuto.root){
       const scaleRootPc=noteToSt(bgAuto.root);
       if(scaleRootPc>=0&&((note.st%12)+12)%12===scaleRootPc){
         const ring=document.createElementNS(NS,'circle');
@@ -5627,7 +5714,8 @@ function svgStringToParsed(svgStr){
   // (bug de la misma familia que el de neckGeo/drawUnifiedFretboard, ver comentario ahí).
   const _nh=(svgStr||'').match(/data-neckh="(\d+)"/);
   const H=_nh?parseInt(_nh[1],10):NECK_H;
-  const out={W:NECK_W,H,notes,raw:svgStr,generated:true};
+  const forceFloating=/data-forcefloating="1"/.test(svgStr||'');
+  const out={W:NECK_W,H,notes,raw:svgStr,generated:true,forceFloating};
   // data-posbox (solo "Arpegios en escala", ver arpBuildZoneSVG): celdas exactas de la forma
   // generada — buildAutoBg lo usa para no salirse de la posición al pintar el fantasma de escala.
   // ARRAY, no Set: los fotogramas "sin acorde" reutilizan este svgParsed vía
@@ -5635,10 +5723,16 @@ function svgStringToParsed(svgStr){
   // perdiendo .has() (bug reportado: "posBox.has is not a function").
   {const _pb=(svgStr||'').match(/data-posbox="([^"]*)"/);
    if(_pb&&_pb[1])out.posBox=_pb[1].split(',').filter(Boolean);}
+  // data-pentaname (ver arpBuildZoneSVG): nombre de la pentatónica de este frame concreto
+  // ("Pentatónica menor de A"), horneado por el generador que lo llame (p.ej. "Pentatónica del
+  // acorde" en la pestaña Arpegios) — igual que asScaleNameFor ya hace para "Estructuras en
+  // escala", pero sin depender de asState (ese tab puede no estar ni cargado).
+  {const _pn=(svgStr||'').match(/data-pentaname="([^"]*)"/);
+   if(_pn&&_pn[1])out.pentaName=_pn[1].replace(/&quot;/g,'"');}
   {const _fr2=(svgStr||'').match(/data-fretrange="(-?\d+),(-?\d+)"/);
    const fr={min:_fr2?parseInt(_fr2[1],10):0,max:_fr2?parseInt(_fr2[2],10):15};
    out.fretRange=fr;
-   const g=neckGeo(fr.min,fr.max,H);
+   const g=neckGeo(fr.min,fr.max,H,forceFloating);
    notes.forEach(n=>{const c=noteCellOf(n,g);if(c){n.fret=c.fret;n.string=c.string;}});}
   // Notas objetivo frames: same coords across frames, only illumination changes.
   if(doc.documentElement&&doc.documentElement.getAttribute('data-tn')==='1')out.tnFrame=true;
@@ -6405,7 +6499,7 @@ function runGenerate(){
 // saber si puede usar asIntroScaleFrame durante la cuenta atrás de intro (si el primer compás
 // mostrado no lleva esta marca, el ejercicio activo no es de este tipo y asIntroScaleFrame
 // podría venir de una sesión anterior/otra pestaña).
-function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScaleMode=false,posBox=null){
+function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScaleMode=false,posBox=null,forceFloating=false,pentaLabel=null){
   const W=NECK_W,H=asScaleMode?arpNeckH(fretStart,fretEnd):NECK_H,fretMin=fretStart,fretMax=fretEnd;
   // posBox (solo "Arpegios en escala"): celdas (cuerda,traste) EXACTAS de la posición/forma
   // generada, hobreadas aquí como data-posbox para que buildAutoBg (fondo automático de
@@ -6419,7 +6513,7 @@ function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScal
   // con "Zona ampliada" desactivada), quedaban desalineadas respecto a la rejilla/trastes en
   // cualquier posición que no arrancara en el traste 0 (bug reportado: "las notas no salen
   // centradas en los trastes").
-  const geo=neckGeo(fretMin,fretMax,H);
+  const geo=neckGeo(fretMin,fretMax,H,forceFloating);
   const leftPad=geo.leftPad,rightPad=25,topPad=35,bottomPad=50;
   const fretW=geo.fretW;
   const stringSpacing=(H-topPad-bottomPad)/5;
@@ -6427,7 +6521,14 @@ function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScal
   const fretX=f=>leftPad+(f-fretMin)*fretW;
   const r=geo.r;
   // dark style: no white bg, light-on-dark lines (matches sequence player look)
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="arpeggios"${asScaleMode?' data-asscale="1"':''} data-fretrange="${fretMin},${fretMax}"${asScaleMode?` data-neckh="${H}"`:''}${posBoxAttr}>`;
+  const pentaLabelAttr=pentaLabel?` data-pentaname="${pentaLabel.replace(/"/g,'&quot;')}"`:'';
+  // data-forcefloating (ver neckGeo/_lastForceFloating): así drawUnifiedFretboard/computeViewWin/
+  // relayoutNotes (que no reciben forceFloating explícito) usan automáticamente la MISMA fórmula
+  // de leftPad/fretW con la que se hornearon las notas de ESTE frame al mostrarlo — sin esto la
+  // rejilla del mástil en vivo se dibuja con otra geometría (bug reportado: "se descolocan las
+  // notas del mástil").
+  const forceFloatingAttr=forceFloating?' data-forcefloating="1"':'';
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="arpeggios"${asScaleMode?' data-asscale="1"':''} data-fretrange="${fretMin},${fretMax}"${asScaleMode?` data-neckh="${H}"`:''}${posBoxAttr}${pentaLabelAttr}${forceFloatingAttr}>`;
   if(fretMin===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
   for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${0.45-si*0.04})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
@@ -6456,7 +6557,7 @@ let ashNotes=[]; // [{string,fret}] current shape being edited
 const ASH_KEYS=['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
 // Regex compartida: entradas de librería generadas por ashGenerate, "Cmaj7 arpegio (E)".
 // El grupo 3 (posición) es opcional para compatibilidad con formas antiguas sin posición.
-const ARP_ENTRY_RE=/^([A-G][b#]?)(.*?)\s+arpegio(?:\s*\(([^)]*)\))?$/;
+const ARP_ENTRY_RE=/^([A-G][b#]?)(.*?)\s+(?:arpegio|pentatónica)(?:\s*\(([^)]*)\))?$/;
 // Elección MANUAL de posición por acorde (independiente del tema cargado — persiste entre
 // sesiones, como el resto de ajustes de este panel): {'pc|quality': 'A', ...}. Si un acorde
 // no tiene entrada aquí (o vale ''), se usa el criterio automático de siempre (voice leading /
@@ -6684,21 +6785,61 @@ function ashClearPattern(qualityText,posLabel){
   delete store[ashPatternKey(qualityText,posLabel)];
   ashSavePatternStoreToDisk();
 }
-function ashAutoBoxNotes(rootRaw,qualityText,posLabel){
+// usePenta: en vez de las notas del acorde (resolveChordDefs), usa la PENTATÓNICA que le
+// corresponde (mayor si el acorde es mayor, menor en cualquier otro caso — mismo criterio que
+// tnPentaToneMap/"Resaltar: Pentatónica" en Arpegios en escala) — delegando en seqBuildPentaBox,
+// la MISMA función que ya genera las cajas correctas en "Estructuras en escala"/"Escalas por
+// tramos" (2 notas por cuerda, persiguiendo el traste más cercano cuerda a cuerda). NO se
+// reutiliza la ventana rectangular de 4 trastes de más abajo (pensada para chord tones, más
+// dispersos): con 5 notas/octava esa ventana fija recorta notas reales de la forma en algunas
+// cuerdas (bug reportado: "falta el Eb de la cuerda 2" — caía justo un traste fuera del
+// rectángulo). Sin almacén de patrones corregidos a mano: la mano de dibujo de arriba
+// (ashGenerate/ashPos) es solo para arpegios, así que este modo siempre calcula por geometría.
+function ashAutoBoxNotes(rootRaw,qualityText,posLabel,usePenta){
   const rootSt=noteToSt(rootRaw);if(rootSt<0)return[];
-  const anchorFret=ashRootFretE(rootSt);
-  const saved=ashLoadPatternStore()[ashPatternKey(qualityText,posLabel)];
-  if(saved&&saved.notes&&saved.notes.length){
-    const baseFrets=saved.notes.map(n=>n.fret);
-    let shift=anchorFret-saved.anchorFret;
-    while(Math.min(...baseFrets)+shift<0)shift+=12;
-    while(Math.max(...baseFrets)+shift>24)shift-=12;
-    return saved.notes.map(n=>{const fret=n.fret+shift;return{string:n.string,fret,st:getNoteStAtFret(n.string,fret),iv:n.iv};});
+  if(usePenta){
+    const defs=resolveChordDefs(qualityText||'');
+    const isMinor=defs.some(iv=>iv.n==='b3');
+    const posIndex=SP_CAGED_INDEX[posLabel]??0;
+    const rawNotes=seqBuildPentaBox(rootRaw,isMinor?'penta_minor':'penta_major',posIndex);
+    // seqBuildPentaBox persigue el traste más cercano cuerda a cuerda desde un punto de
+    // referencia que va arrastrando — para ciertas combinaciones raíz+forma (p.ej. "E mayor,
+    // forma E") la nota que le toca en una cuerda concreta no existe cerca de esa referencia y el
+    // buscador la encuentra en la OCTAVA siguiente, partiendo la caja en dos grupos separados por
+    // ~12 trastes en vez de una caja compacta de 2 notas/cuerda (bug reportado: "el ancho de todo
+    // el vídeo se dispara a 16 trastes" — arrastraba el ancho compartido de ashSendToEditor).
+    // Se corrige aquí, NO en seqBuildPentaBox (compartida con "Estructuras en escala", donde ya
+    // hay posiciones validadas a mano que no hay que arriesgar): cualquier nota a más de 6 trastes
+    // de la MEDIANA del grupo se trae a su octava más cercana — mismo tono, dentro de la caja.
+    const fretsSorted=rawNotes.map(n=>n.fret).slice().sort((a,b)=>a-b);
+    const median=fretsSorted[Math.floor(fretsSorted.length/2)];
+    const fixedNotes=rawNotes.map(n=>{
+      let f=n.fret;
+      while(f-median>6)f-=12;
+      while(median-f>6)f+=12;
+      while(f<0)f+=12;
+      return f===n.fret?n:{...n,fret:f,st:getNoteStAtFret(n.string,f)};
+    });
+    // seqBuildPentaBox marca la tónica como '1' (SEQ_DEGREE_NAMES) — el resto del pipeline
+    // (isRoot, spellNote vía IV_LETTER_STEPS) espera 'R', igual que en el modo arpegio.
+    return fixedNotes.map(n=>({string:n.string,fret:n.fret,st:n.st,iv:n.degree==='1'?'R':n.degree}));
   }
-  const defs=resolveChordDefs(qualityText||'');
-  if(!defs||!defs.length)return[];
-  const ivBySemi={};
-  defs.forEach(d=>{ivBySemi[((rootSt+d.st)%12+12)%12]=d.n;});
+  const anchorFret=ashRootFretE(rootSt);
+  let ivBySemi;
+  {
+    const saved=ashLoadPatternStore()[ashPatternKey(qualityText,posLabel)];
+    if(saved&&saved.notes&&saved.notes.length){
+      const baseFrets=saved.notes.map(n=>n.fret);
+      let shift=anchorFret-saved.anchorFret;
+      while(Math.min(...baseFrets)+shift<0)shift+=12;
+      while(Math.max(...baseFrets)+shift>24)shift-=12;
+      return saved.notes.map(n=>{const fret=n.fret+shift;return{string:n.string,fret,st:getNoteStAtFret(n.string,fret),iv:n.iv};});
+    }
+    const defs=resolveChordDefs(qualityText||'');
+    if(!defs||!defs.length)return[];
+    ivBySemi={};
+    defs.forEach(d=>{ivBySemi[((rootSt+d.st)%12+12)%12]=d.n;});
+  }
   const sh=ASH_CAGED_SHAPES.find(s=>s.name===posLabel)||ASH_CAGED_SHAPES[0];
   let lo=anchorFret+sh.off;while(lo>=12)lo-=12;if(lo<0)lo=0;
   const collect=(lo,hi)=>{
@@ -6726,7 +6867,19 @@ function ashAutoGenerateForTheme(){
   if(!cycles.length){alert('Carga primero un tema (XML con acordes) en Audio & XML.');return;}
   const chords=tnThemeChords();
   if(!chords.length){say('El tema cargado no tiene acordes.');return;}
-  const parentId=getOrCreateSubFolder('Arpegios',null);
+  const usePenta=!!document.getElementById('ashUsePenta')?.checked;
+  // "Mensajes/consejos" (showMsg) ON por defecto con Pentatónica del acorde — mismo criterio que
+  // "Resaltar: Pentatónica" en Estructuras en escala (ver ese mismo comentario más abajo, 2026-
+  // 09-06): sin esto la zona de texto donde sale "Pentatónica menor de A" (ver data-pentaname/
+  // arpBuildZoneSVG) se queda oculta si nunca se tocó esa casilla a mano.
+  if(usePenta){
+    const cfg={...getVisConfig(),showMsg:true};
+    localStorage.setItem('gv_vis',JSON.stringify(cfg));
+    applyVisConfig(cfg);
+    const cb=document.getElementById('toggle_showMsg');if(cb)cb.checked=true;
+  }
+  const kindWord=usePenta?'pentatónica':'arpegio';
+  const parentId=getOrCreateSubFolder(usePenta?'Pentatónicas (auto)':'Arpegios',null);
   let made=0;const weak=[];
   chords.forEach(chordStr=>{
     const cm=chordStr.match(/^([A-G][b#]?)(.*)$/);if(!cm)return;
@@ -6734,22 +6887,33 @@ function ashAutoGenerateForTheme(){
     const rootSt=noteToSt(rootRaw);
     ASH_CAGED_SHAPES.forEach(shDef=>{
       const posLabel=shDef.name;
-      const boxNotes=ashAutoBoxNotes(rootRaw,qualityText,posLabel);
+      const boxNotes=ashAutoBoxNotes(rootRaw,qualityText,posLabel,usePenta);
       if(!boxNotes.length)return; // nada que dibujar en esta forma para este acorde
       if(boxNotes.length<ASH_AUTO_MIN_NOTES)weak.push(chordStr+' ('+posLabel+')');
       const tnotes=boxNotes.map(n=>({string:n.string,fret:n.fret,st:n.st,
         note:spellNote(rootRaw,n.iv,((n.st-rootSt)%12+12)%12)||NTS[n.st],interval:n.iv,isRoot:n.iv==='R'}));
       const avgFret=tnotes.reduce((a,n)=>a+n.fret,0)/tnotes.length;
-      const svgStr=arpBuildZoneSVG(tnotes,chordStr,'',[],0,15);
+      // Ventana de trastes AJUSTADA a esta forma concreta (igual que asSendToEditor en
+      // "Estructuras en escala", NO el mástil 0-15 fijo de antes) + asScaleMode=true (alto
+      // adaptativo, arpNeckH): con pocos trastes visibles de verdad, la separación entre cuerdas
+      // era tan pequeña que las notas de cuerdas contiguas se solapaban visualmente (feedback de
+      // Alberto: "no me gusta nada" comparado con Estructuras en escala, que sí usa este mismo
+      // camino). asScaleMode=true NO reintroduce la leyenda de "tónica de escala"/"nota fuera de
+      // la pentatónica" — esas filas dependen de bgAuto.mode==='scale' (ver
+      // updateNextPreviewLegend), que este flujo nunca activa.
+      const boxFrets=tnotes.map(n=>n.fret);
+      const fretMin=Math.max(0,Math.min(...boxFrets)-1);
+      const fretMax=Math.min(24,Math.max(...boxFrets)+1);
+      const svgStr=arpBuildZoneSVG(tnotes,chordStr,'',[],fretMin,fretMax,true);
       const sub=getOrCreateSubFolder(chordStr,parentId);
-      const entryName=chordStr+' arpegio ('+posLabel+')';
+      const entryName=chordStr+' '+kindWord+' ('+posLabel+')';
       const existing=library.find(e=>e.name===entryName);
       if(existing){
         existing.data=svgStr;existing.folder=sub;existing.svgParsed=svgStringToParsed(svgStr);
-        existing.arpPos=posLabel;existing.arpAvgFret=avgFret;existing.chordName=chordStr;existing.notes=tnotes;
+        existing.arpPos=posLabel;existing.arpAvgFret=avgFret;existing.chordName=chordStr;existing.notes=tnotes;existing.arpKindWord=kindWord;
       }else{
         library.push({id:rid(),type:'svg',data:svgStr,name:entryName,folder:sub,svgParsed:svgStringToParsed(svgStr),
-          arpPos:posLabel,arpAvgFret:avgFret,chordName:chordStr,notes:tnotes});
+          arpPos:posLabel,arpAvgFret:avgFret,chordName:chordStr,notes:tnotes,arpKindWord:kindWord});
       }
       made++;
     });
@@ -6864,10 +7028,11 @@ function ashSendToEditor(silent){
 
   const byKey=ashBuildByKey();
 
-  let applied=0;const missing=new Set();
   let prevFret=null; // traste "actual" de la posición elegida, para minimizar el salto al siguiente acorde
   let isFirst=true; // solo el primer acorde con candidatas usa la "forma de partida" elegida por el usuario
   const startPos=document.getElementById('ashStartPos')?.value||'';
+  const missing=new Set();
+  const assignments=[]; // {f,entry,pos} — decisión de voice-leading, ANTES de construir ningún SVG
   for(const f of flat){
     const chord=(f.chord||'').trim();
     if(!chord||chord==='—')continue;
@@ -6904,15 +7069,71 @@ function ashSendToEditor(silent){
       },candidates[0]);
     }
     isFirst=false;
-    const entry=choice.entry;
     prevFret=choice.avgFret;
-    const slotIdx=Math.round((f.beat||1)-1);
-    const loc=barLoc[f.bi];if(!loc)continue;
-    const target=getTargetBars(loc.ci);
-    if(target&&target[loc.local]){
-      target[loc.local].imgs[slotIdx]={type:'svg',data:entry.data,name:chord+' arpegio (auto, forma '+choice.pos+')',
-        thumb:entry.thumb||null,svgParsed:entry.svgParsed?JSON.parse(JSON.stringify(entry.svgParsed)):svgStringToParsed(entry.data)};
-      applied++;
+    assignments.push({f,chord,entry:choice.entry,pos:choice.pos});
+  }
+  // Segunda pasada: ventana de trastes ÚNICA Y ABSOLUTA (misma fretMin Y misma fretMax, no solo
+  // el mismo ancho) para TODAS las formas realmente usadas en este envío — mismo criterio que
+  // spSendToEditor en "Escalas por tramos" ("ventana ÚNICA global"). Con solo igualar el ANCHO
+  // (versión anterior) el salto de tamaño seguía dándose entre posiciones con fretMin=0 (cejilla
+  // visible, "cuerda al aire") y posiciones con fretMin>0 (ventana "flotante"): neckGeo usa una
+  // fórmula de leftPad/fretW DISTINTA en cada caso (bug reportado: "el mástil cambia de tamaño
+  // entre Em y Bm... ocurre cuando hay cuerdas al aire" — diagnóstico correcto). Al compartir
+  // fretMin Y fretMax exactos, esa rama de neckGeo también queda fija para todo el ejercicio.
+  // Reconstruye el SVG de cada forma usada con esa ventana común — NO toca la librería (esta
+  // reconstrucción es solo para este envío al editor).
+  let applied=0;
+  const usedEntries=[...new Set(assignments.map(a=>a.entry))];
+  if(usedEntries.length){
+    // Ventana ABSOLUTA ÚNICA (mismo fretMin Y fretMax, no solo el mismo ancho) para TODAS las
+    // formas usadas en este envío — la única forma de que NUNCA haya desplazamiento de notas: con
+    // el mismo ancho pero ventanas centradas de forma independiente, dos formas vecinas (p.ej. C
+    // y F, ambas de ancho 6 pero una en [8,14] y la otra en [9,15]) dibujan la MISMA nota real a
+    // un píxel distinto según de qué forma venga — rompe el anclaje de notas comunes y la
+    // fantasma "salta" justo al activarse (bug reportado: "las notas dan como un salto de un
+    // traste hacia atrás" al pintar la fantasma). Con una ventana absoluta compartida, cualquier
+    // nota real siempre cae en el mismo píxel la toque quien la toque. Es la unión de las
+    // ventanas propias (±1 traste) de cada forma — con encadenamientos que no se estabilizan en
+    // un ciclo (raro, ver ashSendToEditor) puede ensanchar el mástil más de lo ideal; se prefiere
+    // eso a un salto visual, que es peor.
+    let unionLo=Infinity,unionHi=-Infinity;
+    usedEntries.forEach(e=>{
+      const fr=(e.notes||[]).map(n=>n.fret);
+      if(!fr.length)return;
+      unionLo=Math.min(unionLo,Math.min(...fr)-1);
+      unionHi=Math.max(unionHi,Math.max(...fr)+1);
+    });
+    unionLo=Math.max(0,unionLo);unionHi=Math.min(24,unionHi);
+    if(unionHi<=unionLo)unionHi=unionLo+1;
+    const rebuilt=new Map();
+    usedEntries.forEach(e=>{
+      if(!(e.notes||[]).length){rebuilt.set(e,{svg:e.data,parsed:e.svgParsed});return;}
+      const lo=unionLo,hi=unionHi;
+      // "Pentatónica mayor/menor de X" — mismo texto y mismo criterio (isMinor por la 3ª del
+      // propio acorde) que asScaleNameFor en "Estructuras en escala"/Resaltar:Pentatónica, para
+      // que "Pentatónica del acorde" muestre el mismo literal (bug/petición reportada: faltaba
+      // aquí). Solo en modo pentatónica — el modo arpegio (chord tones) no tiene este concepto.
+      let pentaLabel=null;
+      if(e.arpKindWord==='pentatónica'){
+        const cm=(e.chordName||'').match(/^([A-G][b#]?)(.*)$/);
+        if(cm){
+          const isMinor=resolveChordDefs(cm[2].trim()).some(iv=>iv.n==='b3');
+          pentaLabel=(isMinor?'Pentatónica menor de ':'Pentatónica mayor de ')+cm[1];
+        }
+      }
+      const svg=arpBuildZoneSVG(e.notes,e.chordName||'','',[],lo,hi,true,null,true,pentaLabel);
+      rebuilt.set(e,{svg,parsed:svgStringToParsed(svg)});
+    });
+    for(const a of assignments){
+      const slotIdx=Math.round((a.f.beat||1)-1);
+      const loc=barLoc[a.f.bi];if(!loc)continue;
+      const target=getTargetBars(loc.ci);
+      if(target&&target[loc.local]){
+        const built=rebuilt.get(a.entry);
+        target[loc.local].imgs[slotIdx]={type:'svg',data:built.svg,name:a.chord+' '+(a.entry.arpKindWord||'arpegio')+' (auto, forma '+a.pos+')',
+          thumb:a.entry.thumb||null,svgParsed:built.parsed?JSON.parse(JSON.stringify(built.parsed)):null};
+        applied++;
+      }
     }
   }
   renderEditor();if(typeof renderBank==='function')renderBank();if(typeof checkReady==='function')checkReady();
@@ -8373,7 +8594,7 @@ function exArpeggiosApproach(ctx){
           if(fs?.type==='svg'&&fs.svgParsed){changeBarIdx=b;nextPosNotes=fs.svgParsed.notes;nextChord3=ch;
             const _m=(fs.svgParsed.raw||'').match(/data-fretrange="(-?\d+),(-?\d+)"/);
             nextPosNat=_m?{min:parseInt(_m[1],10),max:parseInt(_m[2],10)}:(fs.svgParsed.fretRange||null);
-            if(nextPosNat)nextPosNat.H=fs.svgParsed.H;
+            if(nextPosNat){nextPosNat.H=fs.svgParsed.H;nextPosNat.pentaName=fs.svgParsed.pentaName||null;}
             break;}
           // si esta primera candidata no tiene forma todavía, seguir mirando más adelante
         }
@@ -8421,10 +8642,10 @@ function exArpeggiosApproach(ctx){
           colorProg=Math.min(colorProg,ARP_GHOST_COLOR_CAP);
           // Pinta las fantasmas si estamos dentro de la ventana, o SIEMPRE si el toggle está activo.
           if(timeToChange<=GHOST_WIN || alwaysGhost){
-            paintArpeggioGhosts(act,nextPosNotes,nextChord3,ghostProg,fadeProg,colorProg);
+            paintArpeggioGhosts(act,nextPosNotes,nextChord3,ghostProg,fadeProg,colorProg,nextPosNat);
           }else{
             const ov=document.getElementById('ghostCanvas');if(ov&&ov.firstChild){ov.innerHTML='';window._arpGhostEls=null;window._arpGhostChord=null;}
-            if(getVisConfig().commonsAlways===true){markCommonNotes(act,nextPosNotes);}
+            if(getVisConfig().commonsAlways===true){markCommonNotes(act,nextPosNotes,nextPosNat);}
           }
         }
       }
@@ -8440,10 +8661,10 @@ function exArpeggiosBarChange(ctx){
   const {slot,bar,bi,allBars}=ctx;
       const curChord2=bar.chord||'';
       // Siguiente posición DISTINTA tras este compás (la que se va a anticipar como fantasma).
-      let nextDistinctChord=null,nextNotes2=null;
+      let nextDistinctChord=null,nextNotes2=null,nextFretRange2=null;
       for(let b=bi+1;b<allBars.length;b++){
         const fs=(allBars[b].imgs||[]).find(s=>s)||null;const ch=allBars[b].chord||'';
-        if(fs?.type==='svg'&&fs.svgParsed&&ch&&ch!==curChord2){nextDistinctChord=ch;nextNotes2=fs.svgParsed.notes;break;}
+        if(fs?.type==='svg'&&fs.svgParsed&&ch&&ch!==curChord2){nextDistinctChord=ch;nextNotes2=fs.svgParsed.notes;nextFretRange2=fs.svgParsed.fretRange||null;break;}
       }
       // Limpiar las fantasmas SOLO si el objetivo cambió respecto a lo ya pintado. Si sigue siendo
       // la misma posición siguiente (p.ej. cambio de compás con el mismo acorde), NO se tocan —
@@ -8453,8 +8674,27 @@ function exArpeggiosBarChange(ctx){
       }
       const curSlot2=slot;
       const activeNotes=(vlCurrentNotes&&vlCurrentNotes.length)?vlCurrentNotes:(curSlot2?.svgParsed?.notes||null);
+      // Solo mezclar activeNotes+nextNotes2 si comparten la MISMA ventana nativa (mismo
+      // data-fretrange): sus (cx,cy) horneados están entonces en un único sistema de
+      // coordenadas y el zoom conjunto tiene sentido. Con "Pentatónica del acorde" (una
+      // posición real distinta por acorde) casi nunca coinciden — mezclarlas de todas formas
+      // reinterpreta mal los fretos de nextNotes2 y produce una ventana de zoom incorrecta justo
+      // en la transición (bug reportado: "de Gm a Dm hay un salto en el tamaño del mástil").
+      const curFretRange2=curSlot2?.svgParsed?.fretRange||null;
+      const sameWindow2=curFretRange2&&nextFretRange2&&curFretRange2.min===nextFretRange2.min&&curFretRange2.max===nextFretRange2.max;
+      // Ancla el anillo de "notas comunes" YA, en este mismo tick — onBarChange se dispara
+      // DESPUÉS de que showSlot() ya haya redibujado el mástil (canvas.innerHTML='' en
+      // renderSVGStatic se lleva por delante cualquier anillo previo), pero el ÚNICO sitio que
+      // vuelve a pintarlo es paintArpeggioGhosts, dentro de onApproach — que en tick() se ejecuta
+      // ANTES de detectar el cambio de compás y llamar a showSlot(). Resultado: el anillo se
+      // pinta sobre las notas VIEJAS (a punto de borrarse) y las notas NUEVAS se quedan sin
+      // anillo hasta elACIERTO siguiente (un tick después) — un parpadeo real, visible incluso en
+      // notas que no cambian de sitio ni de color (bug reportado: "ocurre aunque la nota se quede
+      // exactamente igual"). Llamarlo aquí también, justo tras el redibujado, lo cierra en el
+      // mismo tick.
+      if(activeNotes)markCommonNotes(activeNotes,nextNotes2,nextFretRange2);
       if(getVisConfig().zoomToZone===true && activeNotes){
-        applyZoomToZone(nextNotes2?[...activeNotes,...nextNotes2]:activeNotes);
+        applyZoomToZone((nextNotes2&&sameWindow2)?[...activeNotes,...nextNotes2]:activeNotes,curFretRange2);
       }else{
         // "Zona ampliada" apagada: sin zoom dinámico, PERO el recorte fijo de trastes (si hay
         // uno configurado) debe seguir aplicándose.
@@ -10101,9 +10341,12 @@ function tick(){
           if((EXERCISES[exFor(first.svgParsed)]||{}).usesZoom===true && getVisConfig().zoomToZone===true){
             // Arpeggios with zoom on: frame the first position plus the next distinct one
             const c0=allBars.find(b=>(b.imgs||[]).find(s=>s))?.chord||'';
-            let nx=null;
-            for(let b=0;b<allBars.length;b++){const fs=(allBars[b].imgs||[]).find(s=>s)||null;const ch=allBars[b].chord||'';if(fs?.type==='svg'&&fs.svgParsed&&ch&&ch!==c0){nx=fs.svgParsed.notes;break;}}
-            applyZoomToZone(nx?[...first.svgParsed.notes,...nx]:first.svgParsed.notes);
+            let nx=null,nxFretRange=null;
+            for(let b=0;b<allBars.length;b++){const fs=(allBars[b].imgs||[]).find(s=>s)||null;const ch=allBars[b].chord||'';if(fs?.type==='svg'&&fs.svgParsed&&ch&&ch!==c0){nx=fs.svgParsed.notes;nxFretRange=fs.svgParsed.fretRange||null;break;}}
+            // Ver comentario equivalente en exArpeggiosApproach: solo mezclar si comparten ventana nativa.
+            const firstFretRange=first.svgParsed.fretRange||null;
+            const sameWindow0=firstFretRange&&nxFretRange&&firstFretRange.min===nxFretRange.min&&firstFretRange.max===nxFretRange.max;
+            applyZoomToZone((nx&&sameWindow0)?[...first.svgParsed.notes,...nx]:first.svgParsed.notes,firstFretRange);
           }else{
             // Triads, sequences, or arpeggios with zoom off: full neck, no zoom.
             applyZoomToZone(null);
@@ -10275,7 +10518,7 @@ function tick(){
     // DESPUÉS de bar.msgText/inversions en la prioridad: un comentario manual del usuario para
     // ese compás sigue ganando.
     const isAsScale=slot?.svgParsed?.asScaleGen===true;
-    const autoMsg=bar.msgText||(isInversionsExercise?getAutoMsg(slot,barChordNow):'')||(isAsScale?asScaleNameFor(barChordNow):'');
+    const autoMsg=bar.msgText||(isInversionsExercise?getAutoMsg(slot,barChordNow):'')||(isAsScale?asScaleNameFor(barChordNow):'')||(slot?.svgParsed?.pentaName||'');
     renderMsg(allBars,bi,autoMsg);
     const prevBar=allBars[bi-1];const prevSlot=prevBar?.imgs?.filter(s=>s).slice(-1)[0]||null;
     if(seqActive){
