@@ -5715,7 +5715,8 @@ function svgStringToParsed(svgStr){
   const _nh=(svgStr||'').match(/data-neckh="(\d+)"/);
   const H=_nh?parseInt(_nh[1],10):NECK_H;
   const forceFloating=/data-forcefloating="1"/.test(svgStr||'');
-  const out={W:NECK_W,H,notes,raw:svgStr,generated:true,forceFloating};
+  const stableWin=/data-stablewin="1"/.test(svgStr||'');
+  const out={W:NECK_W,H,notes,raw:svgStr,generated:true,forceFloating,stableWin};
   // data-posbox (solo "Arpegios en escala", ver arpBuildZoneSVG): celdas exactas de la forma
   // generada — buildAutoBg lo usa para no salirse de la posición al pintar el fantasma de escala.
   // ARRAY, no Set: los fotogramas "sin acorde" reutilizan este svgParsed vía
@@ -6499,7 +6500,7 @@ function runGenerate(){
 // saber si puede usar asIntroScaleFrame durante la cuenta atrás de intro (si el primer compás
 // mostrado no lleva esta marca, el ejercicio activo no es de este tipo y asIntroScaleFrame
 // podría venir de una sesión anterior/otra pestaña).
-function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScaleMode=false,posBox=null,forceFloating=false,pentaLabel=null){
+function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScaleMode=false,posBox=null,forceFloating=false,pentaLabel=null,stableWin=false){
   const W=NECK_W,H=asScaleMode?arpNeckH(fretStart,fretEnd):NECK_H,fretMin=fretStart,fretMax=fretEnd;
   // posBox (solo "Arpegios en escala"): celdas (cuerda,traste) EXACTAS de la posición/forma
   // generada, hobreadas aquí como data-posbox para que buildAutoBg (fondo automático de
@@ -6528,7 +6529,14 @@ function arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart=0,fretEnd=15,asScal
   // rejilla del mástil en vivo se dibuja con otra geometría (bug reportado: "se descolocan las
   // notas del mástil").
   const forceFloatingAttr=forceFloating?' data-forcefloating="1"':'';
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="arpeggios"${asScaleMode?' data-asscale="1"':''} data-fretrange="${fretMin},${fretMax}"${asScaleMode?` data-neckh="${H}"`:''}${posBoxAttr}${pentaLabelAttr}${forceFloatingAttr}>`;
+  // data-stablewin (ver applyZoomToZone/exArpeggiosBarChange): esta ventana YA es la definitiva
+  // (mismo ancho para todas las formas del ejercicio, cada una centrada en sus propias notas —
+  // ver ashAutoGenerateForTheme/ashSendToEditor) — "Zona ampliada" NO debe recortarla más al
+  // vuelo según las notas concretas de cada acorde (que varían de ancho real de acorde a acorde),
+  // o el número de trastes visible vuelve a cambiar de un acorde a otro pese a que la ventana
+  // horneada ya es igual para todos (bug reportado: "entre Bb y Eb vuelve a meter un traste más").
+  const stableWinAttr=stableWin?' data-stablewin="1"':'';
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="arpeggios"${asScaleMode?' data-asscale="1"':''} data-fretrange="${fretMin},${fretMax}"${asScaleMode?` data-neckh="${H}"`:''}${posBoxAttr}${pentaLabelAttr}${forceFloatingAttr}${stableWinAttr}>`;
   if(fretMin===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
   for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${0.45-si*0.04})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
@@ -6904,7 +6912,18 @@ function ashAutoGenerateForTheme(){
       const boxFrets=tnotes.map(n=>n.fret);
       const fretMin=Math.max(0,Math.min(...boxFrets)-1);
       const fretMax=Math.min(24,Math.max(...boxFrets)+1);
-      const svgStr=arpBuildZoneSVG(tnotes,chordStr,'',[],fretMin,fretMax,true);
+      // forceFloating=true SIEMPRE aquí (no solo cuando fretMin===0 de esta forma concreta): con
+      // un tema real, unas formas empiezan justo en traste 0 (cuerdas al aire) y otras no — si
+      // leftPad/fretW dependieran de eso forma a forma, el mástil "cambiaría de tamaño" entre
+      // acordes consecutivos aunque cada uno tenga su propia ventana ajustada (bug reportado:
+      // "el mástil cambia de tamaño... ocurre cuando hay cuerdas al aire"). Con forceFloating fijo
+      // para TODAS las formas de este generador, la fórmula de neckGeo es siempre la misma.
+      let pentaLabel=null;
+      if(usePenta){
+        const isMinorLbl=resolveChordDefs(qualityText||'').some(iv=>iv.n==='b3');
+        pentaLabel=(isMinorLbl?'Pentatónica menor de ':'Pentatónica mayor de ')+rootRaw;
+      }
+      const svgStr=arpBuildZoneSVG(tnotes,chordStr,'',[],fretMin,fretMax,true,null,true,pentaLabel,true);
       const sub=getOrCreateSubFolder(chordStr,parentId);
       const entryName=chordStr+' '+kindWord+' ('+posLabel+')';
       const existing=library.find(e=>e.name===entryName);
@@ -7072,47 +7091,39 @@ function ashSendToEditor(silent){
     prevFret=choice.avgFret;
     assignments.push({f,chord,entry:choice.entry,pos:choice.pos});
   }
-  // Segunda pasada: ventana de trastes ÚNICA Y ABSOLUTA (misma fretMin Y misma fretMax, no solo
-  // el mismo ancho) para TODAS las formas realmente usadas en este envío — mismo criterio que
-  // spSendToEditor en "Escalas por tramos" ("ventana ÚNICA global"). Con solo igualar el ANCHO
-  // (versión anterior) el salto de tamaño seguía dándose entre posiciones con fretMin=0 (cejilla
-  // visible, "cuerda al aire") y posiciones con fretMin>0 (ventana "flotante"): neckGeo usa una
-  // fórmula de leftPad/fretW DISTINTA en cada caso (bug reportado: "el mástil cambia de tamaño
-  // entre Em y Bm... ocurre cuando hay cuerdas al aire" — diagnóstico correcto). Al compartir
-  // fretMin Y fretMax exactos, esa rama de neckGeo también queda fija para todo el ejercicio.
-  // Reconstruye el SVG de cada forma usada con esa ventana común — NO toca la librería (esta
-  // reconstrucción es solo para este envío al editor).
+  // Segunda pasada: MISMO NÚMERO DE TRASTES (mismo ANCHO, no la misma ventana absoluta) para
+  // TODAS las formas realmente usadas en este envío — el ancho es el máximo que necesite la
+  // forma más ancha del ejercicio; cada forma sigue con su PROPIA posición (lo,hi), centrada en
+  // sus propias notas, así que el "mástil" no cambia de tamaño entre acordes (bug reportado:
+  // "entre Bb y Eb vuelve a meter un traste más") pero tampoco se ensancha a la unión de las 12
+  // tonalidades del tema (bug reportado antes: "sale el mástil completo!!" — eso pasaba con una
+  // ventana absoluta ÚNICA global, que en un tema "por quintas/cuartas" que recorre las 12
+  // tonalidades A PROPÓSITO acababa abarcando casi todo el mástil). Ya no hace falta compartir
+  // la posición absoluta para evitar el salto de la fantasma: cada nota lleva su (fret,string)
+  // real horneado (ver svgStringToParsed/noteCellOf) y paintArpeggioGhosts/markCommonNotes
+  // proyectan por fret absoluto sobre la ventana de cámara EN VIVO (_viewWin), no sobre
+  // coordenadas horneadas de otra ventana. forceFloating=true en TODAS las formas evita además
+  // el cambio de fórmula leftPad/fretW entre formas con/sin cuerdas al aire (bug "Em→Bm").
   let applied=0;
   const usedEntries=[...new Set(assignments.map(a=>a.entry))];
   if(usedEntries.length){
-    // Ventana ABSOLUTA ÚNICA (mismo fretMin Y fretMax, no solo el mismo ancho) para TODAS las
-    // formas usadas en este envío — la única forma de que NUNCA haya desplazamiento de notas: con
-    // el mismo ancho pero ventanas centradas de forma independiente, dos formas vecinas (p.ej. C
-    // y F, ambas de ancho 6 pero una en [8,14] y la otra en [9,15]) dibujan la MISMA nota real a
-    // un píxel distinto según de qué forma venga — rompe el anclaje de notas comunes y la
-    // fantasma "salta" justo al activarse (bug reportado: "las notas dan como un salto de un
-    // traste hacia atrás" al pintar la fantasma). Con una ventana absoluta compartida, cualquier
-    // nota real siempre cae en el mismo píxel la toque quien la toque. Es la unión de las
-    // ventanas propias (±1 traste) de cada forma — con encadenamientos que no se estabilizan en
-    // un ciclo (raro, ver ashSendToEditor) puede ensanchar el mástil más de lo ideal; se prefiere
-    // eso a un salto visual, que es peor.
-    let unionLo=Infinity,unionHi=-Infinity;
+    let maxSpan=0;
     usedEntries.forEach(e=>{
       const fr=(e.notes||[]).map(n=>n.fret);
       if(!fr.length)return;
-      unionLo=Math.min(unionLo,Math.min(...fr)-1);
-      unionHi=Math.max(unionHi,Math.max(...fr)+1);
+      maxSpan=Math.max(maxSpan,Math.max(...fr)-Math.min(...fr)+2); // +2 = ±1 de margen, igual que la ventana propia de cada forma
     });
-    unionLo=Math.max(0,unionLo);unionHi=Math.min(24,unionHi);
-    if(unionHi<=unionLo)unionHi=unionLo+1;
     const rebuilt=new Map();
     usedEntries.forEach(e=>{
       if(!(e.notes||[]).length){rebuilt.set(e,{svg:e.data,parsed:e.svgParsed});return;}
-      const lo=unionLo,hi=unionHi;
-      // "Pentatónica mayor/menor de X" — mismo texto y mismo criterio (isMinor por la 3ª del
-      // propio acorde) que asScaleNameFor en "Estructuras en escala"/Resaltar:Pentatónica, para
-      // que "Pentatónica del acorde" muestre el mismo literal (bug/petición reportada: faltaba
-      // aquí). Solo en modo pentatónica — el modo arpegio (chord tones) no tiene este concepto.
+      const fr=e.notes.map(n=>n.fret);
+      const ownMin=Math.min(...fr),ownMax=Math.max(...fr);
+      const ownSpan=ownMax-ownMin;
+      const extra=Math.max(0,maxSpan-ownSpan);
+      let lo=ownMin-Math.ceil(extra/2),hi=ownMax+Math.floor(extra/2);
+      if(lo<0){hi+=-lo;lo=0;}
+      if(hi>24){lo-=(hi-24);hi=24;}
+      lo=Math.max(0,lo);
       let pentaLabel=null;
       if(e.arpKindWord==='pentatónica'){
         const cm=(e.chordName||'').match(/^([A-G][b#]?)(.*)$/);
@@ -7121,7 +7132,7 @@ function ashSendToEditor(silent){
           pentaLabel=(isMinor?'Pentatónica menor de ':'Pentatónica mayor de ')+cm[1];
         }
       }
-      const svg=arpBuildZoneSVG(e.notes,e.chordName||'','',[],lo,hi,true,null,true,pentaLabel);
+      const svg=arpBuildZoneSVG(e.notes,e.chordName||'','',[],lo,hi,true,null,true,pentaLabel,true);
       rebuilt.set(e,{svg,parsed:svgStringToParsed(svg)});
     });
     for(const a of assignments){
@@ -8693,7 +8704,17 @@ function exArpeggiosBarChange(ctx){
       // exactamente igual"). Llamarlo aquí también, justo tras el redibujado, lo cierra en el
       // mismo tick.
       if(activeNotes)markCommonNotes(activeNotes,nextNotes2,nextFretRange2);
-      if(getVisConfig().zoomToZone===true && activeNotes){
+      // data-stablewin (ver arpBuildZoneSVG/ashAutoGenerateForTheme): esta forma YA trae la
+      // ventana definitiva (mismo ancho que TODAS las demás formas usadas en el ejercicio, cada
+      // una centrada en sus propias notas) — "Zona ampliada" NO debe recortarla más según las
+      // notas concretas de ESTE acorde (que varían de ancho real de acorde a acorde): eso volvía
+      // a cambiar el número de trastes visible de un acorde a otro pese a que la ventana horneada
+      // ya era igual para todos (bug reportado: "entre Bb y Eb vuelve a meter un traste más" —
+      // tras haber igualado ya el ANCHO horneado de cada forma). Pasar null como notas a encuadrar
+      // hace que computeViewWin use la ventana nativa (curFretRange2) tal cual, sin recorte.
+      if(curSlot2?.svgParsed?.stableWin===true){
+        applyZoomToZone(null,curFretRange2);
+      }else if(getVisConfig().zoomToZone===true && activeNotes){
         applyZoomToZone((nextNotes2&&sameWindow2)?[...activeNotes,...nextNotes2]:activeNotes,curFretRange2);
       }else{
         // "Zona ampliada" apagada: sin zoom dinámico, PERO el recorte fijo de trastes (si hay
