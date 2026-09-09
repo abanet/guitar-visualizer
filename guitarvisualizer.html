@@ -3289,9 +3289,10 @@ async function applySession(s){
       }
       spRestore(s);
       bgAuto=(s.bgAuto&&typeof s.bgAuto==='object')
-        ?{mode:['off','figure','scale'].includes(s.bgAuto.mode)?s.bgAuto.mode:'off',
+        ?{mode:['off','figure','scale','position'].includes(s.bgAuto.mode)?s.bgAuto.mode:'off',
           root:SP_ROOTS.includes(s.bgAuto.root)?s.bgAuto.root:'C',
-          scale:SEQ_SCALE_FORMULAS[s.bgAuto.scale]?s.bgAuto.scale:'major'}
+          scale:SEQ_SCALE_FORMULAS[s.bgAuto.scale]?s.bgAuto.scale:'major',
+          cells:Array.isArray(s.bgAuto.cells)?s.bgAuto.cells.filter(c=>c&&Number.isFinite(c.string)&&Number.isFinite(c.fret)):undefined}
         :{mode:'off',root:'C',scale:'major'};
       bgAutoSyncUI();
       renderEditor();renderBank();checkReady();
@@ -9092,34 +9093,22 @@ async function asSendToEditor(){
   const nameEl=document.getElementById('exerciseName');
   const exName=`${asState.root} ${SEQ_SCALE_LABELS[asState.scale]||asState.scale} (Forma ${AS_POS_LABELS[asState.posIdx]}) — arpegios diatónicos`;
 
-  // Fotograma "localiza la escala": TODAS las notas de la escala en la ventana de trastes de la
-  // posición (no solo las 14 de la forma CAGED fija — si no, quedan huecos, p.ej. el traste más
-  // a la derecha de la ventana, que la forma no usa pero sí pertenece a la escala), iluminadas
-  // con el mismo look que un acorde real (cian, tónica en rojo) — no un fondo tenue, para
-  // identificar la escala de un vistazo. Se usa (a) durante la cuenta atrás de intro (compases
-  // de metrónomo antes de que arranque el tema, ver tick()/getIntroSec — NO son compases del
-  // XML, son un ajuste aparte de "Compases de intro") y (b) para cualquier compás del XML sin
-  // acorde (interludio). Guardado en una variable de módulo porque tick() (motor de
-  // reproducción) no tiene acceso directo al estado de la pestaña "Arpegios en escala".
+  // Fotograma "localiza la escala": las notas de `notes` (la posición/caja generada, YA
+  // filtradas por asActiveNotes() — incluye correcciones manuales) iluminadas con el mismo
+  // look que un acorde real (cian, tónica en rojo) — no un fondo tenue, para identificar la
+  // escala de un vistazo. Se usa (a) durante la cuenta atrás de intro (compases de metrónomo
+  // antes de que arranque el tema, ver tick()/getIntroSec — NO son compases del XML, son un
+  // ajuste aparte de "Compases de intro") y (b) para cualquier compás del XML sin acorde
+  // (interludio). Guardado en una variable de módulo porque tick() (motor de reproducción) no
+  // tiene acceso directo al estado de la pestaña "Arpegios en escala".
+  // NO recalcular por (cuerda,traste) escaneando toda la ventana fretMin..fretMax en las 6
+  // cuerdas por clase de nota: en escala mayor TODAS las notas naturales son diatónicas, así
+  // que ese escaneo cuela notas de fuera de la caja real en cuanto la ventana se abre un poco
+  // más que la forma exacta (bug reportado: "sale un B/D en el traste 7 que no pertenece a la
+  // posición" — esas notas SÍ eran de la escala pero NO de esta caja concreta). `notes` ya es
+  // exactamente la caja — reusarla tal cual.
   {
-    const rootPc=noteToSt(asState.root);
-    const formula=SEQ_SCALE_FORMULAS[asState.scale]||SEQ_SCALE_FORMULAS.major;
-    const semiByPc={};formula.forEach(st=>{semiByPc[(rootPc+st)%12]=st;});
-    const scaleNotes=[];
-    for(let s=0;s<6;s++){
-      // fretMin es SOLO el margen de relleno de la "ventana abierta" (una posición a la
-      // izquierda de la nota más grave real, sin línea de traste que la cierre por la
-      // izquierda — ver neckGeo) — no pertenece a la forma dibujada. Si se incluye aquí, se
-      // cuelan notas de la escala ahí (bug reportado: "notas en la zona abierta de la
-      // izquierda que no corresponden a la posición"). Mismo rango que usa buildAutoBg.
-      for(let f=(fretMin===0?0:fretMin+1);f<=fretMax;f++){
-        const pc=getNoteStAtFret(s,f);
-        const semi=semiByPc[pc];if(semi===undefined)continue;
-        const name=spellNote(asState.root,IV_SEMI_LBL[semi]||'R',semi)||NTS[pc];
-        scaleNotes.push({string:s,fret:f,st:pc,note:name,isRoot:pc===rootPc});
-      }
-    }
-    const svg=arpBuildZoneSVG(scaleNotes,'Escala','',[],fretMin,fretMax,true);
+    const svg=arpBuildZoneSVG(notes,'Escala','',[],fretMin,fretMax,true);
     const parsed=svgStringToParsed(svg);
     let thumb=null;try{thumb=await svgToThumb(svg,320,116);}catch(e){}
     asIntroScaleFrame={type:'svg',data:svg,name:'Escala',thumb,svgParsed:parsed};
@@ -9214,11 +9203,29 @@ async function asSendToEditor(){
     }
     say(applied+' fotogramas colocados · modo cambiado a Arpegios para la reproducción.');
   }
+  // Arpegios en escala: en modo 'auto' cada vuelta/compás cambia de cycleIdx y con eso
+  // alterna notas/intervalos (ver getNoteDisplay) — pero aquí conviven en el mismo mástil la
+  // tónica del ARPEGIO (isRoot por acorde) y la fantasma de la ESCALA (isRoot por tónica de
+  // la escala): en intervalos, la "R" puede salir dos veces (una por cada tónica) y una nota
+  // de la escala puede leerse como si fuera un intervalo raro del acorde (p.ej. una 3ª de la
+  // escala justo bajo la tónica del arpegio parece una 4ª "errónea") — confuso y parece un
+  // fallo. Se fuerza 'notes' para este ejercicio (mismo truco que tríadas/tn con etiquetas
+  // horneadas, ver arriba).
+  {
+    const gnd=document.getElementById('globalNoteDisplay');
+    if(gnd&&gnd.value!=='notes')gnd.value='notes';
+  }
   // Fondo automático = escala fija: las notas de la escala quedan FIJAS en gris tenue de
   // fondo (Editor → "Fondo automático"), mientras el frame de arriba solo dibuja —y anima
   // con zoom/fantasma/crossfade— las que son del arpegio en cada acorde. Sin esto el frame
   // (ahora un subconjunto, no la caja completa) se vería "pelado" sin referencia de escala.
-  bgAuto={mode:'scale',root:asState.root,scale:asState.scale};
+  // mode:'position' (no el genérico 'scale'): 'scale' pinta CUALQUIER traste de la ventana
+  // visible que sea diatónico — correcto para otros ejercicios de mástil libre, pero en
+  // escala mayor TODAS las notas naturales son diatónicas, así que cuela notas de fuera de
+  // esta caja concreta en cuanto la ventana se abre un poco (bug reportado: "sale un B/D en
+  // el traste 7 que no pertenece a la posición"). 'position' restringe el fondo a las celdas
+  // EXACTAS de `notes` (ver buildAutoBg/bgAutoPcs) — nunca una nota fuera de la caja generada.
+  bgAuto={mode:'position',root:asState.root,scale:asState.scale,cells:notes.map(n=>({string:n.string,fret:n.fret}))};
   bgAutoSyncUI();
   rebuildBgMapIfVisible();
   showTab('player');
@@ -9766,7 +9773,17 @@ function tick(){
   const varBi=hasTempoVar?getBarIndexAt(elapsed):null;
   const bi=varBi!==null?varBi:Math.floor(prog/barSec);
   const currentBarSec=hasTempoVar?getBarSecAt(elapsed):barSec;
-  if(bi>=allBars.length){stopAll();return;}
+  // Los compases del ejercicio se agotan (bi por delante del último real) pero el audio puede
+  // seguir sonando unos segundos más (cola/reverb final sin acorde escrito en el XML, p.ej. el
+  // caso reportado: 122 compases ≈ 344s de contenido, audio de 357s). Cortar aquí con stopAll()
+  // detiene rafId y tick() deja de correr — armEndFade() (que vive al principio de este mismo
+  // tick(), se llama cada frame) nunca vuelve a evaluarse, así que su ventana de disparo
+  // (audioEl.currentTime cerca de audioEl.duration) jamás llega y el fundido a negro con el
+  // logo no aparece (bug reportado: "no se hace el fundido al logo"). En vez de cortar, seguir
+  // pidiendo frames (sin tocar más el mástil/acorde, que se queda en su último estado) hasta
+  // que el propio <audio> llegue a su fin real y dispare 'ended' (audioEl.onended=stopAll,
+  // ver arriba) — ahí sí, con armEndFade() ya habiendo tenido su ventana para dispararse antes.
+  if(bi>=allBars.length){armEndFade();rafId=requestAnimationFrame(tick);return;}
   const bar=allBars[bi];
   const imgs=bar.imgs||[null,null,null,null];
   const barBeats=getBeatsAtBar(bi); // tiempos reales de ESTE compás (4 si no hay <time> en el XML)
@@ -9969,7 +9986,14 @@ function tick(){
 //   'off'    → comportamiento clásico (fondo manual de librería, gated por showBgMap)
 //   'figure' → resto de notas de la FIGURA que suena: acorde actual (resolveChordDefs) o, si el
 //              frame activo es sp (escala con data-st), las clases de nota de esa escala.
-//   'scale'  → escala fija (tónica+escala) independiente de la figura.
+//   'scale'  → escala fija (tónica+escala), CUALQUIER traste diatónico de la ventana visible
+//              (independiente de la figura) — pensado para mástil libre, no para una caja/
+//              posición concreta (ver 'position').
+//   'position' → como 'scale', pero restringido a `bgAuto.cells` ([{string,fret},...]) — la
+//              caja/posición exacta (p.ej. la de "Arpegios en escala", ver asSendToEditor):
+//              nunca pinta una nota diatónica que esté fuera de esa caja, aunque el traste
+//              en cuestión sea igualmente diatónico. No expuesto en el selector "Fondo
+//              automático" (solo se fija por código).
 // Se guarda con la sesión (bgAuto). Etiquetas según el modo de vista del ciclo (notas/intervalos).
 let bgAuto={mode:'off',root:'C',scale:'major'};
 
@@ -9993,7 +10017,7 @@ function bgAutoChanged(){
 
 // Clases de nota (pc 0-11) + tónica + defs de intervalo para el modo activo. null si no aplica.
 function bgAutoPcs(bar,activeSlot){
-  if(bgAuto.mode==='scale'){
+  if(bgAuto.mode==='scale'||bgAuto.mode==='position'){
     const formula=SEQ_SCALE_FORMULAS[bgAuto.scale]||SEQ_SCALE_FORMULAS.major;
     const rootPc=noteToSt(bgAuto.root);if(rootPc<0)return null;
     return{rootRaw:bgAuto.root,rootPc,pcs:formula.map(st=>({pc:(rootPc+st)%12,semi:st}))};
@@ -10069,12 +10093,17 @@ function buildAutoBg(bar,activeSlot){
   const labelMode=getNoteDisplay(bar?.cycleIdx??0); // 'notes' | 'intervals'
   const IV_BY_SEMI={0:'R',1:'b2',2:'2',3:'b3',4:'3',5:'4',6:'b5',7:'5',8:'b6',9:'6',10:'b7',11:'7'};
   const byPc={};info.pcs.forEach(p=>{byPc[p.pc]=p;});
+  // mode:'position' → solo estas celdas EXACTAS entran en el barrido (ver comentario en la
+  // declaración de bgAuto): sin esto, cualquier traste diatónico de la ventana visible se
+  // pintaría, aunque no pertenezca a la caja/posición concreta que se está reproduciendo.
+  const posCells=bgAuto.mode==='position'?new Set((bgAuto.cells||[]).map(c=>`${c.string},${c.fret}`)):null;
   el.innerHTML='';
   let painted=0;
   for(let s=0;s<6;s++){
     // Con fretMin>0 la nota del traste fretMin caería MEDIO FUERA del borde izquierdo
     // (su hueco queda antes de la primera línea dibujada): el primer traste visible es fretMin+1.
     for(let f=(fretMin===0?0:fretMin+1);f<=fretMax;f++){
+      if(posCells&&!posCells.has(`${s},${f}`))continue;
       const pc=getNoteStAtFret(s,f);
       const p=byPc[pc];if(!p)continue;
       if(activeCells.has(`${s},${f}`)||activePcs.has(pc))continue;
