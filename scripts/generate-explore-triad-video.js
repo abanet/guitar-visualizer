@@ -34,6 +34,10 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileP = promisify(execFile);
 
+// Nombre de fichero final: <Acorde>_TodasTriadas_<Etiqueta>_<bpm>bpm.mp4 (p.ej.
+// Gm_TodasTriadas_Horizontal_90bpm.mp4) — convención pedida por Alberto para esta tanda de vídeos.
+const SEQ_LABEL = { A: 'Horizontal', B: 'Vertical', C: 'Azar' };
+
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
@@ -158,6 +162,8 @@ async function main() {
   let flipTimestamp = null;
   let stepError = null;
   let appVersion = 'unknown';
+  let chordName = 'Acorde';
+  let bpmRounded = 0;
   try {
     log('cargando app…');
     await page.goto(appUrl);
@@ -196,6 +202,17 @@ async function main() {
       if (err && err.classList.contains('err')) throw new Error('Error al leer el MusicXML');
       return t3 && t3.textContent && t3.textContent.length > 0;
     }, null, { timeout: 20000 });
+
+    // Acorde y bpm para el nombre del fichero final: el acorde tal cual viene en el primer compás
+    // del XML (vamp de un solo acorde) y el bpm tal cual lo lee la app (mismo input que usa el
+    // resto del vídeo, no un valor aparte que pudiera desincronizarse del real).
+    const meta = await page.evaluate(() => {
+      const all = getAllBars();
+      const segs = all.length ? getBarSegments(all[0]) : [];
+      return { chord: (segs[0] && segs[0].chord) || '', bpm: getBPM() };
+    });
+    chordName = (meta.chord || '').replace(/[\\/:*?"<>|\s]+/g, '') || 'Acorde';
+    bpmRounded = Math.round(meta.bpm) || 0;
 
     log('cargando audio…');
     await page.setInputFiles('#audioPicker', [audioPath]);
@@ -356,7 +373,7 @@ async function main() {
   }
   const trimOffsetSec = Math.max(0, ((playStartAt || videoStartRef) - videoStartRef) / 1000);
 
-  const outPath = path.join(outDir, `explore-triad_${seq}.mp4`);
+  const outPath = path.join(outDir, `${chordName}_TodasTriadas_${SEQ_LABEL[seq]}_${bpmRounded}bpm.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
   // "-ss" ANTES de "-i" busca por keyframe (rápido pero puede desviarse hasta un GOP entero —
   // con un cambio de posición cada 1 compás/2.67s ese desvío se notaba muchísimo, "está
