@@ -16,8 +16,9 @@
  *   --app <path>         Ruta al HTML de la app (por defecto: guitarvisualizer.html)
  *   --xml <path>          MusicXML de un solo acorde tipo vamp (obligatorio)
  *   --audio <path>        Audio m4a/mp3/wav a ese mismo acorde (obligatorio)
- *   --seq A|B             A: horizontal por grupo de cuerdas, ida y vuelta.
- *                         B: diagonal, conecta las 12 posiciones cuerda a cuerda. (por defecto: A)
+ *   --seq A|B|C           A: horizontal por grupo de cuerdas, ida y vuelta.
+ *                         B: diagonal, conecta las 12 posiciones cuerda a cuerda.
+ *                         C: las 12 posiciones en orden aleatorio. (por defecto: A)
  *   --out <dir>            Carpeta de salida (por defecto: ./video-out)
  *   --extra <seg>         Segundos extra al final del vídeo (por defecto: 2)
  *   --vis-config <path>   JSON con la configuración de "Elementos" a aplicar (opcional, por
@@ -111,7 +112,7 @@ async function main() {
   const outDir = path.resolve(args.out || './video-out');
   const extraSec = args.extra !== undefined ? parseFloat(args.extra) : 2;
   const seq = String(args.seq || 'A').toUpperCase();
-  if (seq !== 'A' && seq !== 'B') { console.error('--seq debe ser A o B'); process.exit(1); }
+  if (seq !== 'A' && seq !== 'B' && seq !== 'C') { console.error('--seq debe ser A, B o C'); process.exit(1); }
   const width = args.width ? parseInt(args.width, 10) : 1600;
   const height = args.height ? parseInt(args.height, 10) : 900;
   const defaultVisConfigPath = path.resolve(repoRoot, 'scripts/lib/explore-triad-vis-config.json');
@@ -205,7 +206,7 @@ async function main() {
 
     log(`generando secuencia ${seq}…`);
     const genResult = await page.evaluate((s) => (
-      s === 'A' ? generateExploreTriadA() : generateExploreTriadB()
+      s === 'A' ? generateExploreTriadA() : s === 'B' ? generateExploreTriadB() : generateExploreTriadC()
     ), seq);
 
     // Con 1 compás por posición, los 2 compases de anticipación fantasma por defecto (pensados
@@ -306,7 +307,7 @@ async function main() {
     // instante exacto en que empieza la 2ª pasada (bug reportado: "las tríadas no cambian nunca a
     // formato intervalos"). Se descuenta lo que el muestreo de arriba ya ha consumido de reloj
     // real (~4.5s) para no disparar el cambio tarde.
-    const lapLen = seq === 'A' ? 23 : 12; // nº de posiciones de una vuelta completa de la secuencia
+    const lapLen = seq === 'C' ? 12 : 23; // nº de posiciones de una vuelta completa de la secuencia (A y B: ida+vuelta=23; C: 12, sin ida/vuelta)
     const { introSec, barSec } = await page.evaluate(() => ({ introSec: getIntroSec() + getOffSec(), barSec: getBarSec() }));
     const pass2AtSec = introSec + lapLen * barSec; // 1 compás/posición
     const elapsedSoFarSec = (Date.now() - t0) / 1000;

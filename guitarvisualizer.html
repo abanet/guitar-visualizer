@@ -1331,11 +1331,13 @@ body.presentation #channelWatermark{display:flex;}
           de cuerdas, agotando sus 3 posiciones por traste real antes de saltar al siguiente
           (3-2-1→4-3-2→5-4-3→6-5-4), ida y vuelta. <b>B</b>: conecta las 12 posiciones deslizando la
           ventana de 3 cuerdas una cuerda cada vez (2 notas comunes + 1 nueva), en zigzag por todo
-          el mástil.
+          el mástil. <b>C</b>: las mismas 12 posiciones en orden aleatorio, sin conexión entre
+          compases consecutivos.
         </p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button class="btn" onclick="generateExploreTriadA()" title="Genera la secuencia A: horizontal por grupo de cuerdas, ida y vuelta"><i class="ti ti-wand"></i> Generar A (horizontal, ida/vuelta)</button>
-          <button class="btn" onclick="generateExploreTriadB()" title="Genera la secuencia B: diagonal, conectando por cuerdas comunes"><i class="ti ti-wand"></i> Generar B (diagonal)</button>
+          <button class="btn" onclick="generateExploreTriadB()" title="Genera la secuencia B: diagonal, conectando por cuerdas comunes, ida y vuelta"><i class="ti ti-wand"></i> Generar B (diagonal, ida/vuelta)</button>
+          <button class="btn" onclick="generateExploreTriadC()" title="Genera la secuencia C: las 12 posiciones en orden aleatorio"><i class="ti ti-wand"></i> Generar C (al azar)</button>
         </div>
       </div>
      </div>
@@ -6027,9 +6029,20 @@ const EXPLORE_TRIAD_SEQ_A=[
 // B ("vertical/diagonal"): conecta las 12 posiciones deslizando la ventana de 3 cuerdas UNA cuerda
 // cada vez (2 notas comunes + 1 nueva), en zigzag: sube 3-2-1→4-3-2→5-4-3→6-5-4, salta dentro de
 // 6-5-4 a la posición libre siguiente, baja 6-5-4→5-4-3→4-3-2→3-2-1, salta dentro de 3-2-1 a la
-// posición libre siguiente, vuelve a subir — cubre las 12 exactamente una vez.
+// posición libre siguiente, vuelve a subir — cubre las 12 exactamente una vez. Igual que A: ida y
+// vuelta retrazando el mismo camino (23 posiciones: 12 ida + 11 vuelta, sin repetir el compás de
+// giro) — si no, al llegar a la posición 12 saltaba directamente a la 1 (y encima cambiando a
+// intervalos ahí mismo), en vez de volver sobre sus pasos como hace A (feedback de Alberto).
 const EXPLORE_TRIAD_SEQ_B=[
   [3,2],[0,1],[1,0],[2,2],[2,0],[1,1],[0,2],[3,0],[3,1],[0,0],[1,2],[2,1],
+  [1,2],[0,0],[3,1],[3,0],[0,2],[1,1],[2,0],[2,2],[1,0],[0,1],[3,2],
+];
+// C ("al azar"): las mismas 12 posiciones, orden fijo sin patrón — sin ida/vuelta, cada compás es
+// un salto arbitrario (a diferencia de A/B, que conectan posiciones vecinas a propósito). Al ser
+// las 12 combinaciones (gi,inv) siempre jugables por construcción, no hace falta verificar a mano
+// como en A/B: basta con que aparezcan las 12 exactamente una vez.
+const EXPLORE_TRIAD_SEQ_C=[
+  [2,1],[0,2],[3,0],[1,1],[2,0],[0,0],[3,2],[1,2],[2,2],[0,1],[3,1],[1,0],
 ];
 
 // Aplica una de las secuencias fijas de arriba al tema cargado: para cada compás (bloque de
@@ -6130,7 +6143,14 @@ async function generateExploreTriadA(){
 }
 async function generateExploreTriadB(){
   const r=await applyExploreTriadSequence(EXPLORE_TRIAD_SEQ_B,1);
-  if(r)alert('✓ Explora tríada B (diagonal) — '+r.applied+' compases generados.'+
+  if(r)alert('✓ Explora tríada B (diagonal, ida/vuelta) — '+r.applied+' compases generados.'+
+    (r.skipped?'\n⚠ '+r.skipped+' compás(es) no admitían esa posición y se dejaron sin generar.':'')+
+    (r.bumpedTo?'\n↔ Se ha ampliado el mástil hasta el traste '+r.bumpedTo+'.':'')+
+    '\nModo cambiado a Tríadas. Revísalas en el editor y pulsa Visualizador.');
+}
+async function generateExploreTriadC(){
+  const r=await applyExploreTriadSequence(EXPLORE_TRIAD_SEQ_C,1);
+  if(r)alert('✓ Explora tríada C (al azar) — '+r.applied+' compases generados.'+
     (r.skipped?'\n⚠ '+r.skipped+' compás(es) no admitían esa posición y se dejaron sin generar.':'')+
     (r.bumpedTo?'\n↔ Se ha ampliado el mástil hasta el traste '+r.bumpedTo+'.':'')+
     '\nModo cambiado a Tríadas. Revísalas en el editor y pulsa Visualizador.');
