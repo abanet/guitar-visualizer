@@ -22,5 +22,8 @@
   "devDependencies": {
     "busboy": "^1.6.0",
     "playwright": "^1.62.1"
+  },
+  "dependencies": {
+    "googleapis": "^178.1.1"
   }
 }
