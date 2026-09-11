@@ -378,10 +378,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .slot-chord-name{font-size:clamp(44px,9vw,88px);font-weight:800;line-height:1;letter-spacing:-3px;text-align:center;}
 .slot-fn-badge{font-size:clamp(10px,1.2vw,14px);font-weight:500;padding:3px 12px 5px;border-radius:4px;display:inline-block;margin-top:3px;line-height:1.4;}
 .chord-notes{display:flex;align-items:center;gap:clamp(4px,.6vw,8px);margin-top:clamp(4px,.6vw,8px);flex-wrap:wrap;justify-content:center;}
-.note-chip{display:flex;flex-direction:column;align-items:center;line-height:1.1;}
+.note-chip{display:flex;flex-direction:column;align-items:center;line-height:1.1;min-width:clamp(30px,3.4vw,42px);}
 .note-name{font-size:clamp(20px,2.6vw,32px);font-weight:700;color:rgba(255,255,255,.9);}
-.note-interval{font-size:clamp(11px,1.4vw,17px);font-weight:500;color:rgba(255,255,255,.4);margin-top:1px;}
+.note-interval{font-size:clamp(15px,2vw,24px);font-weight:600;color:rgba(255,255,255,.5);margin-top:1px;}
 .note-sep{font-size:clamp(16px,2vw,24px);color:rgba(255,255,255,.15);align-self:center;}
+.note-link{display:flex;flex-direction:column;align-items:center;justify-content:center;align-self:flex-start;margin-top:clamp(9px,1.2vw,15px);width:clamp(44px,5vw,60px);}
+.note-link-label{font-size:clamp(11px,1.3vw,15px);font-weight:700;color:#FFD166;letter-spacing:.02em;margin-bottom:4px;white-space:nowrap;}
+.note-link-line{width:100%;height:2px;background:#FFD166;border-radius:1px;}
 .next-row{display:flex;align-items:center;gap:7px;margin-top:clamp(4px,.6vw,8px);}
 .next-lbl{font-size:clamp(9px,1.1vw,14px);color:rgba(255,255,255,.25);text-transform:uppercase;letter-spacing:.1em;}
 .next-val{font-size:clamp(20px,3.2vw,36px);font-weight:700;color:rgba(255,255,255,.28);}
@@ -423,6 +426,10 @@ body.mastil-only .msg-zone,body.mastil-only .scale-row,body.mastil-only .vis-bot
 .lap-tot{font-size:clamp(10px,1.2vw,13px);color:rgba(255,255,255,.42);font-weight:600;white-space:nowrap;}
 @keyframes lapChange{0%{transform:translateY(8px);opacity:0;}100%{transform:translateY(0);opacity:1;}}
 .lap-cur.changed{animation:lapChange .45s cubic-bezier(.2,.8,.3,1);}
+
+/* ── "Explora una tríada": destello de la posición eco (ver generateNeckSVG/renderSVGStatic) ── */
+@keyframes echoPulse{0%{opacity:.55;}50%{opacity:1;}100%{opacity:.55;}}
+.echo-pulse{animation:echoPulse 1.8s ease-in-out infinite;}
 
 /* ── Intro count-in pulse ── */
 @keyframes introPulse{0%{transform:scale(1);}28%{transform:scale(1.13);}100%{transform:scale(1);}}
@@ -549,6 +556,7 @@ body.presentation #channelWatermark{display:flex;}
           <option value="off">Desactivado</option>
           <option value="figure">Figura actual (resto de sus notas en el mástil)</option>
           <option value="scale">Escala fija</option>
+          <option value="triadFull">Tríada por todo el mástil (Explora una tríada)</option>
         </select>
         <span id="bgAutoScaleRow" style="display:none;align-items:center;gap:6px;">
           <select id="bgAutoRoot" onchange="bgAutoChanged()" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border2);font-size:13px;"></select>
@@ -826,6 +834,13 @@ body.presentation #channelWatermark{display:flex;}
           <svg id="svgCanvas" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet"></svg>
           <svg id="bgMapCanvas" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;overflow:visible;"></svg>
           <svg id="ghostCanvas" viewBox="0 0 1001 300" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;overflow:visible;z-index:7;"></svg>
+          <!-- Texto de apoyo de "Explora una tríada en el mástil" (ver renderExploreTriadMsg): SOBRE
+               la franja vacía que deja el letterboxing del mástil (viewBox 1001x300 con otra
+               relación de aspecto que la caja), no en una fila propia — así no resta altura real al
+               mástil (feedback de Alberto: "una ubicación que no reste espacio"). -->
+          <div id="exploreMsgOverlay" style="position:absolute;left:0;right:0;bottom:1%;text-align:center;pointer-events:none;z-index:8;">
+            <span id="exploreMsgOverlayText" style="font:400 clamp(14px,1.6vw,22px)/1.3 Arial,Helvetica,sans-serif;color:rgba(255,255,255,.55);letter-spacing:.06em;opacity:0;transition:opacity .6s ease;"></span>
+          </div>
           <!-- Texto de apoyo de "Historia de escala" (módulo scaleStory, ver final del archivo) -->
           <div id="ssCaption" style="position:absolute;left:0;right:0;bottom:0;display:none;pointer-events:none;z-index:9;background:linear-gradient(0deg,rgba(0,0,0,.72),transparent);padding:16px 18px 12px;text-align:center;">
             <div id="ssCaptionText" style="color:#fff;font:600 16px/1.3 Helvetica,Arial,sans-serif;letter-spacing:.02em;text-shadow:0 1px 3px rgba(0,0,0,.6);"></div>
@@ -1316,6 +1331,24 @@ body.presentation #channelWatermark{display:flex;}
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
           <button class="btn" onclick="autoGenerateTriads()" title="Genera las tríadas de todo el tema aplicando todas las opciones activas de esta pestaña"><i class="ti ti-wand"></i> Generar tríadas automáticas</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>Explora una tríada en el mástil <span style="font-weight:400;font-size:12px;color:var(--text3);">(recorre las 12 posiciones jugables de la tríada de un vamp de un solo acorde — pensado para lanzarse por comando, ver scripts/generate-explore-triad-video.js)</span></h3>
+        <p style="font-size:12px;color:var(--text3);margin:4px 0 10px 0;">
+          Ignora voice leading y "Barrido de posiciones": fuerza un compás por posición siguiendo un
+          orden fijo propio, 2 pasadas completas (nombres de nota → intervalos). <b>A</b>: por grupo
+          de cuerdas, agotando sus 3 posiciones por traste real antes de saltar al siguiente
+          (3-2-1→4-3-2→5-4-3→6-5-4), ida y vuelta. <b>B</b>: conecta las 12 posiciones deslizando la
+          ventana de 3 cuerdas una cuerda cada vez (2 notas comunes + 1 nueva), en zigzag por todo
+          el mástil. <b>C</b>: las mismas 12 posiciones en orden aleatorio, sin conexión entre
+          compases consecutivos.
+        </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn" onclick="generateExploreTriadA()" title="Genera la secuencia A: horizontal por grupo de cuerdas, ida y vuelta"><i class="ti ti-wand"></i> Generar A (horizontal, ida/vuelta)</button>
+          <button class="btn" onclick="generateExploreTriadB()" title="Genera la secuencia B: diagonal, conectando por cuerdas comunes, ida y vuelta"><i class="ti ti-wand"></i> Generar B (diagonal, ida/vuelta)</button>
+          <button class="btn" onclick="generateExploreTriadC()" title="Genera la secuencia C: las 12 posiciones en orden aleatorio"><i class="ti ti-wand"></i> Generar C (al azar)</button>
         </div>
       </div>
      </div>
@@ -3541,16 +3574,30 @@ function resolveChordDefs(quality){
 }
 function parseChord(chord){const m=chord.match(/^([A-G][b#]?)(.*)/);if(!m)return null;const root=norm(m[1]),quality=m[2].trim();const intervals=resolveChordDefs(quality);const ri=NTS.indexOf(root);return intervals.map(iv=>({note:NTS[(ri+iv.st)%12],interval:iv.n}));}
 function getNoteMode(){return document.getElementById('noteMode').value;}
+// Distancia en TONOS (feedback de Alberto: "2T", "1½T"…) entre dos notas CONSECUTIVAS del
+// acorde tal y como vienen de parseChord (orden de posición fundamental: R,3,5[,7…] — es la
+// "fórmula" de la tríada, no la inversión concreta que se esté viendo en el mástil en ese momento).
+function intervalGapLabel(fromNote,toNote){
+  const semi=((noteToSt(toNote)-noteToSt(fromNote))%12+12)%12;
+  const whole=Math.floor(semi/2),half=semi%2===1;
+  if(whole===0)return half?'½T':'0T';
+  return whole+(half?'½T':'T');
+}
 function renderNotesRow(chord,fn,cid){
   const el=document.getElementById(cid);if(!el)return;const mode=getNoteMode();
   if(!chord||chord==='—'||mode==='off'){el.innerHTML='';return;}
   const notes=parseChord(chord);if(!notes){el.innerHTML='';return;}
   const showFn=getVisConfig().showFnBadge!==false;
+  // "Distancia en intervalos entre notas" (feedback de Alberto, ejercicio "Explora una tríada"):
+  // sustituye el separador mudo "–" por el nombre del intervalo entre esa nota y la siguiente,
+  // en la MISMA línea — no añade alto, solo reaprovecha el hueco del separador.
+  const showGaps=getVisConfig().showIntervalGaps===true;
   // Use function color class only if showing fn, otherwise neutral
   const nc=(showFn&&fn&&fn!=='x')?(fn==='I'?'ncI':fn==='IV'?'ncIV':fn==='V'?'ncV':'nc'+fn.toUpperCase().replace(/[^IVX]/g,'')):'ncNeutral';
   el.innerHTML=notes.map((n,i)=>{
     let label=mode==='notes'?`<span class="note-name">${n.note}</span>`:mode==='intervals'?`<span class="note-name" style="font-size:clamp(12px,1.7vw,20px);color:rgba(255,255,255,.75);">${n.interval}</span>`:`<span class="note-name">${n.note}</span><span class="note-interval">${n.interval}</span>`;
-    return `<div class="note-chip ${nc}">${label}</div>${i<notes.length-1?'<span class="note-sep">–</span>':''}`;
+    const sep=i<notes.length-1?(showGaps?`<span class="note-link"><span class="note-link-label">${intervalGapLabel(n.note,notes[i+1].note)}</span><span class="note-link-line"></span></span>`:'<span class="note-sep">–</span>'):'';
+    return `<div class="note-chip ${nc}">${label}</div>${sep}`;
   }).join('');
 }
 function refreshNotes(){if(currentChordData)renderNotesRow(currentChordData.chord,currentChordData.fn,'vNotes');}
@@ -3731,7 +3778,9 @@ function clearGhostNotes(){
   if(sc)sc.querySelectorAll('.vl-note').forEach(g=>{
     g.style.opacity='';
     const c=g.querySelector('circle');
-    if(c){const orig=c.getAttribute('data-fill');if(orig){c.setAttribute('fill',orig);c.setAttribute('stroke',orig);c.setAttribute('stroke-width','2');}const tt=g.querySelector('text');if(tt)tt.setAttribute('fill','white');}
+    if(c){const orig=c.getAttribute('data-fill');if(orig){c.setAttribute('fill',orig);c.setAttribute('stroke',orig);c.setAttribute('stroke-width','2');}
+      const isEcho=c.getAttribute('class')==='echo-pulse';
+      const tt=g.querySelector('text');if(tt)tt.setAttribute('fill',isEcho?'rgba(255,213,79,.85)':'white');}
   });
 }
 
@@ -4999,7 +5048,17 @@ function renderSVGStatic(parsed){
     const rr=useUnified?stdR:note.r;
     const g=document.createElementNS(NS,'g');g.setAttribute('class','vl-note');g.setAttribute('data-idx',String(i));g.setAttribute('data-label',note.label||'');
     const circle=document.createElementNS(NS,'circle');circle.setAttribute('cx',note.cx);circle.setAttribute('cy',note.cy);circle.setAttribute('r',rr);
-    if(ownStyle){
+    if(note.echo){
+      // Posición "eco" (ver generateNeckSVG/svgStringToParsed): SIEMPRE su propio estilo amarillo
+      // tenue y parpadeante, por delante de ownStyle/forceOwnNoteStyle — si no, se repinta con el
+      // rojo/cian fijo de "Exact look..." de abajo y se pierde el marcador.
+      circle.setAttribute('fill','rgba(255,213,79,.16)');circle.setAttribute('stroke','#FFD54F');circle.setAttribute('stroke-width','2');
+      circle.setAttribute('class','echo-pulse');
+      // data-ownstroke: applyFollowHighlight() resetea SIEMPRE el stroke de TODAS las notas a
+      // data-ownstroke||fill en cada cambio de compás (para quitar el anillo de "seguir voz" del
+      // compás anterior) — sin esto el ámbar se perdía y quedaba igual al fill (bug real).
+      circle.setAttribute('data-ownstroke','#FFD54F');circle.setAttribute('data-ownstrokew','2');
+    }else if(ownStyle){
       // Exact look of the sequence generator: semi-transparent cyan/red + subtle white border
       const f=note.isRoot?'rgba(229,57,53,.45)':'rgba(38,198,218,.5)';
       circle.setAttribute('fill',f);circle.setAttribute('stroke','rgba(255,255,255,.25)');circle.setAttribute('stroke-width','1');circle.setAttribute('data-fill',f);
@@ -5032,7 +5091,7 @@ function renderSVGStatic(parsed){
     const displayLabel=noteDisplayLabel(note,ndMode,chord);
     const t=document.createElementNS(NS,'text');t.setAttribute('x',note.cx);t.setAttribute('y',note.cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
     const _dimTN=isTNparsed&&!ownStyle&&(note.fill||'').indexOf('255,255,255')>=0;
-    t.setAttribute('fill',_dimTN?'rgba(255,255,255,.45)':'white');
+    t.setAttribute('fill',note.echo?'rgba(255,213,79,.85)':(_dimTN?'rgba(255,255,255,.45)':'white'));
     const fs=displayLabel&&displayLabel.length>2?Math.round(rr*0.65):Math.round(rr*0.85);
     t.setAttribute('font-size',fs);t.setAttribute('font-weight',_dimTN?'normal':'bold');t.setAttribute('font-family','Helvetica,Arial,sans-serif');t.setAttribute('pointer-events','none');t.textContent=displayLabel;g.appendChild(t);
     canvas.appendChild(g);
@@ -5536,7 +5595,7 @@ function getChordVoicing(chord,stringGroup,inversion){
     intervals:assigned.map(a=>a.interval)};
 }
 
-function generateNeckSVG(voicing,chord,fretStart=0,fretEnd=15){
+function generateNeckSVG(voicing,chord,fretStart=0,fretEnd=15,msg=null,showEcho=false){
   if(!voicing)return null;
   const{frets,strings,notes,intervals}=voicing;
   const W=NECK_W,H=NECK_H;
@@ -5546,7 +5605,12 @@ function generateNeckSVG(voicing,chord,fretStart=0,fretEnd=15){
   const stringSpacing=(H-topPad-bottomPad)/5;
   const strY=(sIdx)=>topPad+(5-sIdx)*stringSpacing;
   const fretX=(f)=>leftPad+(f-fretStart)*fretW;
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="triads" data-fretrange="${fretStart},${fretEnd}">`;
+  // data-msg (opcional, ver "Explora una tríada en el mástil"): mismo mecanismo que data-pentaname
+  // en arpBuildZoneSVG — un texto horneado en el SVG de cada compás para que renderMsg() lo saque
+  // por la fila #vMsgText igual que hace con el nombre de pentatónica, sin depender de bar.msgText
+  // (que el usuario podría borrar/editar por compás).
+  const msgAttr=msg?` data-msg="${String(msg).replace(/"/g,'&quot;')}"`:'';
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="triads" data-fretrange="${fretStart},${fretEnd}"${msgAttr}>`;
   if(fretStart===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretStart+(fretStart===0?1:0);f<=fretEnd;f++){
     const x=fretX(f);
@@ -5585,6 +5649,26 @@ function generateNeckSVG(voicing,chord,fretStart=0,fretEnd=15){
     s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" data-st="${getNoteStAtFret(sIdx,f)}"/>`;
     s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="white" font-size="${lbl.length>2?Math.round(r*0.65):Math.round(r*0.85)}" font-weight="bold" font-family="Arial,sans-serif">${lbl}</text>`;
   });
+  // Posición "eco" (ver "Explora una tríada en el mástil", feedback de Alberto): con el mástil
+  // ampliado a 13 trastes, ALGUNAS posiciones (p.ej. la 2ª inversión de C en cuerdas 3-2-1, que cae
+  // cerca del traste 0) caben ENTERAS otra vez una octava más arriba (+12) dentro del mismo tramo
+  // visible — misma digitación, mismas notas, dos sitios válidos. No es un caso especial de esa
+  // posición: se recalcula aquí para CUALQUIER voicing, comprobando si +12 (o -12, si el mástil no
+  // empezara en el traste 0) sigue cayendo dentro de fretStart..fretEnd. Destello amarillo tenue,
+  // sin la forma/color de nota real, para no confundirlo con "aquí hay que tocar".
+  if(showEcho){
+    const echoOffset=[12,-12].find(off=>strings.every((sIdx,i)=>{const nf=frets[i]+off;return nf>=fretStart&&nf<=fretEnd;}));
+    if(echoOffset!=null){
+      strings.forEach((sIdx,i)=>{
+        const f=frets[i]+echoOffset;
+        const x=fretX(f)-fretW/2;
+        const y=strY(sIdx);
+        const lbl=notes[i];
+        s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="rgba(255,213,79,.16)" stroke="#FFD54F" stroke-width="2" data-echo="1"><animate attributeName="opacity" values=".55;1;.55" dur="1.8s" repeatCount="indefinite"/></circle>`;
+        s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="rgba(255,213,79,.85)" font-size="${lbl.length>2?Math.round(r*0.65):Math.round(r*0.85)}" font-weight="600" font-family="Arial,sans-serif" pointer-events="none">${lbl}</text>`;
+      });
+    }
+  }
   s+='</svg>';
   return s;
 }
@@ -5689,6 +5773,10 @@ function svgStringToParsed(svgStr){
     // generated circles carry no stroke attribute, so this is a no-op for them.
     const stk=c.getAttribute('stroke');if(stk){note.stroke=stk;const sw=c.getAttribute('stroke-width');if(sw)note.strokeWidth=sw;}
     const dst=c.getAttribute('data-st');if(dst!=null&&dst!=='')note.st=parseInt(dst,10);
+    // data-echo (ver generateNeckSVG): posición "eco" de "Explora una tríada" — renderSVGStatic
+    // debe pintarla con su estilo amarillo tenue SIEMPRE, incluso con forceOwnNoteStyle activado
+    // (que si no, repintaría este círculo con el rojo/cian fijo y perdería el marcador).
+    if(c.getAttribute('data-echo')==='1')note.echo=true;
     notes.push(note);
   });
   // Si hay data-st y una tónica identificable, hornear el semitono relativo (note.semi):
@@ -5730,6 +5818,9 @@ function svgStringToParsed(svgStr){
   // escala", pero sin depender de asState (ese tab puede no estar ni cargado).
   {const _pn=(svgStr||'').match(/data-pentaname="([^"]*)"/);
    if(_pn&&_pn[1])out.pentaName=_pn[1].replace(/&quot;/g,'"');}
+  // data-msg (ver generateNeckSVG): texto de apoyo horneado por "Explora una tríada en el mástil".
+  {const _em=(svgStr||'').match(/data-msg="([^"]*)"/);
+   if(_em&&_em[1])out.exerciseMsg=_em[1].replace(/&quot;/g,'"');}
   {const _fr2=(svgStr||'').match(/data-fretrange="(-?\d+),(-?\d+)"/);
    const fr={min:_fr2?parseInt(_fr2[1],10):0,max:_fr2?parseInt(_fr2[2],10):15};
    out.fretRange=fr;
@@ -5971,6 +6062,226 @@ function buildSweepSlots(scope,fixedGroupIdx){
 // Etiquetas visibles de cada grupo, en el MISMO orden de índice que TRIAD_STRING_GROUPS y que las
 // opciones de los selects de grupo de cuerdas del resto de la pestaña (0="Cuerdas 4-3-2", etc.).
 const TRIAD_GROUP_LABELS=['Cuerdas 4-3-2','Cuerdas 5-4-3','Cuerdas 6-5-4','Cuerdas 3-2-1'];
+
+// ── EXPLORA UNA TRÍADA EN EL MÁSTIL (ejercicios A/B) ────────────────────────────────────────────
+// Secuencias de slots [gi,inv] (índices de TRIAD_STRING_GROUPS/TRIAD_GROUP_LABELS) que recorren
+// las 12 posiciones jugables de una tríada de 3 notas por todo el mástil, pensadas para el
+// ejercicio "Explora una tríada" (vamp de un solo acorde, cualquier tónica/calidad — practicar
+// digitación por todo el mástil, no voice leading).
+//
+// A ("horizontal", serpenteo): agota las 3 posiciones de cada grupo de cuerdas por TRASTE REAL
+// (no por número de inversión — el orden real por traste depende de la tónica, ver
+// buildExploreTriadSeqA), alternando el sentido en cada grupo (321 izq→dcha, 432 dcha→izq, 543
+// izq→dcha, 654 dcha→izq) para que cada grupo arranque donde acabó el anterior — sin el salto de
+// vuelta a la zona abierta que había con los 4 grupos siempre en el mismo sentido (feedback de
+// Alberto). Y vuelta atrás retrazando el mismo camino (23 posiciones: 12 ida + 11 vuelta, sin
+// repetir el compás de giro).
+//
+// Building it a mano y fijo (como B/C) solo servía para C: el orden real por TRASTE de las 3
+// inversiones de un grupo de cuerdas depende de la tónica (p.ej. para Bm la inversión más aguda de
+// C es la más grave de Bm) — con la tabla fija de C, un vídeo de Bm empezaba por el extremo
+// contrario del mástil (bug reportado: "debería empezar por la posición más a la izquierda... pero
+// empieza en la última, va al revés"). Por eso A se CALCULA en cada generación a partir del acorde
+// real cargado (ver generateExploreTriadA), no es una tabla fija — a diferencia de B (la conexión
+// por notas comunes entre inversiones vecinas es una propiedad de la FORMA, no de la tónica:
+// verificado que da la misma tabla para C y para Bm) y de C (orden arbitrario, cualquier permutación
+// de las 12 sirve igual sea cual sea la tónica).
+function buildExploreTriadSeqA(chord){
+  const groupOrder=[3,0,1,2]; // 321→432→543→654 (fijo, ver comentario de arriba)
+  const seq=[];
+  groupOrder.forEach((gi,gIdx)=>{
+    const group=TRIAD_STRING_GROUPS[gi];
+    const invs=[0,1,2].map(inv=>{
+      const v=getChordVoicing(chord,group,inv);
+      const minFret=(v&&v.frets&&v.frets.length)?Math.min(...v.frets):999;
+      return{inv,minFret};
+    });
+    invs.sort((a,b)=>a.minFret-b.minFret); // ascendente = izquierda→derecha en el mástil
+    const ascending=gIdx%2===0; // grupos 1º/3º (321,543) izq→dcha; 2º/4º (432,654) dcha→izq
+    (ascending?invs:invs.slice().reverse()).forEach(o=>seq.push([gi,o.inv]));
+  });
+  // ida y vuelta: 12 ida + 11 vuelta, retrazando el mismo camino sin repetir el compás de giro
+  // (índices 10..0 de la ida — se excluye el 11, la posición de giro).
+  return seq.concat(seq.slice(0,11).reverse());
+}
+// B ("vertical/diagonal"): conecta las 12 posiciones deslizando la ventana de 3 cuerdas UNA cuerda
+// cada vez (2 notas comunes + 1 nueva), en zigzag: sube 3-2-1→4-3-2→5-4-3→6-5-4, salta dentro de
+// 6-5-4 a la posición libre siguiente, baja 6-5-4→5-4-3→4-3-2→3-2-1, salta dentro de 3-2-1 a la
+// posición libre siguiente, vuelve a subir — cubre las 12 exactamente una vez. Igual que A: ida y
+// vuelta retrazando el mismo camino (23 posiciones: 12 ida + 11 vuelta, sin repetir el compás de
+// giro) — si no, al llegar a la posición 12 saltaba directamente a la 1 (y encima cambiando a
+// intervalos ahí mismo), en vez de volver sobre sus pasos como hace A (feedback de Alberto).
+//
+// Igual que A, esto se CALCULA en cada generación a partir del acorde real (buildExploreTriadSeqB),
+// no es una tabla fija: el requisito es "empezar por la posición más a la izquierda" del grupo
+// 3-2-1, y esa posición es una inversión distinta según la tónica (p.ej. para Em la más a la
+// izquierda es su 1ª inversión — cae justo en las tres cuerdas al aire — pero para C es la 2ª, y
+// para Bm ninguna llega a traste 0). Con la tabla fija vieja (que arrancaba siempre en la 2ª
+// inversión) un vídeo de Em no empezaba en la posición más a la izquierda sino en la segunda desde
+// esa punta (bug reportado por Alberto). El orden de GRUPOS del zigzag (3,0,1,2, salto, 2,1,0,3,
+// salto, 0,1,2) sí es fijo — es geometría del mástil, no depende de la tónica —; lo único que se
+// recalcula por acorde es (a) qué inversión de 3-2-1 es la más a la izquierda para arrancar ahí, y
+// (b) qué inversión del siguiente grupo comparte las 2 notas con el paso anterior (misma nota,
+// no solo mismo nombre de intervalo), siguiendo esa regla en cada deslizamiento.
+function buildExploreTriadSeqB(chord){
+  const groupWalk=[3,0,1,2,2,1,0,3,3,0,1,2]; // fijo: geometría del zigzag, no depende del acorde
+  const startCandidates=[0,1,2].map(inv=>({inv,v:getChordVoicing(chord,TRIAD_STRING_GROUPS[3],inv)}));
+  startCandidates.sort((a,b)=>Math.min(...a.v.frets)-Math.min(...b.v.frets)); // más a la izquierda primero
+  const startInv=startCandidates[0].inv;
+
+  const seq=[[3,startInv]];
+  const usedByGroup={0:new Set(),1:new Set(),2:new Set(),3:new Set([startInv])};
+  for(let i=1;i<groupWalk.length;i++){
+    const gi=groupWalk[i],prevGi=groupWalk[i-1],prevInv=seq[i-1][1];
+    if(gi===prevGi){
+      // salto dentro del mismo grupo: la inversión que aún no se ha usado en él
+      const remaining=[0,1,2].find(inv=>!usedByGroup[gi].has(inv));
+      seq.push([gi,remaining]);usedByGroup[gi].add(remaining);
+      continue;
+    }
+    // deslizamiento a grupo vecino: la inversión (aún libre) cuyas 2 cuerdas compartidas llevan
+    // la MISMA nota (mismo st, no solo mismo nombre de intervalo) que el paso anterior
+    const prevGroupArr=TRIAD_STRING_GROUPS[prevGi],curGroupArr=TRIAD_STRING_GROUPS[gi];
+    const prevV=getChordVoicing(chord,prevGroupArr,prevInv);
+    const sharedStrings=prevGroupArr.filter(s=>curGroupArr.includes(s));
+    const prevStByString={};
+    prevV.strings.forEach((s,idx)=>{prevStByString[s]=prevV.assigned[idx].st;});
+    let matchInv=null;
+    for(const inv of[0,1,2]){
+      if(usedByGroup[gi].has(inv))continue;
+      const v=getChordVoicing(chord,curGroupArr,inv);
+      if(sharedStrings.every(s=>v.assigned[v.strings.indexOf(s)].st===prevStByString[s])){matchInv=inv;break;}
+    }
+    seq.push([gi,matchInv]);usedByGroup[gi].add(matchInv);
+  }
+  return seq.concat(seq.slice(0,11).reverse());
+}
+// C ("al azar"): las mismas 12 posiciones, orden fijo sin patrón — sin ida/vuelta, cada compás es
+// un salto arbitrario (a diferencia de A/B, que conectan posiciones vecinas a propósito). Al ser
+// las 12 combinaciones (gi,inv) siempre jugables por construcción, no hace falta verificar a mano
+// como en A/B: basta con que aparezcan las 12 exactamente una vez.
+const EXPLORE_TRIAD_SEQ_C=[
+  [2,1],[0,2],[3,0],[1,1],[2,0],[0,0],[3,2],[1,2],[2,2],[0,1],[3,1],[1,0],
+];
+
+// Aplica una de las secuencias fijas de arriba al tema cargado: para cada compás (bloque de
+// `barsPerPos` compases) usa el/los acorde(s) real(es) del XML tal cual vengan (normalmente uno
+// solo, tipo vamp) pero fuerza la posición según la secuencia en vez de resolver por voice
+// leading — como el "Barrido de posiciones" de arriba, pero con un orden propio explícito en vez
+// de sus 2 estrategias (secuencial por etiqueta / aleatorio). Da 2 pasadas completas de la
+// secuencia (nombres de nota, luego intervalos); los compases que sobren tras esas 2 pasadas se
+// quedan en la última posición de la 2ª pasada.
+async function applyExploreTriadSequence(seq,barsPerPos,label){
+  if(!cycles.length){alert('Carga primero un tema (XML con acordes).');return null;}
+  // La secuencia recorre TODO el tema sin repetirse cada vuelta — las vueltas 'ref' (que por
+  // defecto solo reflejan los compases de la vuelta 0, ver getTargetBars) necesitan sus propios
+  // compases igual que "Figura por vuelta"/"Zona por vuelta", si no el compás 17 (2ª vuelta) no
+  // tiene dónde escribirse y la secuencia se corta en los compases de la vuelta 0.
+  for(let ci=0;ci<cycles.length;ci++){if(cycles[ci].mode==='ref'){makeCycleCustom(ci);}}
+  const all=getAllBars();
+  if(!all.length){alert('Carga primero un tema (XML con acordes).');return null;}
+  const barLoc=[];
+  {let g=0;for(let ci=0;ci<cycles.length;ci++){const eb=getEffectiveBars(ci);for(let li=0;li<eb.length;li++){if(g<all.length){barLoc[g]={ci,local:li};g++;}}}}
+  const flat=[];
+  all.forEach((b,bi)=>{const ci=barLoc[bi]?.ci??0;getBarSegments(b).forEach(s=>flat.push({bi,chord:s.chord,beat:s.beat||1,ci}));});
+
+  const lapLen=seq.length;
+  const totalBlocks=Math.max(1,Math.ceil(flat.length/barsPerPos));
+  const plan=[]; // por bloque de barsPerPos compases: {gi,inv,mode}
+  for(let k=0;k<totalBlocks;k++){
+    const idx=Math.min(k,2*lapLen-1); // más allá de las 2 pasadas: se queda en la última posición
+    const[gi,inv]=seq[idx%lapLen];
+    plan.push({gi,inv,mode:idx<lapLen?'name':'interval'});
+  }
+
+  const INV_NAMES=['Fund.','1ª inv','2ª inv'];
+  const items=[];
+  let sharedFretEnd=13;
+  for(let idx=0;idx<flat.length;idx++){
+    const f=flat[idx];
+    const block=Math.min(Math.floor(f.bi/barsPerPos),plan.length-1);
+    const{gi,inv,mode}=plan[block];
+    const group=TRIAD_STRING_GROUPS[gi]||TRIAD_STRING_GROUPS[0];
+    const chord=f.chord;
+    const voicing=getChordVoicing(chord,group,inv);
+    items.push({f,gi,inv,mode,chord,voicing});
+    if(voicing&&voicing.frets&&voicing.frets.length){
+      const mx=Math.max(...voicing.frets);if(mx>sharedFretEnd)sharedFretEnd=mx;
+    }
+  }
+  const bumpedTo=bumpMaxFretsShownIfNeeded(sharedFretEnd);
+  let applied=0,skipped=0;
+  const usedSlotsByBar={};
+  for(const{f,gi,inv,mode,chord,voicing}of items){
+    if(!voicing){skipped++;continue;}
+    // El modo notas/intervalos del mástil NO se hornea aquí: renderSVGStatic recalcula la
+    // etiqueta en vivo a partir de "Mástil:" (getNoteDisplay, ver noteDisplayLabel) usando
+    // note.st, así que da igual qué texto lleve el <text> del SVG — lo decide el selector global
+    // en el momento de pintar (por eso el script de vídeo cambia ese selector a mitad de
+    // grabación en vez de hornear dos SVG distintos por posición).
+    const svg=generateNeckSVG(voicing,chord,0,sharedFretEnd,label,true);
+    if(!svg)continue;
+    const parsed=svgStringToParsed(svg);
+    let thumb=null; try{thumb=await svgToThumb(svg,320,116);}catch(e){}
+    const loc=barLoc[f.bi];if(!loc)continue;
+    const target=getTargetBars(loc.ci);
+    if(target&&target[loc.local]){
+      const slotIdx=Math.round((f.beat||1)-1);
+      target[loc.local].imgs[slotIdx]={type:'svg',data:svg,
+        name:chord+' '+INV_NAMES[inv]+' '+(TRIAD_GROUP_LABELS[gi]||'')+(mode==='interval'?' (intervalos)':''),
+        thumb,svgParsed:parsed};
+      (usedSlotsByBar[f.bi]=usedSlotsByBar[f.bi]||new Set()).add(slotIdx);
+      applied++;
+    }
+  }
+  all.forEach((b,bi)=>{
+    const loc=barLoc[bi];if(!loc)return;
+    const target=getTargetBars(loc.ci);
+    if(!target||!target[loc.local])return;
+    const used=usedSlotsByBar[bi]||new Set();
+    for(let s=0;s<4;s++){if(!used.has(s))target[loc.local].imgs[s]=null;}
+  });
+  renderEditor();renderBank();checkReady();
+  // El mástil ya lleva la etiqueta correcta (nombre o intervalo) horneada en el SVG de cada
+  // compás — "Auto" del selector de arriba alterna notas/intervalos por VUELTA en vivo durante
+  // la reproducción y pisaría lo ya decidido aquí (ver comentario de "Barrido de posiciones").
+  const gnd=document.getElementById('globalNoteDisplay');
+  if(gnd&&gnd.value!=='notes'){gnd.value='notes';}
+  if(typeof setExerciseType==='function'){
+    const sel=document.getElementById('exerciseType');if(sel)sel.value='triads';
+    setExerciseType('triads');
+  }
+  return{applied,skipped,bumpedTo};
+}
+async function generateExploreTriadA(){
+  // El orden real por traste (izq→dcha) depende de la tónica — ver buildExploreTriadSeqA. Si aún
+  // no hay tema cargado, cycles.length es 0 y applyExploreTriadSequence ya avisa con su propio
+  // alert; el fallback a 'C' aquí es solo para no reventar getChordVoicing con un acorde vacío.
+  const firstBar=cycles.length?getAllBars()[0]:null;
+  const chord=(firstBar&&getBarSegments(firstBar)[0]?.chord)||'C';
+  const r=await applyExploreTriadSequence(buildExploreTriadSeqA(chord),1,'Recorre las tríadas en horizontal');
+  if(r)alert('✓ Explora tríada A (horizontal, ida/vuelta) — '+r.applied+' compases generados.'+
+    (r.skipped?'\n⚠ '+r.skipped+' compás(es) no admitían esa posición y se dejaron sin generar.':'')+
+    (r.bumpedTo?'\n↔ Se ha ampliado el mástil hasta el traste '+r.bumpedTo+'.':'')+
+    '\nModo cambiado a Tríadas. Revísalas en el editor y pulsa Visualizador.');
+}
+async function generateExploreTriadB(){
+  // Igual que A: el orden real por traste depende de la tónica — ver buildExploreTriadSeqB.
+  const firstBar=cycles.length?getAllBars()[0]:null;
+  const chord=(firstBar&&getBarSegments(firstBar)[0]?.chord)||'C';
+  const r=await applyExploreTriadSequence(buildExploreTriadSeqB(chord),1,'Recorre las tríadas en vertical');
+  if(r)alert('✓ Explora tríada B (diagonal, ida/vuelta) — '+r.applied+' compases generados.'+
+    (r.skipped?'\n⚠ '+r.skipped+' compás(es) no admitían esa posición y se dejaron sin generar.':'')+
+    (r.bumpedTo?'\n↔ Se ha ampliado el mástil hasta el traste '+r.bumpedTo+'.':'')+
+    '\nModo cambiado a Tríadas. Revísalas en el editor y pulsa Visualizador.');
+}
+async function generateExploreTriadC(){
+  const r=await applyExploreTriadSequence(EXPLORE_TRIAD_SEQ_C,1,'Muévete al azar entre las tríadas');
+  if(r)alert('✓ Explora tríada C (al azar) — '+r.applied+' compases generados.'+
+    (r.skipped?'\n⚠ '+r.skipped+' compás(es) no admitían esa posición y se dejaron sin generar.':'')+
+    (r.bumpedTo?'\n↔ Se ha ampliado el mástil hasta el traste '+r.bumpedTo+'.':'')+
+    '\nModo cambiado a Tríadas. Revísalas en el editor y pulsa Visualizador.');
+}
 
 // Apply auto-generated minimal-movement triads to every bar/segment of the loaded exercise.
 async function autoGenerateTriads(){
@@ -8580,6 +8891,17 @@ function exTriadsApproach(ctx){
         animPending=nextBi;
         if(nextBarSlot?.type==='svg'&&nextBarSlot.svgParsed&&slot?.type==='svg'&&vlCurrentNotes){
           animateVoiceLeading(vlCurrentNotes,nextBarSlot.svgParsed,ANIM_MS,allBars[nextBi].chord);
+          // El fondo automático (fantasmas del resto del mástil) solo se reconstruía en el tick
+          // del CAMBIO DE COMPÁS real — pero el deslizamiento visual arranca antes (justo aquí,
+          // ANIM_SEC por delante, "para llegar justo a tiempo"). Durante esa ventana la nota
+          // vieja ya se ve alejándose pero el fondo seguía excluyendo su celda (la trataba como
+          // activa hasta el cambio de compás) → hueco vacío donde debería ir apareciendo el
+          // fantasma (feedback de Alberto). Se reconstruye YA con la posición de destino, en
+          // sincronía con el propio deslizamiento — y se marca _lastBgPosKey para que el tick del
+          // cambio de compás real no lo vuelva a reconstruir de golpe cuando llegue (bug
+          // reportado: "al terminar la animación desaparecen todas las fantasma y se redibujan").
+          buildBgMap(allBars[nextBi],nextBarSlot);
+          _lastBgPosKey=nextBarSlot.svgParsed.tnFrame?tnNotesKey(nextBarSlot.svgParsed.notes):nextBarSlot.svgParsed.notes.map(n=>Math.round(n.cx)+','+Math.round(n.cy)).sort().join('|');
         }
       }
 }
@@ -10553,6 +10875,12 @@ function tick(){
     const isAsScale=slot?.svgParsed?.asScaleGen===true;
     const autoMsg=bar.msgText||(isInversionsExercise?getAutoMsg(slot,barChordNow):'')||(isAsScale?asScaleNameFor(barChordNow):'')||(slot?.svgParsed?.pentaName||'');
     renderMsg(allBars,bi,autoMsg);
+    // "Explora una tríada": texto de apoyo APARTE de #vMsgText — esa fila resta altura real al
+    // mástil (flex:1 en .vis-img-zone, ver .msg-zone) y Alberto pidió una ubicación que no lo
+    // haga. Se pinta en su lugar sobre la franja vacía que deja el letterboxing del SVG del
+    // mástil (viewBox fijo 1001×300 dentro de una caja con otra relación de aspecto — ver
+    // renderExploreTriadMsg), así no cuesta ni un píxel de mástil.
+    renderExploreTriadMsg(slot?.svgParsed?.exerciseMsg||'');
     const prevBar=allBars[bi-1];const prevSlot=prevBar?.imgs?.filter(s=>s).slice(-1)[0]||null;
     if(seqActive){
       // Sequence mode: keep chord/strip/notes, but fretboard shows the scale + animated sequence
@@ -10692,7 +11020,7 @@ function bgAutoPcs(bar,activeSlot){
     const rootPc=noteToSt(bgAuto.root);if(rootPc<0)return null;
     return{rootRaw:bgAuto.root,rootPc,pcs:formula.map(st=>({pc:(rootPc+st)%12,semi:st}))};
   }
-  if(bgAuto.mode==='figure'){
+  if(bgAuto.mode==='figure'||bgAuto.mode==='triadFull'){
     // sp frame: las clases de nota vienen horneadas en data-st (v3.5)
     const notes=activeSlot?.svgParsed?.notes;
     if(activeSlot?.svgParsed?.spFrame===true&&notes&&notes.some(n=>n.st!=null)){
@@ -10783,7 +11111,11 @@ function buildAutoBg(bar,activeSlot){
       if(posBox&&!posBox.has(`${s}:${f}`))continue;
       const pc=getNoteStAtFret(s,f);
       const p=byPc[pc];if(!p)continue;
-      if(activeCells.has(`${s},${f}`)||activePcs.has(pc))continue;
+      // 'triadFull' (Explora una tríada): solo excluye la celda EXACTA activa, no la clase de
+      // nota entera — con una tríada de 3 notas el frame activo YA cubre las 3 clases, así que
+      // la exclusión por clase (pensada para acordes de 4+ notas con voicing parcial) no dejaba
+      // nada por pintar como fantasma (bugs reportado: "no se ve ninguna nota fantasma").
+      if(activeCells.has(`${s},${f}`)||(bgAuto.mode!=='triadFull'&&activePcs.has(pc)))continue;
       const cx=f===0?leftPad-r-4:fretX(f)-fretW/2;
       const cy=strY(s);
       if(activePositions.has(`${Math.round(cx/15)},${Math.round(cy/15)}`))continue;
@@ -10791,6 +11123,13 @@ function buildAutoBg(bar,activeSlot){
       if(labelMode==='intervals')label=p.semi===0?'R':(p.ivName||SEQ_DEGREE_NAMES[p.semi]||IV_BY_SEMI[p.semi]||'');
       else label=spellNote(info.rootRaw,p.ivName||IV_BY_SEMI[p.semi]||'R',p.semi)||NTS[pc];
       const g=document.createElementNS(NS,'g');
+      // (Se probó un fundido de entrada aquí con opacity 0→1 vía rAF — revertido: si el vídeo
+      // grababa el fotograma ANTES de que el rAF disparase el cambio, ese fotograma salía con
+      // TODOS los fantasmas a opacidad 0, es decir, el mástil entero sin ninguna nota fantasma
+      // durante un fotograma — bug reportado: "desaparecen todas las notas fantasma". El cambio
+      // de posición ahora ya está en sincronía con el deslizamiento real (ver exTriadsApproach),
+      // que es la mejora que importaba; el fundido en sí queda pendiente de una implementación
+      // que no dependa de un rAF después de un innerHTML='' completo.)
       const c=document.createElementNS(NS,'circle');
       c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r',r);
       // Mismo tenue gris para toda nota de fondo, tónica de escala incluida (antes iba en
@@ -11250,6 +11589,29 @@ function renderMsg(allBars, bi, overrideMsg){
   }
 }
 
+// Estado del fade del texto de apoyo — FUERA de la función para sobrevivir entre llamadas (una
+// por cada cambio de compás, ver renderExploreTriadMsg debajo): el texto es el MISMO durante toda
+// la 1ª pasada de la secuencia, así que sin este memo cada cambio de compás relanzaría el fade-in
+// y el timer de 20s, y el texto nunca llegaría a desaparecer. Solo se relanza si el texto CAMBIA
+// (o desaparece del todo, p.ej. al salir del ejercicio).
+let _exploreMsgShownText=null,_exploreMsgHideTimer=null;
+function renderExploreTriadMsg(text){
+  const el=document.getElementById('exploreMsgOverlay');const t=document.getElementById('exploreMsgOverlayText');
+  if(!el||!t)return;
+  if(!text){
+    if(_exploreMsgHideTimer){clearTimeout(_exploreMsgHideTimer);_exploreMsgHideTimer=null;}
+    _exploreMsgShownText=null;
+    t.style.opacity='0';
+    return;
+  }
+  if(text===_exploreMsgShownText)return; // ya mostrado (o ya en fade-out) — no relanzar
+  _exploreMsgShownText=text;
+  t.textContent=text;
+  t.style.opacity='1';
+  if(_exploreMsgHideTimer)clearTimeout(_exploreMsgHideTimer);
+  _exploreMsgHideTimer=setTimeout(()=>{t.style.opacity='0';_exploreMsgHideTimer=null;},20000);
+}
+
 const MINOR_SCALES={
   'C': ['C','D','Eb','F','G','Ab','Bb'],
   'C#':['C#','D#','E','F#','G#','A','B'],
@@ -11566,6 +11928,7 @@ const VIS_ELEMENTS=[
   {id:'showFnBadge',  label:'Badge de función (I/IV/V)', def:false, group:'Información en pantalla'},
   {id:'showScaleHint',label:'Escala/arpegio sugerido',def:false, group:'Información en pantalla'},
   {id:'showNotes',    label:'Notas del acorde',       def:false, group:'Información en pantalla'},
+  {id:'showIntervalGaps',label:'Distancia en intervalos entre notas del acorde', def:false, group:'Información en pantalla'},
   {id:'showLap',      label:'Contador de vuelta', def:true, group:'Información en pantalla'},
   {id:'showMsg',      label:'Mensajes/consejos',        def:false, group:'Información en pantalla'},
   {id:'showScaleRow', label:'Franja de escala',       def:false, group:'Franjas y elementos del mástil'},
@@ -11913,6 +12276,11 @@ try{setChordDisplayMode(document.getElementById('chordDisplayMode').value);}catc
 // Restore saved exercise type
 try{const xt=localStorage.getItem('gv_exerciseType');if(xt){exerciseType=xt;const sel=document.getElementById('exerciseType');if(sel)sel.value=xt;}}catch(e){}
 showTab('editor');
+// Sin esto, los paneles "sin tema cargado" (noXmlMsg, triadsNoXmlMsg…) y sus contenidos
+// dependientes se quedan los dos en display:none hasta el primer renderEditor() real (cargar un
+// XML, etc.) — cualquier pestaña con ese patrón (p.ej. Tríadas) se ve en blanco de entrada, sin
+// pista de qué hacer (feedback de Alberto: "convendría indicarlo en la página").
+try{renderEditor();}catch(e){}
 checkReady();
 try{bgAutoSyncUI();}catch(e){}
 checkAutosaveRecovery();
