@@ -299,20 +299,23 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
     // busca el fotograma exacto en el que ese cuadrado aparece (ver más abajo, tras cerrar la
     // página) — así el "instante real del fotograma 0" se mide directamente en el propio vídeo,
     // sin depender de ninguna suposición sobre cuánto tarda en arrancar el grabador.
+    // v6 (bug encontrado al portar esta misma calibración a generate-explore-triad-video.js y
+    // depurar ahí un fallo intermitente de detección: "no se detectó la marca" repetido en
+    // algunos vídeos, no en otros): el doble rAF de abajo deja la marca en negro solo 1-2
+    // fotogramas de PINTADO del navegador — bastante menos que un fotograma de GRABACIÓN si el
+    // vídeo se captura a ~25fps (40ms), así que el grabador podía no llegar a capturar NINGÚN
+    // fotograma negro (confirmado grabando aparte: la traza nunca bajaba de Y≈230, jamás oscuro).
+    // Se sustituye por 200ms explícitos en negro (varios fotogramas de sobra a cualquier fps de
+    // grabación) antes de pasar a blanco.
     flipTimestamp = await page.evaluate(() => new Promise((resolve) => {
       const marker = document.createElement('div');
       marker.id = '__syncMarker';
       marker.style.cssText = 'position:fixed;top:0;left:0;width:48px;height:48px;background:#000;z-index:2147483647;pointer-events:none;';
       document.body.appendChild(marker);
-      // Doble rAF: dejar que el navegador pinte el cuadro NEGRO al menos una vez antes de pasar a
-      // blanco — si se cambia a blanco en el mismo fotograma en que se crea el elemento, con mala
-      // suerte el vídeo podría no llegar a capturar nunca el estado "negro" de referencia.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          marker.style.background = '#fff';
-          resolve(performance.timeOrigin + performance.now());
-        });
-      });
+      setTimeout(() => {
+        marker.style.background = '#fff';
+        resolve(performance.timeOrigin + performance.now());
+      }, 200);
     }));
     // Ya no hace falta el cuadro en pantalla (ni en el resto del vídeo ni en la miniatura) — el
     // recorte inicial (más abajo) de sobra se lo lleva por delante de todas formas, pero quitarlo
