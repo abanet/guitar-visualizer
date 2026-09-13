@@ -862,11 +862,11 @@ body.presentation #channelWatermark{display:flex;}
                  cuadrado") — antes vivía dentro del mismo panel bordeado que la miniatura. -->
             <div id="nextPreviewLegend" style="display:none;margin-top:40px;background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 16px;font:16px/1.7 Helvetica,Arial,sans-serif;color:rgba(255,255,255,.85);backdrop-filter:blur(3px);">
               <div style="font:600 12px Helvetica,Arial,sans-serif;color:rgba(255,255,255,.75);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;text-align:center;">Notación</div>
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:#E53935;"></span>Tónica de la pentatónica</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:#E53935;"></span><span id="legendRootLabel">Tónica de la pentatónica</span></div>
               <div class="legend-scale-only" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:transparent;border:3px solid #FFC94A;box-sizing:border-box;"></span>Tónica de la escala</div>
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(38,198,218,.5);border:1px solid rgba(255,255,255,.25);box-sizing:border-box;"></span>Activa en la posición actual</div>
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(38,198,218,.5);border:2px solid #ffffff;box-sizing:border-box;"></span>Seguirá activa en siguiente posición</div>
-              <div class="legend-scale-only" style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.14);border:2px dashed rgba(255,255,255,.6);box-sizing:border-box;"></span>Nota de la escala fuera de la pentatónica</div>
+              <div class="legend-scale-only" style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.14);border:2px dashed rgba(255,255,255,.6);box-sizing:border-box;"></span><span id="legendOutsideLabel">Nota de la escala fuera de la pentatónica</span></div>
               <div class="legend-ghost-only" style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.12);border:2px dashed rgba(38,198,218,.65);box-sizing:border-box;"></span>Se activará en la siguiente posición</div>
             </div>
           </div>
@@ -1698,7 +1698,7 @@ body.presentation #channelWatermark{display:flex;}
 <div class="panel" id="tab-arpscale" style="display:none;padding:20px;">
   <div style="max-width:1100px;margin:0 auto;">
     <h2 style="margin:0 0 6px;font-size:18px;"><i class="ti ti-guitar-pick"></i> Estructuras en escala</h2>
-    <div class="tab-help"><div><span class="th-k">Qué genera</span>La <b>progresión diatónica completa</b> de una escala (un acorde por grado, tríada o tétrada) sobre una <b>posición CAGED</b>, resaltando en cada paso qué notas de esa misma posición corresponden al acorde — sin dibujar ninguna forma de arpegio: el resaltado siempre es un subconjunto de las notas de la escala.</div><div><span class="th-k">Resaltar → Pentatónica</span>En vez de las notas del propio acorde, resalta la <b>pentatónica</b> que le corresponde (mayor si el acorde es mayor, menor en cualquier otro caso), siempre dentro de la misma posición CAGED.</div><div><span class="th-k">Si la posición no es correcta</span>Corrígela a mano en "2 · Corregir posición" — igual que el editor de caja personalizada de Escalas por tramos.</div><div><span class="th-k">"Ver en Visualizador" (paso 4)</span>Si ya cargaste un <b>tema (XML)</b> en Audio &amp; XML, respeta SUS compases/ciclos y coloca el fotograma allí donde el acorde real de cada compás encaje — el acorde en sí se lee tal cual está en el XML (no se reconstruye del grado diatónico), pero el selector "Resaltar" sí decide qué se ilumina de ese acorde (sus notas o su pentatónica). Sin tema cargado, crea un ejercicio corto de un compás por grado ("modo diapositivas").</div><div><span class="th-k">Para generar en lote</span>Exporta el config.json (paso 4) y úsalo con <code>scripts/generate-scale-arpeggio-videos.js</code> (ese script siempre usa el modo diapositivas + un audio compartido, no el tema cargado).</div></div>
+    <div class="tab-help"><div><span class="th-k">Qué genera</span>La <b>progresión diatónica completa</b> de una escala (un acorde por grado, tríada o tétrada) sobre una <b>posición CAGED</b>, resaltando en cada paso qué notas de esa misma posición corresponden al acorde — sin dibujar ninguna forma de arpegio: el resaltado siempre es un subconjunto de las notas de la escala.</div><div><span class="th-k">Resaltar → Pentatónica</span>En vez de las notas del propio acorde, resalta la <b>pentatónica</b> que le corresponde (mayor si el acorde es mayor, menor en cualquier otro caso), siempre dentro de la misma posición CAGED.</div><div><span class="th-k">Si la posición no es correcta</span>Corrígela a mano en "2 · Corregir posición" — igual que el editor de caja personalizada de Escalas por tramos.</div><div><span class="th-k">"Ver en Visualizador" (paso 4)</span>Si ya cargaste un <b>tema (XML)</b> en Audio &amp; XML, respeta SUS compases/ciclos y coloca el fotograma allí donde el acorde real de cada compás encaje — el acorde en sí se lee tal cual está en el XML (no se reconstruye del grado diatónico), pero el selector "Resaltar" sí decide qué se ilumina de ese acorde (sus notas o su pentatónica). Sin tema cargado, crea un ejercicio corto de un compás por grado ("modo diapositivas").</div><div><span class="th-k">Para generar en lote</span>Exporta el config.json (paso 4) y úsalo con <code>scripts/generate-scale-arpeggio-videos.js</code> (ese script siempre usa el modo diapositivas + un audio compartido, no el tema cargado).</div><div><span class="th-k">"Ver en Visualizador (tríadas por posición)" (paso 4)</span>Variante para tríadas: la posición no cambia de zona, pero cada acorde diatónico muestra, una tras otra, TODAS sus tríadas que caben enteras en ella (normalmente 1-3), con la animación habitual de tríadas — en vez de un único fotograma fijo por acorde. Sustituye a la vieja serie "Domina las tríadas | Escala de X | Forma de Y" grabada a mano. Para generar en lote: <code>scripts/generate-scale-triad-explore-videos.js</code>.</div></div>
 
     <div class="card">
       <h3>1 · Escala y posición</h3>
@@ -1757,6 +1757,11 @@ body.presentation #channelWatermark{display:flex;}
         <button class="btn accent" onclick="asSendToEditor()"><i class="ti ti-send"></i> Ver en Visualizador</button>
         <button class="btn" onclick="asExportConfigFile()"><i class="ti ti-download"></i> Exportar config.json (lote)</button>
         <span id="asSendStatus" style="font-size:12px;color:var(--text2);"></span>
+      </div>
+      <div style="border-top:1px solid var(--border2);margin-top:12px;padding-top:12px;">
+        <p style="font-size:12px;color:var(--text2);margin:0 0 8px;">Variante — <b>tríadas dentro de esta misma posición</b> (sin tema cargado): la posición NUNCA cambia de zona; cada acorde diatónico suena tantos compases como tríadas suyas quepan enteras en ella (normalmente 1-3), mostrándolas todas una tras otra con la animación habitual de tríadas. Requiere "Resaltar: Tríadas" (paso 1). Sustituye a la vieja serie "Domina las tríadas | Escala de X | Forma de Y".</p>
+        <button class="btn accent" onclick="asSendToEditorTriadExploreUI()"><i class="ti ti-send"></i> Ver en Visualizador (tríadas por posición)</button>
+        <span id="asTriadExploreStatus" style="font-size:12px;color:var(--text2);margin-left:10px;"></span>
       </div>
     </div>
   </div>
@@ -4725,6 +4730,15 @@ function updateNextPreviewLegend(elapsed){
   const ghostOnly=document.querySelectorAll('#nextPreviewLegend .legend-ghost-only');
   scaleOnly.forEach(r=>{r.style.display=hasScaleBg?'flex':'none';});
   ghostOnly.forEach(r=>{r.style.display=hasScaleBg?'none':'flex';});
+  // "Tónica de la pentatónica"/"...fuera de la pentatónica" solo son ciertas con
+  // Resaltar:Pentatónica — en "Estructuras en escala" con Resaltar:Tríadas/Tétradas (asState.quality,
+  // ver arpscale) lo resaltado son las notas del ACORDE, no una pentatónica (bug reportado: el
+  // vídeo decía "pentatónica" grabado en el propio vídeo con tríadas resaltadas).
+  const isPentaQuality=!hasScaleBg||(typeof asState!=='undefined'&&asState&&asState.quality==='pentatonic');
+  const rootLabelEl=document.getElementById('legendRootLabel');
+  if(rootLabelEl)rootLabelEl.textContent=isPentaQuality?'Tónica de la pentatónica':'Tónica del acorde';
+  const outsideLabelEl=document.getElementById('legendOutsideLabel');
+  if(outsideLabelEl)outsideLabelEl.textContent=isPentaQuality?'Nota de la escala fuera de la pentatónica':'Nota de la escala fuera del acorde';
   const e=elapsed==null?(audioEl?.currentTime||0):elapsed;
   const op=e>=LEGEND_FADE_END?0:(e<=LEGEND_FADE_START?1:1-(e-LEGEND_FADE_START)/(LEGEND_FADE_END-LEGEND_FADE_START));
   el.style.opacity=String(op);
@@ -10151,6 +10165,189 @@ async function asSendToEditor(){
   showTab('player');
 }
 
+// ── Prototipo: tríadas diatónicas CON ANIMACIÓN de posiciones, EN UNA SOLA CAJA (pedido de
+// Alberto 2026-09-13 — v2, corrige el primer intento que recorría todo el mástil: "tiene que
+// salir solo una posición de la escala como en los ejercicios de arpegios") — sustituto de la
+// vieja serie "Domina las tríadas | Escala de X | Forma de Y" grabada a mano.
+// Igual que asSendToEditor (MODO DIAPOSITIVAS): UNA sola posición CAGED fija para TODO el
+// vídeo (asActiveNotes()/fretMin/fretMax, igual que arpeggios — el mástil NUNCA se mueve de
+// zona) y fondo de escala gris con la tónica marcada (bgAuto mode:'scale'). La diferencia con
+// asSendToEditor es que, en vez de UN fotograma estático por acorde diatónico (todas las notas
+// del acorde presentes en la caja a la vez), cada acorde suena `barsPerChord` compases y en
+// ellos se ALTERNA entre las distintas tríadas (grupo de cuerdas × inversión) de ESE acorde que
+// caben ENTERAS dentro de esta misma caja — la misma animación de zoom/crossfade que usan
+// generateExploreTriadA/B/C, pero sin salir nunca de la posición fija (a diferencia de esos, que
+// recorren las 12 posiciones por todo el mástil).
+async function asSendToEditorTriadExplore(){
+  if(!asState.chords.length){alert('Esta escala no tiene acordes diatónicos limpios de ese tipo — prueba con tríadas o cambia de escala.');return null;}
+  const label='Tríadas dentro de la posición';
+
+  // Caja FIJA: idéntica a la que usa asSendToEditor/asRenderPreview para arpegios — nunca
+  // cambia durante todo el vídeo, es la "única posición de la escala" pedida.
+  const boxNotes=asActiveNotes();
+  if(!boxNotes.length){alert('Genera primero una posición (paso 1).');return null;}
+  const frets=boxNotes.map(n=>n.fret);
+  const fretMin=Math.max(0,Math.min(...frets)-1);
+  const fretMax=Math.min(24,Math.max(...frets)+1);
+
+  // Para cada acorde diatónico: de las 12 combinaciones (grupo de cuerdas × inversión), solo
+  // las que caen ENTERAS dentro de la caja fija — por CELDA EXACTA (cuerda:traste), no por rango
+  // de trastes (una posición CAGED tiene huecos, no es un bloque rectangular). SIEMPRE en el
+  // mismo sentido — cuerdas 3-2-1 primero y subiendo hacia 6-5-4 (mismo orden que
+  // buildExploreTriadSeqA/groupOrder para "Explora una tríada": 321→432→543→654, pedido de
+  // Alberto — antes se ordenaba por traste ascendente, que no seguía un sentido consistente de
+  // acorde a acorde).
+  const boxCellSet=new Set(boxNotes.map(n=>n.string+':'+n.fret));
+  const GROUP_ORDER=[3,0,1,2]; // 321,432,543,654 — ver TRIAD_GROUP_LABELS
+  function localVoicingsFor(chord){
+    const cands=[];
+    GROUP_ORDER.forEach(gi=>{
+      for(let inv=0;inv<3;inv++){
+        const v=getChordVoicing(chord,TRIAD_STRING_GROUPS[gi],inv);
+        if(v&&v.frets&&v.frets.length&&v.strings.every((sIdx,i)=>boxCellSet.has(sIdx+':'+v.frets[i])))cands.push(v);
+      }
+    });
+    return cands;
+  }
+  const candsCache={};
+  function localVoicingsForCached(chord){
+    if(!(chord in candsCache))candsCache[chord]=localVoicingsFor(chord);
+    return candsCache[chord];
+  }
+
+  // getChordVoicing() devuelve {frets,strings,assigned,notes(nombres),intervals} — no el formato
+  // {string,fret,st,note,isRoot} que espera arpBuildZoneSVG (el mismo dibujante que usan los
+  // ejercicios de arpegios: mismo padding simétrico de trastes vacíos a los dos lados, misma
+  // altura adaptativa vía arpNeckH). Transformación idéntica a la que generateNeckSVG hace por
+  // dentro (isRoot=intervals[i]==='R', st=getNoteStAtFret(string,fret)).
+  function voicingToNotes(v){
+    return v.strings.map((sIdx,i)=>({string:sIdx,fret:v.frets[i],st:getNoteStAtFret(sIdx,v.frets[i]),note:v.notes[i],isRoot:v.intervals[i]==='R'}));
+  }
+  // arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart,fretEnd,asScaleMode,posBox,...) — el
+  // MISMO dibujante que asBuildArpeggioSVG usa para "Estructuras en escala" (asScaleMode=true ya
+  // pone data-asscale="1" por su cuenta). posBox = la caja completa (boxNotes) para que el fondo
+  // automático de escala no cuele notas fuera de esta posición concreta. Sin voicing limpio (0
+  // posiciones para este acorde en esta caja): mismo resaltado de "chord tones sobre la
+  // posición" que asSendToEditor, para no saltarse el compás del todo.
+  function svgForChord(chord,voicing){
+    return voicing
+      ?arpBuildZoneSVG(voicingToNotes(voicing),chord,'',[],fretMin,fretMax,true,boxNotes)
+      :asBuildArpeggioSVG(boxNotes,asChordInfo(chord),chord,fretMin,fretMax);
+  }
+
+  const nameEl=document.getElementById('exerciseName');
+  if(nameEl)nameEl.value=`${asState.root} ${SEQ_SCALE_LABELS[asState.scale]||asState.scale} (Forma ${AS_POS_LABELS[asState.posIdx]}) — tríadas por acorde`;
+
+  // Fotograma "localiza la escala" (igual que asSendToEditor): se muestra durante los compases
+  // de intro/cuenta atrás (getIntroSec(), ANTES de que empiece el primer acorde real — ver
+  // tick()) — sin esto, tick() cae en su propio fallback (el primer compás real), que en la
+  // práctica tardaba un instante en asentarse y se veía solo el fondo fantasma sin el mástil
+  // dibujado (bug reportado: "al principio no se dibuja el mástil, solo notas fantasma").
+  {
+    const rootPc=noteToSt(asState.root);
+    const introNotes=boxNotes.map(n=>({...n,isRoot:((n.st%12)+12)%12===rootPc}));
+    const introSvg=arpBuildZoneSVG(introNotes,'Escala','',[],fretMin,fretMax,true,boxNotes);
+    const introParsed=svgStringToParsed(introSvg);
+    let introThumb=null;try{introThumb=await svgToThumb(introSvg,320,116);}catch(e){}
+    asIntroScaleFrame={type:'svg',data:introSvg,name:'Escala',thumb:introThumb,svgParsed:introParsed};
+  }
+
+  let applied=0,skipped=0;
+  if(cycles.length){
+    // MODO TEMA (tema real cargado en Audio & XML, ver asSendToEditor): respeta SUS compases —
+    // el acorde de cada compás se lee tal cual del XML. Un mismo acorde puede volver a aparecer
+    // muchas veces a lo largo del tema (p.ej. un backing que vuelve a la tónica entre cada
+    // grado) — se lleva un contador POR NOMBRE DE ACORDE a lo largo de TODO el tema (no por
+    // "racha" de compases consecutivos) para que, con las repeticiones suficientes, acaben
+    // saliendo TODAS sus posiciones dentro de esta caja, siempre en el mismo orden (321→654).
+    renderEditor();
+    const all=getAllBars();
+    const barLoc=[];
+    {let g=0;for(let ci=0;ci<cycles.length;ci++){const eb=getEffectiveBars(ci);for(let li=0;li<eb.length;li++){if(g<all.length){barLoc[g]={ci,local:li};g++;}}}}
+    const chordCounters={};
+    all.forEach((b,bi)=>{
+      const chord=(b.chord||'').trim();if(!chord)return;
+      const cands=localVoicingsForCached(chord);
+      const idx=chordCounters[chord]||0;chordCounters[chord]=idx+1;
+      const voicing=cands.length?cands[idx%cands.length]:null;
+      const svg=svgForChord(chord,voicing);
+      if(!svg){skipped++;return;}
+      const loc=barLoc[bi];if(!loc)return;
+      const target=getTargetBars(loc.ci);
+      if(target&&target[loc.local]){
+        target[loc.local].imgs[0]={type:'svg',data:svg,name:chord+' (en posición)',svgParsed:svgStringToParsed(svg)};
+        applied++;
+      }
+    });
+  }else{
+    // MODO DIAPOSITIVAS (sin tema cargado): progresión sintética de los 7 grados diatónicos.
+    // Plan por compás: CADA acorde diatónico ocupa tantos compases como posiciones suyas quepan
+    // enteras en la caja — una detrás de otra, TODAS las que haya (pedido de Alberto: antes se
+    // forzaba un nº fijo de compases por acorde, así que con solo 1 posición válida — lo más
+    // habitual — el 2º compás repetía la misma en vez de pasar a algo distinto, y con 3
+    // posiciones válidas la 3ª nunca llegaba a verse). Si un acorde no tiene NINGUNA posición
+    // limpia dentro de esta caja, ocupa 1 compás igual con el fallback de svgForChord.
+    const barPlan=[];
+    asState.chords.forEach(c=>{
+      const cands=localVoicingsForCached(c.chord);
+      if(cands.length)cands.forEach(v=>barPlan.push({chord:c.chord,voicing:v}));
+      else barPlan.push({chord:c.chord,voicing:null});
+    });
+
+    const parsed=barPlan.map(p=>({chord:p.chord}));
+    totalBars=parsed.length;
+    buildCycles(parsed,parsed.length);
+    manualExercise=true;
+    renderEditor();
+
+    const barLoc=[];
+    {let g=0;const all0=getAllBars();for(let ci=0;ci<cycles.length;ci++){const eb=getEffectiveBars(ci);for(let li=0;li<eb.length;li++){if(g<all0.length){barLoc[g]={ci,local:li};g++;}}}}
+
+    barPlan.forEach((plan,bi)=>{
+      const{chord,voicing}=plan;
+      const svg=svgForChord(chord,voicing);
+      if(!svg){skipped++;return;}
+      const loc=barLoc[bi];if(!loc)return;
+      const target=getTargetBars(loc.ci);
+      if(target&&target[loc.local]){
+        target[loc.local].imgs[0]={type:'svg',data:svg,name:chord+' (en posición)',svgParsed:svgStringToParsed(svg)};
+        applied++;
+      }
+    });
+  }
+  renderEditor();if(typeof renderBank==='function')renderBank();if(typeof checkReady==='function')checkReady();
+  if(typeof setExerciseType==='function'){
+    const sel=document.getElementById('exerciseType');if(sel)sel.value='arpeggios';
+    setExerciseType('arpeggios');
+  }
+  const gnd=document.getElementById('globalNoteDisplay');
+  if(gnd&&gnd.value!=='notes'){gnd.value='notes';}
+
+  // Escala fija de fondo (gris, tónica marcada) — 'scaleTriad', no 'scale': con solo 3 notas
+  // activas por acorde, la exclusión POR CLASE DE NOTA de 'scale' (ver buildAutoBg) apagaba
+  // TODAS las instancias de esas 3 notas en toda la caja, dejando la mayoría de la posición sin
+  // pintar ("no dibuja todas las notas" — aquí si interesa ver el resto de la escala aunque
+  // comparta letra con el acorde activo, a diferencia de asSendToEditor).
+  bgAuto={mode:'scaleTriad',root:asState.root,scale:asState.scale};
+  bgAutoSyncUI();
+  rebuildBgMapIfVisible();
+  showTab('player');
+  return{applied,skipped,fretMin,fretMax};
+}
+// Botón de "4 · Usar el ejercicio" (paso UI): valida "Resaltar: Tríadas" (asSendToEditorTriadExplore
+// asume tríadas de 3 notas — con tétradas/pentatónica getChordVoicing() encajaría mal sobre
+// grupos de 3 cuerdas) y muestra el resultado en #asTriadExploreStatus, mismo patrón que
+// asSendToEditor/#asSendStatus.
+async function asSendToEditorTriadExploreUI(){
+  const st=document.getElementById('asTriadExploreStatus');
+  const say=t=>{if(st)st.textContent=t;};
+  if(asState.quality!=='triads'){alert('Esta variante es solo para tríadas — cambia "Resaltar" a Tríadas (paso 1) y genera la posición de nuevo.');return;}
+  say('Generando…');
+  const r=await asSendToEditorTriadExplore();
+  if(!r)return; // asSendToEditorTriadExplore ya mostró su propio alert (sin posición/sin acordes)
+  say(`✓ ${r.applied} compás(es) generados`+(r.skipped?` · ${r.skipped} sin voicing limpio en esta posición`:'')+' · modo cambiado a Tríadas para la reproducción.');
+}
+
 // Config para scripts/generate-scale-arpeggio-videos.js (lote): una escala/tónica,
 // las 5 posiciones CAGED y las correcciones manuales de cada una, si las hay.
 function asExportConfigFile(){
@@ -10796,7 +10993,19 @@ function tick(){
     const crossfadeOn=_exBC.crossfadeSameChord===true;
     let keepFade=false;
     if(crossfadeOn){
-      if(prevChord && prevChord===(barChordNow||''))keepFade=true; // same position as before
+      if(prevChord && prevChord===(barChordNow||'')){
+        // "Mismo nombre de acorde en compases consecutivos" se usaba como sinónimo de "misma
+        // posición/dibujo" — cierto en el resto de ejercicios (Estructuras en escala clásico:
+        // un acorde diatónico = un único fotograma fijo), pero NO en
+        // asSendToEditorTriadExplore (ver ese comentario), donde el MISMO acorde ocupa varios
+        // compases con voicings DISTINTOS a propósito (bug reportado: "muestra una tríada cada
+        // dos compases" — se saltaba el redibujado del 2º/3er compás porque el nombre del
+        // acorde no había cambiado, aunque las notas sí). Se compara también la posición real
+        // (coordenadas de las notas, no el nombre) antes de decidir que no hace falta redibujar.
+        const keyOf=ns=>ns.map(n=>Math.round(n.cx)+','+Math.round(n.cy)).sort().join('|');
+        const newNotes=slot?.svgParsed?.notes,oldNotes=_lastParsedShown?.notes;
+        keepFade=!(newNotes&&oldNotes)||(newNotes.length===oldNotes.length&&keyOf(newNotes)===keyOf(oldNotes));
+      }
     }
     if(!keepFade)clearGhostNotes();
     const curEl=document.getElementById('vChord');if(curEl)curEl.style.opacity='1';
@@ -10956,7 +11165,7 @@ function bgAutoChanged(){
 
 // Clases de nota (pc 0-11) + tónica + defs de intervalo para el modo activo. null si no aplica.
 function bgAutoPcs(bar,activeSlot){
-  if(bgAuto.mode==='scale'){
+  if(bgAuto.mode==='scale'||bgAuto.mode==='scaleTriad'){
     const formula=SEQ_SCALE_FORMULAS[bgAuto.scale]||SEQ_SCALE_FORMULAS.major;
     const rootPc=noteToSt(bgAuto.root);if(rootPc<0)return null;
     return{rootRaw:bgAuto.root,rootPc,pcs:formula.map(st=>({pc:(rootPc+st)%12,semi:st}))};
@@ -11052,11 +11261,14 @@ function buildAutoBg(bar,activeSlot){
       if(posBox&&!posBox.has(`${s}:${f}`))continue;
       const pc=getNoteStAtFret(s,f);
       const p=byPc[pc];if(!p)continue;
-      // 'triadFull' (Explora una tríada): solo excluye la celda EXACTA activa, no la clase de
-      // nota entera — con una tríada de 3 notas el frame activo YA cubre las 3 clases, así que
-      // la exclusión por clase (pensada para acordes de 4+ notas con voicing parcial) no dejaba
-      // nada por pintar como fantasma (bugs reportado: "no se ve ninguna nota fantasma").
-      if(activeCells.has(`${s},${f}`)||(bgAuto.mode!=='triadFull'&&activePcs.has(pc)))continue;
+      // 'triadFull' (Explora una tríada) y 'scaleTriad' (tríadas dentro de una posición de
+      // escala, ver asSendToEditorTriadExplore): solo excluyen la celda EXACTA activa, no la
+      // clase de nota entera — con una tríada de 3 notas el frame activo YA cubre las 3 clases,
+      // así que la exclusión por clase (pensada para acordes de 4+ notas con voicing parcial) no
+      // dejaba nada por pintar como fantasma (bug reportado: "no se ve ninguna nota fantasma" /
+      // "no dibuja todas las notas [de la escala]" — con la escala fija de fondo SÍ interesa ver
+      // el resto de instancias de esa misma nota en otras cuerdas/trastes de la misma posición).
+      if(activeCells.has(`${s},${f}`)||(bgAuto.mode!=='triadFull'&&bgAuto.mode!=='scaleTriad'&&activePcs.has(pc)))continue;
       const cx=f===0?leftPad-r-4:fretX(f)-fretW/2;
       const cy=strY(s);
       if(activePositions.has(`${Math.round(cx/15)},${Math.round(cy/15)}`))continue;
