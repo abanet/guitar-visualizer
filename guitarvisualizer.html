@@ -50,6 +50,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .mi-editable:hover{background:rgba(255,255,255,.05);}
 .mi-editable:focus{background:rgba(255,255,255,.08);}
 .mi-tonic-select{padding:7px 30px 7px 14px;font-size:14px;font-weight:700;border-radius:8px;border:1px solid rgba(255,255,255,.3);background-color:#1a1a1a;color:#fff;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='white'/></svg>");background-repeat:no-repeat;background-position:right 12px center;}
+.mi-legend-overlay{position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:6;}
+.mi-legend-card{background:rgba(28,28,28,.97);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:30px 40px;box-shadow:0 12px 40px rgba(0,0,0,.5);max-width:94%;max-height:92%;overflow-y:auto;}
+.mi-legend-title{color:#fff;font:700 22px Arial;margin-bottom:18px;text-align:center;letter-spacing:.02em;}
+.mi-legend-grid{display:grid;grid-template-columns:auto auto 1fr;column-gap:20px;row-gap:11px;align-items:center;}
+.mi-legend-head{color:rgba(255,255,255,.55);font:700 12.5px Arial;text-transform:uppercase;letter-spacing:.08em;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.2);white-space:nowrap;}
+.mi-legend-abbr{display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:36px;padding:0 8px;border-radius:9px;background:rgba(38,198,218,.55);border:1px solid rgba(255,255,255,.3);color:#fff;font:700 17px Arial;}
+.mi-legend-abbr.mi-legend-root{background:rgba(229,57,53,.55);}
+.mi-legend-name{color:rgba(255,255,255,.85);font:500 16px Arial;white-space:nowrap;}
+.mi-legend-semi{color:#fff;font:700 22px Arial;min-width:20px;text-align:center;}
 .btn.danger{border-color:#c0392b;color:#c0392b;}
 .btn.danger:hover{background:#fdf0ef;}
 .btn.sm{padding:4px 8px;font-size:11px;}
@@ -1783,7 +1792,7 @@ body.presentation #channelWatermark{display:flex;}
 <div class="panel" id="tab-mastilInteractivo" style="display:none;padding:20px;">
   <div style="max-width:1800px;margin:0 auto;">
     <h2 style="margin:0 0 6px;font-size:18px;"><i class="ti ti-hand-click"></i> Mástil interactivo</h2>
-    <div class="tab-help"><div><span class="th-k">Qué es</span>Un mástil en blanco para explicar en directo: click en cualquier traste para revelar su nota (otro click la vuelve a ocultar). El recuadro oscuro de abajo tiene proporción 16:9 — es lo único que hace falta grabar para subirlo directo a YouTube; TODOS los controles están dentro a propósito, para que salgan en la grabación.</div><div><span class="th-k">Ver en todo el mástil</span>Con alguna nota revelada, ese botón marca (tenue, sin ocupar el hueco de una nota revelada) todas las demás casillas con esa misma nota en cualquier cuerda/octava visible. Vuelve a pulsarlo para quitarlas.</div><div><span class="th-k">Franja de escala</span>Encima del mástil, las notas reveladas (sin repetir, una por nombre) ordenadas desde la tónica, con la distancia en semitonos entre cada una y la siguiente.</div></div>
+    <div class="tab-help"><div><span class="th-k">Qué es</span>Un mástil en blanco para explicar en directo: click en cualquier traste para revelar su nota (otro click la vuelve a ocultar). El recuadro oscuro de abajo tiene proporción 16:9 — es lo único que hace falta grabar para subirlo directo a YouTube; TODOS los controles están dentro a propósito, para que salgan en la grabación.</div><div><span class="th-k">Ver en todo el mástil</span>Con alguna nota revelada, ese botón marca (tenue, sin ocupar el hueco de una nota revelada) todas las demás casillas con esa misma nota en cualquier cuerda/octava visible. Vuelve a pulsarlo para quitarlas.</div><div><span class="th-k">Franja de escala</span>Encima del mástil, las notas reveladas (sin repetir, una por nombre) ordenadas desde la tónica, con la distancia en semitonos entre cada una y la siguiente. Shift+click en dos notas cualquiera (no hace falta que sean vecinas) mide la distancia y el intervalo entre ellas.</div></div>
 
     <div id="miRecordZone" style="position:relative;width:100%;aspect-ratio:16/9;background:#0d0d0d;border-radius:10px;overflow:hidden;">
       <div style="position:absolute;top:22px;left:28px;display:flex;align-items:center;gap:10px;z-index:2;">
@@ -1809,10 +1818,16 @@ body.presentation #channelWatermark{display:flex;}
            siempre queda ARRIBA (bajo el título), nunca entre la franja y el mástil ni entre el
            mástil y los botones. -->
       <div style="position:absolute;left:0;right:0;top:112px;bottom:84px;z-index:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;padding:0 30px;">
-        <div id="miScaleStrip" style="z-index:2;font:600 15px Arial;letter-spacing:.02em;min-height:46px;text-align:center;margin-bottom:10px;"></div>
-        <div id="miNeckHost" style="display:flex;justify-content:center;"></div>
+        <div id="miScaleStrip" style="z-index:2;font:600 15px Arial;letter-spacing:.02em;min-height:46px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;user-select:none;-webkit-user-select:none;"></div>
+        <div id="miMeasureInfo" style="z-index:2;color:#ffd640;font:700 15px Arial;text-align:center;min-height:20px;margin-bottom:6px;"></div>
+        <div id="miNeckHost" style="display:flex;justify-content:center;user-select:none;-webkit-user-select:none;"></div>
       </div>
-      <div class="mi-toolbar" style="position:absolute;left:0;right:0;bottom:16px;margin:0;justify-content:center;z-index:2;">
+      <div class="mi-toolbar" style="position:absolute;left:0;right:0;bottom:16px;margin:0;justify-content:center;z-index:7;">
+        <div class="mi-toolbar-group">
+          <button class="mi-btn" onclick="miChangeFretStart(-1)" title="Empezar antes (menos traste de partida)"><i class="ti ti-minus"></i></button>
+          <span class="mi-toolbar-label" id="miFretStartLbl"></span>
+          <button class="mi-btn" onclick="miChangeFretStart(1)" title="Empezar más tarde (más traste de partida) — para mostrar solo una zona del mástil"><i class="ti ti-plus"></i></button>
+        </div>
         <div class="mi-toolbar-group">
           <button class="mi-btn" onclick="miChangeFrets(-1)" title="Menos trastes"><i class="ti ti-minus"></i></button>
           <span class="mi-toolbar-label" id="miFretCountLbl"></span>
@@ -1825,9 +1840,36 @@ body.presentation #channelWatermark{display:flex;}
         </div>
         <div class="mi-toolbar-group">
           <button class="mi-btn" id="miLabelModeBtn" onclick="miToggleLabelMode()" title="Alterna entre nombre de nota e intervalo respecto a la tónica"><i class="ti ti-music"></i> <span id="miLabelModeLbl">Notas</span></button>
+          <button class="mi-btn" id="miLegendBtn" onclick="miToggleLegend()" title="Muestra/oculta la tabla de nombres de intervalo según su distancia"><i class="ti ti-info-circle"></i></button>
+          <button class="mi-btn active" id="miIvTagsBtn" onclick="miToggleIvTags()" title="3 estados: solo ascendente (desde la tónica) → + descendente (desde el final, sentido contrario) → oculto"><i class="ti ti-arrows-vertical"></i> <span>Ver intervalos</span></button>
         </div>
         <div class="mi-toolbar-group">
           <button class="mi-btn" id="miClickModeBtn" onclick="miToggleClickMode()" title="Pintar: el click revela/oculta notas y suena. Sonar: el click solo reproduce la nota (aparece un instante si no estaba pintada), sin cambiar lo dibujado"><i class="ti ti-pointer"></i> <span id="miClickModeLbl">Pintar</span></button>
+          <button class="mi-btn" onclick="miPlayAll()" title="Reproduce a la vez todas las notas dibujadas en el mástil"><i class="ti ti-volume"></i> Sonar todas</button>
+        </div>
+      </div>
+      <!-- Tabla de nombres de intervalo, desplegable (pedido de Alberto: "de forma clara y
+           elegante" pero sin ocupar sitio en la grabación cuando no se está usando) — dentro de
+           miRecordZone a propósito, para que SÍ salga en el vídeo si el profesor la abre. -->
+      <div id="miLegendOverlay" class="mi-legend-overlay" style="display:none;" onclick="if(event.target===this)miToggleLegend()">
+        <div class="mi-legend-card">
+          <div class="mi-legend-title">Nombres de intervalo según la distancia</div>
+          <div class="mi-legend-grid">
+            <div class="mi-legend-head">Semitonos</div><div class="mi-legend-head">Símbolo</div><div class="mi-legend-head">Nombre</div>
+            <span class="mi-legend-semi">0</span><span class="mi-legend-abbr mi-legend-root">R</span><span class="mi-legend-name">Tónica / unísono</span>
+            <span class="mi-legend-semi">1</span><span class="mi-legend-abbr">b2</span><span class="mi-legend-name">2ª menor</span>
+            <span class="mi-legend-semi">2</span><span class="mi-legend-abbr">2</span><span class="mi-legend-name">2ª mayor</span>
+            <span class="mi-legend-semi">3</span><span class="mi-legend-abbr">b3</span><span class="mi-legend-name">3ª menor</span>
+            <span class="mi-legend-semi">4</span><span class="mi-legend-abbr">3</span><span class="mi-legend-name">3ª mayor</span>
+            <span class="mi-legend-semi">5</span><span class="mi-legend-abbr">4</span><span class="mi-legend-name">4ª justa</span>
+            <span class="mi-legend-semi">6</span><span class="mi-legend-abbr">b5</span><span class="mi-legend-name">5ª disminuida (tritono)</span>
+            <span class="mi-legend-semi">7</span><span class="mi-legend-abbr">5</span><span class="mi-legend-name">5ª justa</span>
+            <span class="mi-legend-semi">8</span><span class="mi-legend-abbr">b6</span><span class="mi-legend-name">6ª menor</span>
+            <span class="mi-legend-semi">9</span><span class="mi-legend-abbr">6</span><span class="mi-legend-name">6ª mayor</span>
+            <span class="mi-legend-semi">10</span><span class="mi-legend-abbr">b7</span><span class="mi-legend-name">7ª menor</span>
+            <span class="mi-legend-semi">11</span><span class="mi-legend-abbr">7</span><span class="mi-legend-name">7ª mayor</span>
+            <span class="mi-legend-semi">12</span><span class="mi-legend-abbr mi-legend-root">8ª</span><span class="mi-legend-name">Octava</span>
+          </div>
         </div>
       </div>
     </div>
@@ -11626,6 +11668,9 @@ function getNoteDisplay(cycleIdx){
 
 // Tabla global intervalo-por-semitono (los IV_BY_SEMI locales quedan intactos).
 const IV_SEMI_LBL={0:'R',1:'b2',2:'2',3:'b3',4:'3',5:'4',6:'b5',7:'5',8:'b6',9:'6',10:'b7',11:'7'};
+// Nombre completo del intervalo (mismo texto que la tabla de MI_LEGEND) — usado en el lector de
+// "medir distancia" del Mástil interactivo, para no dejar solo el código corto ("4") sin más.
+const IV_FULL_LBL={0:'Tónica / unísono',1:'2ª menor',2:'2ª mayor',3:'3ª menor',4:'3ª mayor',5:'4ª justa',6:'5ª disminuida',7:'5ª justa',8:'6ª menor',9:'6ª mayor',10:'7ª menor',11:'7ª mayor'};
 // ÚNICO punto de verdad para la etiqueta de una nota según el modo de vista.
 // Prioridad: note.semi (horneado en el parse desde data-st, relativo a la tónica del
 // FRAME — correcto para escalas sp donde tónica de escala ≠ raíz del acorde) →
@@ -12107,10 +12152,12 @@ function seekClick(e){if(!audioEl||!audioEl.duration)return;const p=e.offsetX/e.
 // fretStart=0 — "todo el mástil", igual que en los ejercicios de tríadas — y mismos colores de
 // nota que el resto de la app (rojo #E53935 = tónica seleccionada, cian #26C6DA = el resto).
 // ════════════════════════════════════════════════════════════════════════════
-let miFretCount=15; // trastes visibles (0..miFretCount), ajustable con los botones +/-
+let miFretCount=15; // trastes visibles (miFretStart..miFretCount), ajustable con los botones +/-
+let miFretStart=1; // traste de partida (0 = incluye la cuerda al aire) — pedido de Alberto: "elegir el traste de partida... por si quiero hacer gráficos de una zona concreta"
 let miRevealed=new Set(); // "cuerda:traste" de las notas reveladas ahora mismo
 let miTonic=''; // '' = sin tonalidad (por defecto). Si hay una, decide el color (tónica=rojo, resto=cian) y el punto de partida de la franja de escala
 let miShowGhosts=false; // "ver en todo el mástil": marca tenue el resto de casillas con la misma nota
+let miIvTagsMode='up'; // 'up' (por defecto: solo ascendente, desde la tónica) | 'both' (+ descendente, desde el final) | 'off' (nada) — pedido de Alberto: 3 estados en un solo botón
 let miLabelMode='notes'; // 'notes' (nombre) | 'intervals' (respecto a miTonic) — afecta a la etiqueta de cada nota revelada
 let miHistory=[]; // pila de {key,wasOn} para "Deshacer" — wasOn = estado ANTES del click, deshacer restaura ese estado
 let miLastR=22; // radio (unidades del viewBox) de la última nota dibujada en miNeckSVG — para que la franja de escala use el mismo tamaño EN PANTALLA, no un valor fijo en CSS px
@@ -12121,7 +12168,10 @@ let miAudioCtx=null,miReverbBuffer=null;
 const MI_OPEN_FREQ=[82.4069,110.0000,146.8324,195.9977,246.9417,329.6276]; // E2 A2 D3 G3 B3 E4, afinación estándar
 function miFreqFor(stringIdx,fret){return MI_OPEN_FREQ[stringIdx]*Math.pow(2,fret/12);}
 function miGetAudioCtx(){
-  if(!miAudioCtx)miAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  // Si el contexto llegó a cerrarse (p.ej. tras mucho rato de pestaña en segundo plano) hay que
+  // crear uno nuevo, o cada nodo que se intente crear falla en silencio (el try/catch de
+  // miPlayTone se lo come sin avisar) — bug reportado: "se ha estropeado el sonido, no suena nada".
+  if(!miAudioCtx||miAudioCtx.state==='closed'){miAudioCtx=new(window.AudioContext||window.webkitAudioContext)();miReverbBuffer=null;}
   if(miAudioCtx.state==='suspended')miAudioCtx.resume();
   return miAudioCtx;
 }
@@ -12186,11 +12236,127 @@ function miPlayTone(freq){
 // que el resto de la app. Sin tónica no hay respecto a qué medir el intervalo, así que cae
 // siempre a nombre de nota aunque miLabelMode sea 'intervals'.
 function miLabelFor(pc,tonicPc){
-  return(miLabelMode==='intervals'&&tonicPc!=null)?(IV_SEMI_LBL[(pc-tonicPc+12)%12]||NTS[pc]):NTS[pc];
+  return(miLabelMode==='intervals'&&tonicPc!=null)?(IV_SEMI_LBL[(pc-tonicPc+12)%12]||miNoteName(pc)):miNoteName(pc);
+}
+// Notas enarmónicas (los 5 "sostenidos/bemoles"): un click en el NOMBRE de una nota ya revelada
+// (no en el resto del círculo, que sigue haciendo lo de siempre — revelar/ocultar o sonar según
+// el modo) alterna entre sus dos grafías — pedido de Alberto: "al pulsar la primera vez que salga
+// una y si pulso otra sale el siguiente nombre". El índice 0 de cada par coincide con lo que ya
+// devolvía NTS antes de esto, para no cambiar el aspecto por defecto de nadie.
+const MI_ENH_PAIRS={1:['Db','C#'],3:['Eb','D#'],6:['F#','Gb'],8:['Ab','G#'],10:['Bb','A#']};
+let miEnh={}; // pc -> 0|1, índice dentro de MI_ENH_PAIRS[pc] elegido por el usuario
+let miMeasureSel=[]; // hasta 2 índices de posición en la franja de escala, para "medir distancia" entre dos notas cualquiera (Shift+click) — pedido de Alberto
+let miLastShowNoteTagDown=false,miLastEntryCount=0; // guardado por miScaleStripHTML para que miDrawScaleOverlays sepa si hace falta la línea de dirección de la fila de abajo
+function miNoteName(pc){
+  const pair=MI_ENH_PAIRS[pc];
+  return pair?pair[miEnh[pc]||0]:NTS[pc];
+}
+function miCycleEnh(pc,ev){
+  // Shift+click en el NOMBRE de una nota enarmónica: deja que el click siga su curso hacia el
+  // círculo (Shift ahí significa "marcar para medir distancia", no alternar grafía) — si no, el
+  // stopPropagation() de abajo se lo comía sin que el círculo se enterara (bug: Shift+click en
+  // F#/Gb, Bb/A# etc. no marcaba nada).
+  if(ev&&ev.shiftKey)return;
+  if(ev)ev.stopPropagation(); // que no dispare también el click del círculo (revelar/ocultar/sonar)
+  if(!MI_ENH_PAIRS[pc])return;
+  miEnh[pc]=(miEnh[pc]||0)===0?1:0;
+  miRender();
+}
+// Click en una nota de la franja de escala: SIEMPRE suena (igual que antes). Con Shift, además,
+// la marca para "medir distancia" — hasta 2 notas cualquiera, no hace falta que sean consecutivas
+// (pedido de Alberto: "cómo hago para medir la distancia entre dos notas que no son
+// consecutivas"). Un 3er click (sin ser ya una de las marcadas) reinicia la selección.
+function miScaleNoteClick(ev,idx,freq){
+  miPlayTone(freq);
+  if(!ev||!ev.shiftKey)return;
+  const pos=miMeasureSel.indexOf(idx);
+  if(pos!==-1)miMeasureSel.splice(pos,1);
+  else if(miMeasureSel.length>=2)miMeasureSel=[idx];
+  else miMeasureSel.push(idx);
+  miRender();
+}
+// Botón "✕ quitar" del lector de distancia — pedido de Alberto: "una vez que he seleccionado un
+// intervalo no veo cómo quitar la selección" (Shift+click en cada nota marcada también funciona,
+// pero esto es más directo).
+function miClearMeasure(){miMeasureSel=[];miRender();}
+// Línea con una punta de flecha entre (x1,y) y (x2,y), apuntando hacia x2 — compartida por la
+// flecha de "medir distancia" y la línea de dirección de la fila descendente.
+function miArrowLineSvg(x1,x2,y,color){
+  const dir=x2>=x1?1:-1;
+  const headX=x2-dir*7; // deja hueco para la punta, no tapar lo que haya en x2
+  const head=dir===1?`${headX-7},${y-6} ${headX},${y} ${headX-7},${y+6}`:`${headX+7},${y-6} ${headX},${y} ${headX+7},${y+6}`;
+  return `<line x1="${x1}" y1="${y}" x2="${headX}" y2="${y}" stroke="${color}" stroke-width="2"/><polygon points="${head}" fill="${color}"/>`;
+}
+function miGetOrCreateOverlay(strip,id){
+  let overlay=document.getElementById(id);
+  if(!overlay){
+    overlay=document.createElement('div');
+    overlay.id=id;
+    overlay.style.cssText='position:absolute;left:0;top:0;width:100%;height:0;pointer-events:none;';
+    strip.appendChild(overlay);
+  }
+  return overlay;
+}
+// Dos sobrepuestos que necesitan coordenadas reales en pantalla, por eso se dibujan en el frame
+// siguiente a insertar el HTML de la franja (ver requestAnimationFrame al final de
+// miScaleStripHTML), no al construir el HTML mismo:
+//  1) La flecha entre las 2 notas marcadas para "medir distancia", de la primera pulsada a la
+//     segunda (el orden decide el intervalo — pedido de Alberto: "debería salir una flecha para
+//     indicar cuál es la primera nota... y cuál la segunda").
+//  2) Una línea con dirección, hacia la IZQUIERDA, bajo toda la fila de intervalos descendentes
+//     (modo 'both') — pedido de Alberto: la línea vertical de antes "no aporta nada", mejor "una
+//     línea fina con dirección que una los diferentes intervalos que aparecen abajo hacia la
+//     izquierda" (esa fila se lee de derecha a izquierda: empieza en la última nota y baja).
+function miDrawScaleOverlays(){
+  const strip=document.getElementById('miScaleStrip');
+  if(!strip)return;
+  strip.style.position='relative';
+  const stripRect=strip.getBoundingClientRect();
+
+  // La línea de dirección de la fila descendente (si está activa) se dibuja primero, para saber
+  // cuánto hueco extra hace falta debajo de ella si la flecha de "medir distancia" también hay
+  // que mostrarla (pedido de Alberto: la flecha arriba "despista", mejor debajo).
+  const descOverlay=miGetOrCreateOverlay(strip,'miDescDirOverlay');
+  let descLineBottom=0;
+  if(miLastShowNoteTagDown&&miLastEntryCount>1){
+    const elFirst=strip.querySelector('[data-mi-tag-idx="0"]');
+    const elLast=strip.querySelector(`[data-mi-tag-idx="${miLastEntryCount-1}"]`);
+    if(elFirst&&elLast){
+      const r1=elFirst.getBoundingClientRect(),r2=elLast.getBoundingClientRect();
+      const x1=r1.left+r1.width/2-stripRect.left,x2=r2.left+r2.width/2-stripRect.left;
+      const yBottom=Math.max(r1.bottom,r2.bottom)-stripRect.top+6;
+      descLineBottom=yBottom;
+      descOverlay.innerHTML=`<svg width="100%" height="${yBottom+8}" style="position:absolute;left:0;top:0;overflow:visible;pointer-events:none;">`+
+        miArrowLineSvg(x2,x1,yBottom,'rgba(255,178,102,.85)')+`</svg>`;
+    }else descOverlay.innerHTML='';
+  }else descOverlay.innerHTML='';
+
+  // La flecha de "medir distancia" se ancla a #miMeasureInfo (el propio lector de texto, que ya
+  // vive debajo de la franja), no a la franja misma — así queda SIEMPRE debajo de todo (círculos,
+  // etiquetas descendentes Y el texto "C → E: ...") sin taparlo, en vez de "arriba", que
+  // despistaba (pedido de Alberto).
+  const infoEl=document.getElementById('miMeasureInfo');
+  if(infoEl)infoEl.style.position='relative';
+  const measureOverlay=miGetOrCreateOverlay(infoEl||strip,'miMeasureArrowOverlay');
+  if(miMeasureSel.length===2&&infoEl){
+    const[posFirst,posSecond]=miMeasureSel;
+    const wrapFirst=strip.querySelector(`[data-mi-tag-idx="${posFirst}"]`);
+    const wrapSecond=strip.querySelector(`[data-mi-tag-idx="${posSecond}"]`);
+    if(wrapFirst&&wrapSecond){
+      const infoRect=infoEl.getBoundingClientRect();
+      const r1=wrapFirst.getBoundingClientRect(),r2=wrapSecond.getBoundingClientRect();
+      const x1=r1.left+r1.width/2-infoRect.left,x2=r2.left+r2.width/2-infoRect.left;
+      const y=infoRect.height+14;
+      measureOverlay.innerHTML=`<svg width="100%" height="${y+8}" style="position:absolute;left:0;top:0;overflow:visible;pointer-events:none;">`+
+        miArrowLineSvg(x1,x2,y,'rgba(255,214,64,.9)')+`</svg>`;
+    }else measureOverlay.innerHTML='';
+  }else if(measureOverlay)measureOverlay.innerHTML='';
 }
 function miNeckSVG(){
-  const W=NECK_W,H=NECK_H,fretMin=0,fretMax=miFretCount;
-  const leftPad=50,rightPad=25,topPad=35,bottomPad=50; // como generateNeckSVG(fretStart=0), +10 de leftPad para que la nota al aire no se salga del lienzo
+  const W=NECK_W,H=NECK_H,fretMin=miFretStart,fretMax=Math.max(miFretCount,fretMin+1);
+  // Sin cejilla (fretMin>0, "zona concreta" del mástil — pedido de Alberto) hace falta algo más de
+  // margen a la izquierda para el número del primer traste, igual que generateNeckSVG(fretStart).
+  const leftPad=fretMin===0?50:65,rightPad=25,topPad=35,bottomPad=50; // 50 (+10 sobre generateNeckSVG) para que la nota al aire no se salga del lienzo
   const nFrets=fretMax-fretMin;
   const fretW=(W-leftPad-rightPad)/nFrets;
   const stringSpacing=(H-topPad-bottomPad)/5;
@@ -12208,18 +12374,24 @@ function miNeckSVG(){
   miRevealed.forEach(key=>{const[s0,f0]=key.split(':').map(Number);activePcs.add(getNoteStAtFret(s0,f0));});
   const labelFor=pc=>miLabelFor(pc,tonicPc);
   let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:100%;display:block;">`;
-  s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
-  for(let f=1;f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
+  // La cejilla (línea gruesa) solo tiene sentido si de verdad se ve el traste 0 (cuerda al aire);
+  // si se empieza más adelante, el borde izquierdo es solo un traste más, línea fina como el resto.
+  if(fretMin===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
+  for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
   for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${(0.45-si*0.04).toFixed(2)})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
   [3,5,7,9,12,15,17,19,21].forEach(f=>{
-    if(f<=fretMax){
+    if(f>fretMin&&f<=fretMax){
       const x=fretX(f)-fretW/2;
       s+=`<circle cx="${x}" cy="${topPad+2.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;
       if(f===12){s+=`<circle cx="${x}" cy="${topPad+1.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/><circle cx="${x}" cy="${topPad+3.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;}
     }
   });
-  for(let f=1;f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${H-10}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
-  for(let si=0;si<6;si++)for(let f=0;f<=fretMax;f++){
+  // La etiqueta de cada traste va en el hueco a la DERECHA de su cejilla (f-1 a f) — con o sin
+  // cuerda al aire visible, el traste f+1 empieza justo después de la cejilla en fretMin (bug
+  // corregido: con fretMin>0 el bucle heredado de generateNeckSVG dejaba la primera etiqueta
+  // fuera del lienzo, medio traste a la izquierda del borde).
+  for(let f=fretMin+1;f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${H-10}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
+  for(let si=0;si<6;si++)for(let f=fretMin+(fretMin===0?0:1);f<=fretMax;f++){
     const pc=getNoteStAtFret(si,f);
     const key=si+':'+f;
     const on=miRevealed.has(key)||miFlash.has(key);
@@ -12240,7 +12412,12 @@ function miNeckSVG(){
       // semitransparente rojo/cian + borde blanco suave, NO el rojo/cian sólido de otras vistas.
       const fill=(tonicPc!=null&&pc===tonicPc)?'rgba(229,57,53,.45)':'rgba(38,198,218,.5)';
       s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="rgba(255,255,255,.25)" stroke-width="1" pointer-events="none"/>`;
-      s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="white" font-size="${Math.round(r*0.7)}" font-weight="bold" font-family="Arial" pointer-events="none">${labelFor(pc)}</text>`;
+      // Si se está mostrando el NOMBRE de la nota (no el intervalo) y es una de las 5 notas
+      // enarmónicas, el texto SÍ recibe click (el resto del círculo sigue revelando/ocultando o
+      // sonando, según el modo) para poder alternar su grafía (p.ej. C#/Db).
+      const enhOk=MI_ENH_PAIRS[pc]&&!(miLabelMode==='intervals'&&tonicPc!=null);
+      const textEvt=enhOk?`cursor="pointer" onclick="miCycleEnh(${pc},event)"`:`pointer-events="none"`;
+      s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="white" font-size="${Math.round(r*0.7)}" font-weight="bold" font-family="Arial" ${textEvt}>${labelFor(pc)}</text>`;
     }else if(miShowGhosts&&activePcs.has(pc)){
       // Fantasma de la tónica: mismo trazo discontinuo, pero en rojo — para que destaque igual
       // que la tónica "de verdad" (revelada) se destaca en rojo, y no se confunda con el resto
@@ -12263,27 +12440,33 @@ function miNeckSVG(){
 function miScaleStripHTML(noteDiamPx){
   noteDiamPx=noteDiamPx||44;
   const tonicPc=miTonic?noteToSt(miTonic):null;
-  if(!miRevealed.size)return'';
+  if(!miRevealed.size){
+    const infoEl0=document.getElementById('miMeasureInfo');if(infoEl0)infoEl0.textContent='';
+    return'';
+  }
   // Distancia ASCENDENTE de a hasta b (en semitonos, 0-11) — se usa tanto para ordenar (con
   // tónica) como para medir el hueco entre notas consecutivas (con o sin tónica).
   const fwd=(a,b)=>((b-a)%12+12)%12;
-  let seq;
+  let rel;
   if(tonicPc!=null){
     // Con tónica: UNA entrada por nota (deduplicada por clase de altura — dos C en octavas
     // distintas cuentan como la misma), orden musical real empezando en la tónica y subiendo.
-    // Así SÍ tiene sentido cerrar con la vuelta automática a la tónica (octava) al final.
+    // Así SÍ tiene sentido cerrar con la vuelta automática a la tónica (octava) al final. La
+    // frecuencia de cada entrada es la del primer traste revelado con esa nota (miFreqForPc).
     const pcs=new Set();
     miRevealed.forEach(key=>{const[s,f]=key.split(':').map(Number);pcs.add(getNoteStAtFret(s,f));});
-    seq=[...pcs].sort((a,b)=>fwd(tonicPc,a)-fwd(tonicPc,b));
+    rel=[...pcs].sort((a,b)=>fwd(tonicPc,a)-fwd(tonicPc,b)).map(pc=>({pc,freq:miFreqForPc(pc)}));
   }else{
     // SIN tónica: una entrada por CADA traste revelado, en el orden en que se han pulsado — sin
     // deduplicar por nota. Si repites una nota en otra octava (p.ej. el C tras el B, cerrando la
     // escala) tiene que aparecer igual (bug reportado: "pongo un C después del B y ya no se pone
     // en la escala, es la octava y hay que ponerla") — y tampoco reordenar por altura, o la más
-    // grave mandaría como si fuera la tónica (bug reportado antes: "sale C-G en vez de G-C").
-    seq=[...miRevealed].map(key=>{const[s,f]=key.split(':').map(Number);return getNoteStAtFret(s,f);});
+    // grave mandaría como si fuera la tónica (bug reportado antes: "sale C-G en vez de G-C"). Cada
+    // entrada guarda la frecuencia REAL de SU traste (no una genérica por nombre de nota): dos C
+    // en octavas distintas (p.ej. inicio y cierre de la escala) no deben sonar igual (bug
+    // reportado: "no tienen que sonar igual, son octavas diferentes").
+    rel=[...miRevealed].map(key=>{const[s,f]=key.split(':').map(Number);return{pc:getNoteStAtFret(s,f),freq:miFreqFor(s,f)};});
   }
-  const rel=seq.map(pc=>({pc}));
   // Círculo con el mismo estilo que las notas del mástil (forceOwnNoteStyle): rojo solo si hay
   // tónica Y esta nota coincide con ella, cian para el resto — pedido de Alberto: "con más
   // diseño dentro de un círculo, como las del mástil".
@@ -12292,10 +12475,25 @@ function miScaleStripHTML(noteDiamPx){
   // concreto (bug reportado, con captura: "las notas de la escala... del mismo tamaño que las
   // del mástil").
   const fontPx=Math.round(noteDiamPx*0.44);
-  const noteCircle=pc=>{
+  // Clicables: suenan SIEMPRE (pedido de Alberto), independientemente del modo Pintar/Sonar del
+  // mástil. La frecuencia va FIJADA por entrada (calculada al construir `rel`/el cierre a la
+  // tónica más abajo), no recalculada por nombre de nota al pulsar — así dos círculos con la
+  // misma nota pero distinta octava (p.ej. el primero y el de cierre) suenan distinto.
+  // idx: posición de esta nota dentro de la secuencia completa de la franja (0,1,2...) — sirve
+  // para Shift+click "medir distancia": marcar dos notas cualquiera (no hace falta que sean
+  // consecutivas) y ver cuántos semitonos/qué intervalo hay entre ellas (pedido de Alberto).
+  const noteCircle=(pc,freq,idx)=>{
     const isRoot=tonicPc!=null&&pc===tonicPc;
     const bg=isRoot?'rgba(229,57,53,.55)':'rgba(38,198,218,.6)';
-    return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${noteDiamPx}px;height:${noteDiamPx}px;border-radius:50%;background:${bg};border:2px solid rgba(255,255,255,.35);color:#fff;font-weight:700;font-size:${fontPx}px;vertical-align:middle;">${miLabelFor(pc,tonicPc)}</span>`;
+    // Igual que en el mástil: si se muestra el nombre (no el intervalo) y es enarmónica, el
+    // propio texto puede pulsarse aparte para alternar grafía, sin disparar el sonido del círculo.
+    const enhOk=MI_ENH_PAIRS[pc]&&!(miLabelMode==='intervals'&&tonicPc!=null);
+    const label=enhOk?`<span onclick="miCycleEnh(${pc},event)">${miLabelFor(pc,tonicPc)}</span>`:miLabelFor(pc,tonicPc);
+    const selected=miMeasureSel.includes(idx);
+    const ring=selected?'box-shadow:0 0 0 3px rgba(255,214,64,.95);':'';
+    // data-mi-idx: para poder localizar este círculo por posición después de renderizar y dibujar
+    // la flecha entre las dos notas marcadas (ver miDrawMeasureArrow) — pedido de Alberto.
+    return `<span data-mi-idx="${idx}" onclick="miScaleNoteClick(event,${idx},${freq})" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:${noteDiamPx}px;height:${noteDiamPx}px;border-radius:50%;background:${bg};border:2px solid rgba(255,255,255,.35);color:#fff;font-weight:700;font-size:${fontPx}px;vertical-align:bottom;${ring}">${label}</span>`;
   };
   // Distancia en tonos/semitonos (T = tono entero, 1/2T = semitono), no en nº de semitonos —
   // pedido de Alberto. g=1→"1/2T", g=2→"T", g=3→"T 1/2", g=4→"2T", g=5→"2T 1/2"...
@@ -12307,27 +12505,149 @@ function miScaleStripHTML(noteDiamPx){
     return s;
   };
   const gapFontPx=Math.max(11,Math.round(noteDiamPx*0.28));
-  const gapMarginPx=Math.max(4,Math.round(noteDiamPx*0.18));
-  const gapSpan=g=>`<span style="color:rgba(255,255,255,.45);margin:0 ${gapMarginPx}px;font-weight:400;font-size:${gapFontPx}px;vertical-align:middle;">—${toneLabel(g)}—</span>`;
+  const gapMarginPx=Math.max(6,Math.round(noteDiamPx*0.22));
   const parts=[];
-  const octaveSpan=`<span style="color:rgba(255,255,255,.45);margin:0 ${gapMarginPx}px;font-weight:400;font-size:${gapFontPx}px;vertical-align:middle;">—8ª—</span>`;
+  // Dos capas de información independientes, controladas por el mismo botón de 3 estados
+  // (miIvTagsMode: 'up' por defecto, 'both', 'off') — RESTAURADO tras un despiste en el que, al
+  // añadir las flechas ENTRE notas, se borró por error todo lo que ya había (bug reportado:
+  // "te has cargado tódo lo que había!! ya no sale el nombre del intervalo... ni la distancia en
+  // tonos y semitonos"). Ahora conviven las dos cosas:
+  //  1) Encima/debajo de cada NOTA: su intervalo y semitonos respecto a la tónica (solo si hay
+  //     tónica y se muestran nombres, no ya el intervalo en el propio círculo).
+  //  2) SIEMPRE, el texto de tono/semitono de toda la vida ("—T—") entre cada dos notas, y
+  //     ADEMÁS (si el botón no está en 'off'), encima/debajo de ese texto, una flecha larga con
+  //     el número de semitonos de ESE salto — pedido de Alberto: "una flecha larga [que une R y
+  //     2] y encima ponga 2 semitonos".
+  const showNoteTagUp=miIvTagsMode!=='off'&&tonicPc!=null&&miLabelMode!=='intervals';
+  const showNoteTagDown=showNoteTagUp&&miIvTagsMode==='both';
+  // La distancia entre dos notas mide igual en los dos sentidos (pedido de Alberto: "siempre va a
+  // ser la misma en las dos direcciones"), así que la línea del hueco no necesita dirección ni
+  // duplicarse arriba/abajo — una sola, sin flecha, arriba, baste el modo 'both' o no.
+  const showGapLine=miIvTagsMode!=='off';
+  const ivTagFontPx=Math.max(10,Math.round(noteDiamPx*0.26));
+  // Encima de la nota, SOLO el nombre del intervalo (nada de "X semitonos" ahí, que confundía
+  // junto con el número de la flecha — pedido de Alberto: "el 0 semitonos fuera... encima de la
+  // nota permanece solo el intervalo que forma con la tónica").
+  // Hueco extra (margin-bottom en el propio texto, ver "top" en withNoteTag) para que el anillo
+  // amarillo de "medir distancia" (box-shadow alrededor del círculo) no se coma el texto de
+  // arriba — pedido de Alberto. Con solo más alto de banda no bastaba: al estar el texto pegado
+  // abajo (justify-content:flex-end) el hueco de más se iba arriba, no entre texto y círculo.
+  const noteTagBandH=Math.round(ivTagFontPx*1.2)+5;
+  const numFontPx=Math.max(9,Math.round(noteDiamPx*0.19));
+  const gapLineBandH=Math.round(numFontPx*1.3)+2+2;
+  // Alto de banda compartido: el mayor de los dos (etiqueta de nota / línea de hueco), para que
+  // notas y huecos midan lo mismo de alto y el conjunto se alinee bien (bug ya resuelto antes:
+  // "el literal de distancia... no está centrado con las notas").
+  const topBandH=Math.max(showNoteTagUp?noteTagBandH:0,showGapLine?gapLineBandH:0);
+  const bottomBandH=showNoteTagDown?noteTagBandH:0;
+  const totalH=topBandH+noteDiamPx+bottomBandH;
+  const gapHtml=(txt,g)=>{
+    // Solo el texto "N semitonos" — la línea que había debajo no aportaba nada que el propio
+    // texto ya no dijera, y cargaba el gráfico (pedido de Alberto).
+    const gLbl=`${g} semitono${g===1?'':'s'}`;
+    const top=showGapLine?`<div style="font:600 ${numFontPx}px Arial;color:rgba(255,255,255,.6);line-height:1.2;white-space:nowrap;">${gLbl}</div>`:'';
+    return `<span style="display:inline-block;vertical-align:bottom;height:${totalH}px;text-align:center;">`+
+      `<div style="height:${topBandH}px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;">${top}</div>`+
+      `<div style="height:${noteDiamPx}px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);margin:0 ${gapMarginPx}px;font-weight:400;font-size:${gapFontPx}px;">—${txt}—</div>`+
+      `<div style="height:${bottomBandH}px;"></div>`+
+      `</span>`;
+  };
+  const gapSpan=g=>gapHtml(toneLabel(g),g);
+  const octaveSpan=gapHtml('8ª',12);
+  const withNoteTag=(pc,freq,semiOverride,idx)=>{
+    const circle=noteCircle(pc,freq,idx);
+    // Solo el nombre del intervalo respecto a la tónica — nada de semitonos aquí (eso va en la
+    // flecha del hueco, ver gapHtml) — pedido de Alberto.
+    const semiUp=semiOverride!=null?semiOverride:(tonicPc!=null?fwd(tonicPc,pc):0);
+    const ivUpLbl=tonicPc!=null?(IV_SEMI_LBL[(pc-tonicPc+12)%12]||''):'';
+    const top=showNoteTagUp?`<div style="font:700 ${ivTagFontPx}px Arial;color:rgba(255,255,255,.65);line-height:1.2;margin-bottom:5px;">${ivUpLbl}</div>`:'';
+    let bottom='';
+    if(showNoteTagDown){
+      const semiDown=12-semiUp;
+      const ivDownLbl=IV_SEMI_LBL[semiDown%12]||'';
+      bottom=`<div style="font:700 ${ivTagFontPx}px Arial;color:rgba(255,178,102,.75);line-height:1.2;margin-top:5px;">${ivDownLbl}</div>`;
+    }
+    // data-mi-tag-idx: para localizar la etiqueta de ABAJO de la primera/última nota después de
+    // renderizar y dibujar debajo una única línea con dirección (hacia la izquierda) que las una
+    // — pedido de Alberto: la línea vertical no aportaba, mejor "una línea fina con dirección que
+    // una los diferentes intervalos que aparecen abajo hacia la izquierda".
+    return `<span data-mi-tag-idx="${idx}" style="display:inline-block;vertical-align:bottom;height:${totalH}px;text-align:center;">`+
+      `<div style="height:${topBandH}px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;">${top}</div>`+
+      `<div style="height:${noteDiamPx}px;line-height:0;">${circle}</div>`+
+      `<div style="height:${bottomBandH}px;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;">${bottom}</div>`+
+      `</span>`;
+  };
+  // Un índice de posición por nota (0,1,2...) y el hueco en semitonos entre cada dos consecutivas
+  // — hace falta para "medir distancia" entre dos notas cualquiera (Shift+click, ver
+  // miScaleNoteClick): la distancia total es sencillamente la suma de los huecos de por medio.
+  let entryIdx=0;
+  const gaps=[];
+  const entryPcs=[];
   rel.forEach((n,i)=>{
-    parts.push(noteCircle(n.pc));
+    entryPcs.push(n.pc);
+    parts.push(withNoteTag(n.pc,n.freq,undefined,entryIdx++));
     if(i<rel.length-1){
       const nxt=rel[i+1].pc;
       // Misma clase de altura que la anterior (p.ej. la MISMA nota repetida en otra octava sin
       // ninguna otra nota en medio): fwd() da 0 por la aritmética modular, que se leería como
-      // "0" o "1/2T" sin sentido — es una octava exacta, se etiqueta como tal.
-      parts.push(nxt===n.pc?octaveSpan:gapSpan(fwd(n.pc,nxt)));
+      // "0" o "1/2T" sin sentido — es una octava exacta, se etiqueta como tal (12 semitonos).
+      const g=nxt===n.pc?12:fwd(n.pc,nxt);
+      gaps.push(g);
+      parts.push(nxt===n.pc?octaveSpan:gapSpan(g));
     }
   });
-  if(tonicPc!=null&&rel.length>1){parts.push(gapSpan(fwd(rel[rel.length-1].pc,tonicPc)));parts.push(noteCircle(tonicPc));}
+  if(tonicPc!=null&&rel.length>1){
+    // Cierre "vuelta a la tónica": una octava justa POR ENCIMA de la primera aparición de la
+    // tónica en esta franja (o, si la tónica no llegó a pintarse en el mástil, la octava de
+    // referencia de miFreqForPc) — nunca la misma frecuencia que ya sonó, aunque sea la misma nota.
+    const tonicEntry=rel.find(e=>e.pc===tonicPc);
+    const closingFreq=(tonicEntry?tonicEntry.freq:miFreqForPc(tonicPc))*2;
+    const g=fwd(rel[rel.length-1].pc,tonicPc);
+    gaps.push(g);
+    parts.push(gapSpan(g));
+    entryPcs.push(tonicPc);
+    parts.push(withNoteTag(tonicPc,closingFreq,12,entryIdx++));
+  }
+  // Descarta selecciones de "medir distancia" que ya no correspondan a ninguna nota dibujada
+  // (p.ej. tras borrar notas o cambiar de tónica, que reordena la franja entera).
+  miMeasureSel=miMeasureSel.filter(i=>i<entryIdx);
+  const infoEl=document.getElementById('miMeasureInfo');
+  if(infoEl){
+    if(miMeasureSel.length===2){
+      // El ORDEN de click decide el SENTIDO (ascendente/descendente: pedido de Alberto), pero la
+      // MAGNITUD es siempre la misma suma de huecos entre las dos posiciones — bug corregido: aquí
+      // se invertía (12-suma) creyendo que había que "dar la vuelta a la octava", pero eso NO es
+      // así cuando la segunda nota marcada ya está físicamente más grave dentro de la propia
+      // franja (p.ej. del C final a un E de más a la izquierda hay 8 semitonos bajando, 6ª menor
+      // — NO una 3ª mayor: "parece que hace el cálculo al revés", reportado con capturas).
+      const[posFirst,posSecond]=miMeasureSel;
+      const lo=Math.min(posFirst,posSecond),hi=Math.max(posFirst,posSecond);
+      const total=gaps.slice(lo,hi).reduce((s,g)=>s+g,0);
+      const semi12=((total%12)+12)%12;
+      const ivFullName=IV_FULL_LBL[semi12]||'';
+      const tritoneWarning=semi12===6?' <span style="color:#ff5252;font-weight:800;">¡TRITONO!</span>':'';
+      const nameFirst=miLabelFor(entryPcs[posFirst],tonicPc);
+      const nameSecond=miLabelFor(entryPcs[posSecond],tonicPc);
+      infoEl.innerHTML=`${nameFirst} → ${nameSecond}: ${total} semitono${total===1?'':'s'} (${ivFullName})${tritoneWarning} `+
+        `<span onclick="miClearMeasure()" style="cursor:pointer;color:rgba(255,255,255,.5);font-weight:600;text-decoration:underline;">✕ quitar</span>`;
+    }else{
+      infoEl.textContent='';
+    }
+  }
+  // Dos sobrepuestos que necesitan coordenadas reales en pantalla (solo se conocen después de
+  // insertar este HTML en la página): la flecha entre las 2 notas marcadas para medir, y la línea
+  // con dirección bajo la fila de abajo. Se guarda aquí lo que hace falta y se dibuja en el
+  // siguiente frame — ver miDrawScaleOverlays.
+  miLastShowNoteTagDown=showNoteTagDown;
+  miLastEntryCount=entryIdx;
+  requestAnimationFrame(miDrawScaleOverlays);
   return parts.join('');
 }
 function miRender(){
   const host=document.getElementById('miNeckHost');if(!host)return;
   host.innerHTML=miNeckSVG();
-  const lbl=document.getElementById('miFretCountLbl');if(lbl)lbl.textContent=miFretCount+' trastes';
+  const lbl=document.getElementById('miFretCountLbl');if(lbl)lbl.textContent='hasta '+miFretCount;
+  const lblStart=document.getElementById('miFretStartLbl');if(lblStart)lblStart.textContent='desde '+(miFretStart===0?'al aire':miFretStart);
   const gb=document.getElementById('miGhostBtn');if(gb)gb.classList.toggle('active',miShowGhosts);
   const tsel=document.getElementById('miTonic');if(tsel&&tsel.value!==miTonic)tsel.value=miTonic;
   const strip=document.getElementById('miScaleStrip');
@@ -12376,6 +12696,23 @@ function miToggleClickMode(){
   const b=document.getElementById('miClickModeBtn');if(b)b.classList.toggle('active',miClickMode==='play');
   const lbl=document.getElementById('miClickModeLbl');if(lbl)lbl.textContent=miClickMode==='play'?'Sonar':'Pintar';
 }
+// "Sonar todas": las notas dibujadas a la vez, como un acorde — pedido de Alberto porque hacer
+// sonar varias notas a la vez a golpe de click (una a una, muy seguidas) no era práctico.
+function miPlayAll(){
+  miRevealed.forEach(key=>{const[s,f]=key.split(':').map(Number);miPlayTone(miFreqFor(s,f));});
+}
+// Frecuencia para una nota de la franja de escala (solo tiene la clase de altura, pc 0-11, no
+// cuerda/traste): si esa nota está pintada en el mástil ahora mismo, usamos la MISMA octava que
+// ahí (primera casilla que coincida, orden de inserción); si no (p.ej. la tónica de cierre al
+// final de la franja, que se añade aunque no esté pintada), una octava de referencia razonable
+// (C3=130.81Hz, mismo rango que las cuerdas de la guitarra).
+function miFreqForPc(pc){
+  for(const key of miRevealed){
+    const[s,f]=key.split(':').map(Number);
+    if(getNoteStAtFret(s,f)===pc)return miFreqFor(s,f);
+  }
+  return 130.8128*Math.pow(2,pc/12);
+}
 function miUndo(){
   const last=miHistory.pop();
   if(!last)return;
@@ -12384,11 +12721,32 @@ function miUndo(){
 }
 function miChangeFrets(delta){
   miFretCount=Math.max(4,Math.min(24,miFretCount+delta));
+  if(miFretStart>miFretCount-1)miFretStart=Math.max(0,miFretCount-1); // no dejar que el rango se invierta
   miRender();
 }
-function miClear(){miRevealed.clear();miHistory=[];Object.values(miFlashTimers).forEach(clearTimeout);miFlashTimers={};miFlash.clear();miRender();}
+function miChangeFretStart(delta){
+  miFretStart=Math.max(0,Math.min(miFretCount-1,miFretStart+delta));
+  miRender();
+}
+function miClear(){miRevealed.clear();miHistory=[];Object.values(miFlashTimers).forEach(clearTimeout);miFlashTimers={};miFlash.clear();miMeasureSel=[];miRender();}
 function miToggleGhosts(){miShowGhosts=!miShowGhosts;miRender();}
-function miTonicChanged(){const sel=document.getElementById('miTonic');if(sel)miTonic=sel.value;miRender();}
+function miToggleIvTags(){
+  miIvTagsMode=miIvTagsMode==='up'?'both':(miIvTagsMode==='both'?'off':'up');
+  const b=document.getElementById('miIvTagsBtn');
+  if(b){
+    b.classList.toggle('active',miIvTagsMode!=='off');
+    const lbl={up:'Ver intervalos',both:'Ver intervalos (2 sentidos)',off:'Intervalos ocultos'}[miIvTagsMode];
+    const span=b.querySelector('span');if(span)span.textContent=lbl;
+  }
+  miRender();
+}
+function miToggleLegend(){
+  const ov=document.getElementById('miLegendOverlay');if(!ov)return;
+  const show=ov.style.display==='none';
+  ov.style.display=show?'flex':'none';
+  const b=document.getElementById('miLegendBtn');if(b)b.classList.toggle('active',show);
+}
+function miTonicChanged(){const sel=document.getElementById('miTonic');if(sel)miTonic=sel.value;miMeasureSel=[];miRender();}
 function miToggleLabelMode(){
   miLabelMode=miLabelMode==='notes'?'intervals':'notes';
   // Sin tónica no hay respecto a qué medir el intervalo (miLabelFor ya cae a nombre de nota) —
