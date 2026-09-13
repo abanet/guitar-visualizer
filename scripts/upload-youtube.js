@@ -6,7 +6,9 @@
  *
  * Sube SIEMPRE como "unlisted" salvo que se pida explícitamente --privacy public: la idea es dejar
  * el vídeo listo (metadata completa) pero con el "Publicar" final a mano en YouTube Studio, no
- * autopublicar sin revisión.
+ * autopublicar sin revisión. Si se pasa --publish-at, el vídeo se sube como "private" y YouTube lo
+ * publica en automático (como "public") en la fecha/hora indicada — este es el único caso en el
+ * que sí se autopublica, porque la fecha ya se ha decidido explícitamente al llamar al script.
  *
  * Requiere credenciales OAuth propias (no vienen en el repo, ver más abajo) — la API sube vídeos
  * a TU canal, así que hace falta que autorices tu propia cuenta de Google una vez.
@@ -37,7 +39,11 @@
  *   --tags <lista>          Tags separados por coma
  *   --category <id>         ID de categoría de YouTube (por defecto 22 = People & Blogs)
  *   --privacy <valor>       private | unlisted | public (por defecto: unlisted)
+ *   --publish-at <fecha>    Fecha/hora ISO 8601 (con zona horaria, ej. 2026-09-13T18:30:00+02:00)
+ *                           para programar la publicación automática. Fuerza --privacy private
+ *                           (lo exige la API) hasta esa fecha, en la que YouTube lo pasa a public.
  *   --thumbnail <path>      Imagen de miniatura (jpg/png) a subir junto con el vídeo
+ *   --playlist <lista>      ID(s) de playlist separados por coma — añade el vídeo a cada una tras subirlo
  *   --chapters-every <n>    Igual que en generate-youtube-chapters.js (por defecto 10)
  *   --client-secret <path>  Ruta al JSON de credenciales OAuth (por defecto scripts/lib/youtube-oauth-client.json)
  *   --token <path>          Ruta donde cachear el token (por defecto scripts/.youtube-token.json)
@@ -62,7 +68,7 @@ function parseArgs(argv) {
   return out;
 }
 
-const SCOPES = ['https://www.googleapis.com/auth/youtube.upload'];
+const SCOPES = ['https://www.googleapis.com/auth/youtube'];
 
 async function loadOAuthClient(clientSecretPath, tokenPath) {
   if (!fs.existsSync(clientSecretPath)) {
@@ -150,9 +156,20 @@ async function main() {
   if (args.thumbnail && !fs.existsSync(path.resolve(args.thumbnail))) {
     console.error('No existe: ' + path.resolve(args.thumbnail)); process.exit(1);
   }
-  const privacy = args.privacy || 'unlisted';
+  let privacy = args.privacy || 'unlisted';
   if (!['private', 'unlisted', 'public'].includes(privacy)) {
     console.error('--privacy debe ser private, unlisted o public'); process.exit(1);
+  }
+  let publishAt;
+  if (args['publish-at']) {
+    const d = new Date(args['publish-at']);
+    if (Number.isNaN(d.getTime())) { console.error('--publish-at no es una fecha válida: ' + args['publish-at']); process.exit(1); }
+    if (d.getTime() <= Date.now()) { console.error('--publish-at debe ser una fecha futura: ' + args['publish-at']); process.exit(1); }
+    publishAt = d.toISOString();
+    if (privacy !== 'private') {
+      console.log(`(--publish-at fuerza --privacy private hasta la publicación programada; se ignora --privacy ${privacy})`);
+      privacy = 'private';
+    }
   }
 
   const repoRoot = path.resolve(__dirname, '..');
@@ -169,21 +186,43 @@ async function main() {
 
   console.log(`Subiendo "${args.title}" (${privacy})…`);
   const res = await youtube.videos.insert({
-    part: ['snippet', 'status'],
+    // "status.containsSyntheticMedia" y "paidProductPlacementDetails" son las casillas "No uso de
+    // IA" / "No incluye promoción de pago" de Studio — las fijamos aquí en false siempre (ningún
+    // vídeo de este canal tiene ninguna de las dos cosas) para no tener que marcarlas a mano.
+    part: ['snippet', 'status', 'paidProductPlacementDetails'],
     requestBody: {
       snippet: { title: args.title, description, tags, categoryId },
-      status: { privacyStatus: privacy, selfDeclaredMadeForKids: false },
+      status: {
+        privacyStatus: privacy,
+        selfDeclaredMadeForKids: false,
+        containsSyntheticMedia: false,
+        ...(publishAt ? { publishAt } : {}),
+      },
+      paidProductPlacementDetails: { hasPaidProductPlacement: false },
     },
     media: { body: fs.createReadStream(videoPath) },
   });
   const videoId = res.data.id;
   console.log(`✓ Subido: https://youtu.be/${videoId}`);
   console.log(`  Editar en Studio: https://studio.youtube.com/video/${videoId}/edit`);
+  if (publishAt) console.log(`  Programado para publicarse: ${publishAt}`);
 
   if (args.thumbnail) {
     console.log('Subiendo miniatura…');
     await youtube.thumbnails.set({ videoId, media: { body: fs.createReadStream(path.resolve(args.thumbnail)) } });
     console.log('✓ Miniatura subida.');
+  }
+
+  if (args.playlist) {
+    const playlistIds = String(args.playlist).split(',').map((p) => p.trim()).filter(Boolean);
+    for (const playlistId of playlistIds) {
+      console.log(`Añadiendo a la playlist ${playlistId}…`);
+      await youtube.playlistItems.insert({
+        part: ['snippet'],
+        requestBody: { snippet: { playlistId, resourceId: { kind: 'youtube#video', videoId } } },
+      });
+      console.log('✓ Añadido a la playlist.');
+    }
   }
 }
 
