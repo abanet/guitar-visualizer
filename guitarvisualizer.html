@@ -39,6 +39,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn.accent:hover{opacity:.88;}
 .btn.green{background:#27500A;color:white;border-color:#27500A;}
 .btn.green:hover{opacity:.88;}
+.mi-toolbar{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+.mi-toolbar-group{display:flex;gap:8px;align-items:center;background:rgba(38,38,38,.9);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 10px;box-shadow:0 4px 14px rgba(0,0,0,.35);backdrop-filter:blur(4px);}
+.mi-toolbar-label{color:#fff;font:600 13px Arial;min-width:66px;text-align:center;}
+.mi-btn{padding:8px 14px;font-size:13px;font-weight:600;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:#262626;color:#eee;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap;}
+.mi-btn:hover{background:#333;border-color:rgba(255,255,255,.26);}
+.mi-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.mi-editable{outline:none;cursor:text;padding:2px 4px;margin:-2px -4px;border-radius:5px;min-height:1.3em;}
+.mi-editable:empty:before{content:attr(data-placeholder);color:rgba(255,255,255,.35);}
+.mi-editable:hover{background:rgba(255,255,255,.05);}
+.mi-editable:focus{background:rgba(255,255,255,.08);}
+.mi-tonic-select{padding:7px 30px 7px 14px;font-size:14px;font-weight:700;border-radius:8px;border:1px solid rgba(255,255,255,.3);background-color:#1a1a1a;color:#fff;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='white'/></svg>");background-repeat:no-repeat;background-position:right 12px center;}
 .btn.danger{border-color:#c0392b;color:#c0392b;}
 .btn.danger:hover{background:#fdf0ef;}
 .btn.sm{padding:4px 8px;font-size:11px;}
@@ -508,6 +519,7 @@ body.presentation #channelWatermark{display:flex;}
     <div class="tab" title="Progresión diatónica completa de una escala (tríadas o tétradas) sobre una posición CAGED, sin dibujar ninguna forma de arpegio: el arpegio es siempre un subconjunto de las notas de la escala." onclick="showTab('arpscale')"><i class="ti ti-guitar-pick"></i> Estructuras en escala</div>
     <div class="tab" title="Build-up narrado: revela una caja pentatónica CAGED en pasos (tríada por grupos de cuerdas → +7ª → +4ª → caja completa), sincronizado a un backing track, con texto de apoyo." onclick="showTab('scalestory')"><i class="ti ti-stack-2"></i> Historia de escala</div>
     <div class="tab" title="Asigna una escala y su posición a cada rango de compases del ciclo." onclick="showTab('scales')"><i class="ti ti-timeline"></i> Escalas</div>
+    <div class="tab" title="Mástil en blanco para explicar en directo: click en un traste para revelar su nota. Pensado para grabar la pantalla mientras interactúas con él." onclick="showTab('mastilInteractivo')"><i class="ti ti-hand-click"></i> Mástil interactivo</div>
     <div class="tab" onclick="showTab('help')"><i class="ti ti-help"></i> Ayuda</div>
     <span id="exBadge" style="margin-left:auto;align-self:center;font-size:11px;font-weight:600;color:var(--text2);background:rgba(0,0,0,.06);border:1px solid var(--border);border-radius:999px;padding:3px 10px;white-space:nowrap;" title="Tipo de ejercicio que se está reproduciendo realmente (se deduce del contenido del frame activo, no del selector)"></span>
     <span id="appVersionBadge" style="align-self:center;font-size:11px;color:var(--text3);padding:0 8px;" title="Versión de Guitar Visualizer"></span>
@@ -1762,6 +1774,61 @@ body.presentation #channelWatermark{display:flex;}
         <p style="font-size:12px;color:var(--text2);margin:0 0 8px;">Variante — <b>tríadas dentro de esta misma posición</b> (sin tema cargado): la posición NUNCA cambia de zona; cada acorde diatónico suena tantos compases como tríadas suyas quepan enteras en ella (normalmente 1-3), mostrándolas todas una tras otra con la animación habitual de tríadas. Requiere "Resaltar: Tríadas" (paso 1). Sustituye a la vieja serie "Domina las tríadas | Escala de X | Forma de Y".</p>
         <button class="btn accent" onclick="asSendToEditorTriadExploreUI()"><i class="ti ti-send"></i> Ver en Visualizador (tríadas por posición)</button>
         <span id="asTriadExploreStatus" style="font-size:12px;color:var(--text2);margin-left:10px;"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MÁSTIL INTERACTIVO -->
+<div class="panel" id="tab-mastilInteractivo" style="display:none;padding:20px;">
+  <div style="max-width:1800px;margin:0 auto;">
+    <h2 style="margin:0 0 6px;font-size:18px;"><i class="ti ti-hand-click"></i> Mástil interactivo</h2>
+    <div class="tab-help"><div><span class="th-k">Qué es</span>Un mástil en blanco para explicar en directo: click en cualquier traste para revelar su nota (otro click la vuelve a ocultar). El recuadro oscuro de abajo tiene proporción 16:9 — es lo único que hace falta grabar para subirlo directo a YouTube; TODOS los controles están dentro a propósito, para que salgan en la grabación.</div><div><span class="th-k">Ver en todo el mástil</span>Con alguna nota revelada, ese botón marca (tenue, sin ocupar el hueco de una nota revelada) todas las demás casillas con esa misma nota en cualquier cuerda/octava visible. Vuelve a pulsarlo para quitarlas.</div><div><span class="th-k">Franja de escala</span>Encima del mástil, las notas reveladas (sin repetir, una por nombre) ordenadas desde la tónica, con la distancia en semitonos entre cada una y la siguiente.</div></div>
+
+    <div id="miRecordZone" style="position:relative;width:100%;aspect-ratio:16/9;background:#0d0d0d;border-radius:10px;overflow:hidden;">
+      <div style="position:absolute;top:22px;left:28px;display:flex;align-items:center;gap:10px;z-index:2;">
+        <span style="color:rgba(255,255,255,.75);font:600 15px Arial;letter-spacing:.02em;">Tonalidad:</span>
+        <select id="miTonic" class="mi-tonic-select" onchange="miTonicChanged()">
+          <option value="">— (sin tonalidad)</option>
+          <option>C</option><option>C#</option><option>Db</option><option>D</option><option>D#</option><option>Eb</option>
+          <option>E</option><option>F</option><option>F#</option><option>Gb</option><option>G</option><option>G#</option>
+          <option>Ab</option><option>A</option><option>A#</option><option>Bb</option><option>B</option>
+        </select>
+      </div>
+      <div style="position:absolute;top:22px;right:28px;z-index:2;font:600 14px Arial;letter-spacing:.03em;color:rgba(255,255,255,.85);">
+        <span style="color:rgba(255,255,255,.55);">BanetMasa</span> Guitar Editor
+      </div>
+      <div style="position:absolute;top:62px;left:28px;right:28px;z-index:2;">
+        <div id="miTitle" class="mi-editable" contenteditable="true" data-placeholder="Título (haz click y escribe)…" style="color:#fff;font:700 38px Arial;line-height:1.25;text-align:center;"></div>
+        <div id="miDesc" class="mi-editable" contenteditable="true" data-placeholder="Descripción de lo que vas a explicar…" style="color:rgba(255,255,255,.75);font:500 22px Arial;line-height:1.3;margin-top:5px;text-align:center;"></div>
+      </div>
+      <!-- Franja de escala + mástil, agrupados y anclados ABAJO (pegados a la barra de botones)
+           — antes eran dos capas posicionadas por separado con números mágicos, que se
+           descuadraban entre sí en cuanto cambiaba el tamaño (bug reportado: "ahora está todo
+           fatal"). Con flex-direction:column + justify-content:flex-end, el hueco sobrante
+           siempre queda ARRIBA (bajo el título), nunca entre la franja y el mástil ni entre el
+           mástil y los botones. -->
+      <div style="position:absolute;left:0;right:0;top:112px;bottom:84px;z-index:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;padding:0 30px;">
+        <div id="miScaleStrip" style="z-index:2;font:600 15px Arial;letter-spacing:.02em;min-height:46px;text-align:center;margin-bottom:10px;"></div>
+        <div id="miNeckHost" style="display:flex;justify-content:center;"></div>
+      </div>
+      <div class="mi-toolbar" style="position:absolute;left:0;right:0;bottom:16px;margin:0;justify-content:center;z-index:2;">
+        <div class="mi-toolbar-group">
+          <button class="mi-btn" onclick="miChangeFrets(-1)" title="Menos trastes"><i class="ti ti-minus"></i></button>
+          <span class="mi-toolbar-label" id="miFretCountLbl"></span>
+          <button class="mi-btn" onclick="miChangeFrets(1)" title="Más trastes"><i class="ti ti-plus"></i></button>
+        </div>
+        <div class="mi-toolbar-group">
+          <button class="mi-btn" id="miGhostBtn" onclick="miToggleGhosts()" title="Muestra/oculta, tenues, las demás casillas con la misma nota"><i class="ti ti-eye"></i> Ver en todo el mástil</button>
+          <button class="mi-btn" onclick="miUndo()" title="Deshacer el último click"><i class="ti ti-arrow-back-up"></i> Deshacer</button>
+          <button class="mi-btn" onclick="miClear()" title="Ocultar todas las notas reveladas"><i class="ti ti-eraser"></i> Limpiar</button>
+        </div>
+        <div class="mi-toolbar-group">
+          <button class="mi-btn" id="miLabelModeBtn" onclick="miToggleLabelMode()" title="Alterna entre nombre de nota e intervalo respecto a la tónica"><i class="ti ti-music"></i> <span id="miLabelModeLbl">Notas</span></button>
+        </div>
+        <div class="mi-toolbar-group">
+          <button class="mi-btn" id="miClickModeBtn" onclick="miToggleClickMode()" title="Pintar: el click revela/oculta notas y suena. Sonar: el click solo reproduce la nota (aparece un instante si no estaba pintada), sin cambiar lo dibujado"><i class="ti ti-pointer"></i> <span id="miClickModeLbl">Pintar</span></button>
+        </div>
       </div>
     </div>
   </div>
@@ -10316,6 +10383,14 @@ async function asSendToEditorTriadExplore(){
     // grado) — se lleva un contador POR NOMBRE DE ACORDE a lo largo de TODO el tema (no por
     // "racha" de compases consecutivos) para que, con las repeticiones suficientes, acaben
     // saliendo TODAS sus posiciones dentro de esta caja, siempre en el mismo orden (321→654).
+    // Las vueltas 'ref' (por defecto solo reflejan los compases de la vuelta 0, ver
+    // getTargetBars) necesitan sus PROPIOS compases para poder escribir ahí — si no, el compás
+    // de la 2ª vuelta en adelante pisa el de la 1ª (incluso a través de getAllBars(), que ya de
+    // por sí devuelve el tema entero) y el contador por acorde nunca llega a verse: cada nueva
+    // vuelta sobrescribe las posiciones de la anterior en la MISMA celda compartida en vez de
+    // guardar la suya (bug reportado: "en Em hay 3 posiciones pero solo se ven 2" — mismo fix
+    // que ya usa applyExploreTriadSequence para "Explora una tríada en el mástil").
+    for(let ci=0;ci<cycles.length;ci++){if(cycles[ci].mode==='ref'){makeCycleCustom(ci);}}
     renderEditor();
     const all=getAllBars();
     const barLoc=[];
@@ -12019,9 +12094,343 @@ function clearVis(){
 }
 function seekClick(e){if(!audioEl||!audioEl.duration)return;const p=e.offsetX/e.currentTarget.offsetWidth;audioEl.currentTime=p*audioEl.duration;curBar=-1;lastBar=-99;curImgSlot=-1;curSeg=-1;animPending=null;ghostPending=null;_lastBgPosKey=null;}
 
+// ════════════════════════════════════════════════════════════════════════════
+// MÁSTIL INTERACTIVO — mástil en blanco para explicar en directo (pedido de Alberto
+// 2026-09-13): click en un traste revela/oculta su nota. Pensado para GRABAR LA PANTALLA
+// mientras se interactúa (no genera vídeo en lote como el resto de pestañas). El recuadro
+// grabable (#miRecordZone, proporción 16:9 — lista para subir directo a YouTube) contiene SOLO
+// el mástil y la etiqueta "Tonalidad:"; los controles (+/−, ver por todo el mástil, limpiar,
+// pantalla completa) viven FUERA de ese recuadro a propósito (feedback de Alberto: "que no se
+// metan en el mástil"), en la barra de arriba. Aislado del motor de reproducción
+// (bars/cycles/tick()): esto es interacción en vivo por click, no una sucesión de fotogramas
+// pregrabados. Misma geometría (leftPad/rightPad/topPad/bottomPad) que generateNeckSVG con
+// fretStart=0 — "todo el mástil", igual que en los ejercicios de tríadas — y mismos colores de
+// nota que el resto de la app (rojo #E53935 = tónica seleccionada, cian #26C6DA = el resto).
+// ════════════════════════════════════════════════════════════════════════════
+let miFretCount=15; // trastes visibles (0..miFretCount), ajustable con los botones +/-
+let miRevealed=new Set(); // "cuerda:traste" de las notas reveladas ahora mismo
+let miTonic=''; // '' = sin tonalidad (por defecto). Si hay una, decide el color (tónica=rojo, resto=cian) y el punto de partida de la franja de escala
+let miShowGhosts=false; // "ver en todo el mástil": marca tenue el resto de casillas con la misma nota
+let miLabelMode='notes'; // 'notes' (nombre) | 'intervals' (respecto a miTonic) — afecta a la etiqueta de cada nota revelada
+let miHistory=[]; // pila de {key,wasOn} para "Deshacer" — wasOn = estado ANTES del click, deshacer restaura ese estado
+let miLastR=22; // radio (unidades del viewBox) de la última nota dibujada en miNeckSVG — para que la franja de escala use el mismo tamaño EN PANTALLA, no un valor fijo en CSS px
+let miClickMode='draw'; // 'draw' ("Pintar": click = revela/oculta y suena) | 'play' ("Sonar": click = solo suena, no pinta nada permanente)
+let miFlash=new Set(); // "cuerda:traste" en preview temporal (modo Sonar sobre una casilla sin nota pintada): se ve mientras suena y luego desaparece
+let miFlashTimers={}; // key -> timeout, para reiniciar el preview si se pulsa varias veces seguidas
+let miAudioCtx=null,miReverbBuffer=null;
+const MI_OPEN_FREQ=[82.4069,110.0000,146.8324,195.9977,246.9417,329.6276]; // E2 A2 D3 G3 B3 E4, afinación estándar
+function miFreqFor(stringIdx,fret){return MI_OPEN_FREQ[stringIdx]*Math.pow(2,fret/12);}
+function miGetAudioCtx(){
+  if(!miAudioCtx)miAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(miAudioCtx.state==='suspended')miAudioCtx.resume();
+  return miAudioCtx;
+}
+function miBuildReverbImpulse(ctx,durSec,decay){
+  const rate=ctx.sampleRate,len=Math.floor(rate*durSec);
+  const impulse=ctx.createBuffer(2,len,rate);
+  for(let ch=0;ch<2;ch++){
+    const data=impulse.getChannelData(ch);
+    for(let i=0;i<len;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);
+  }
+  return impulse;
+}
+// Pluck por suma de armónicos (fundamental + 2ª,3ª,4ª + una copia detunada de la fundamental
+// para dar cuerpo/chorus) con un click de ataque (ruido paso-alto muy breve, simula el roce del
+// pulsar) y un filtro paso-bajo cuyo corte decae con el tiempo (brillante al principio, se va
+// apagando) — SIN bucle de realimentación (una primera versión tipo Karplus-Strong con bucle
+// sonaba "asqueroso y estridente", feedback probado y descartado). Esta es la versión que a
+// Alberto le gustó al probarla.
+function miPlayTone(freq){
+  try{
+    const ctx=miGetAudioCtx();
+    const now=ctx.currentTime+0.01;
+    const sustain=2.0;
+    const sum=ctx.createGain();
+    [{mult:1,gain:1.0,detune:0},{mult:1,gain:0.5,detune:6},{mult:2,gain:0.45,detune:0},{mult:3,gain:0.22,detune:0},{mult:4,gain:0.10,detune:0}].forEach(h=>{
+      const osc=ctx.createOscillator();
+      osc.type='triangle';osc.frequency.value=freq*h.mult;osc.detune.value=h.detune;
+      const g=ctx.createGain();g.gain.value=h.gain;
+      osc.connect(g);g.connect(sum);
+      osc.start(now);osc.stop(now+sustain+0.3);
+    });
+    // Click de ataque: ruido muy breve filtrado en paso-alto, simula el roce al pulsar.
+    const clickLen=0.008;
+    const clickBuf=ctx.createBuffer(1,Math.floor(ctx.sampleRate*clickLen),ctx.sampleRate);
+    const cd=clickBuf.getChannelData(0);
+    for(let i=0;i<cd.length;i++)cd[i]=(Math.random()*2-1)*(1-i/cd.length);
+    const click=ctx.createBufferSource();click.buffer=clickBuf;
+    const clickFilter=ctx.createBiquadFilter();clickFilter.type='highpass';clickFilter.frequency.value=1500;
+    const clickGain=ctx.createGain();clickGain.gain.value=0.5;
+    click.connect(clickFilter);clickFilter.connect(clickGain);clickGain.connect(sum);
+    click.start(now);
+    const filt=ctx.createBiquadFilter();
+    filt.type='lowpass';filt.Q.value=0.7;
+    filt.frequency.setValueAtTime(Math.min(9000,freq*10),now);
+    filt.frequency.exponentialRampToValueAtTime(Math.max(400,freq*1.5),now+sustain);
+    const env=ctx.createGain();
+    env.gain.setValueAtTime(0,now);
+    env.gain.linearRampToValueAtTime(0.9,now+0.004);
+    env.gain.exponentialRampToValueAtTime(0.001,now+sustain);
+    sum.connect(filt);filt.connect(env);
+    const dry=ctx.createGain();dry.gain.value=.8;dry.connect(ctx.destination);
+    if(!miReverbBuffer)miReverbBuffer=miBuildReverbImpulse(ctx,1.4,2.5);
+    const conv=ctx.createConvolver();conv.buffer=miReverbBuffer;
+    const wet=ctx.createGain();wet.gain.value=.16;conv.connect(wet);wet.connect(ctx.destination);
+    env.connect(dry);env.connect(conv);
+  }catch(e){console.error('miPlayTone error',e);}
+}
+// Etiqueta de una nota según miLabelMode — COMPARTIDA entre el mástil y la franja de escala
+// (antes la franja siempre mostraba el nombre, sin más: pedido de Alberto, "al cambiar de uno a
+// otro esto también tiene que afectar a la escala que estamos dibujando"). IV_SEMI_LBL: tabla
+// global nombre-de-intervalo por semitono (ver noteDisplayLabel), mismos nombres (R,b2,2,b3...)
+// que el resto de la app. Sin tónica no hay respecto a qué medir el intervalo, así que cae
+// siempre a nombre de nota aunque miLabelMode sea 'intervals'.
+function miLabelFor(pc,tonicPc){
+  return(miLabelMode==='intervals'&&tonicPc!=null)?(IV_SEMI_LBL[(pc-tonicPc+12)%12]||NTS[pc]):NTS[pc];
+}
+function miNeckSVG(){
+  const W=NECK_W,H=NECK_H,fretMin=0,fretMax=miFretCount;
+  const leftPad=50,rightPad=25,topPad=35,bottomPad=50; // como generateNeckSVG(fretStart=0), +10 de leftPad para que la nota al aire no se salga del lienzo
+  const nFrets=fretMax-fretMin;
+  const fretW=(W-leftPad-rightPad)/nFrets;
+  const stringSpacing=(H-topPad-bottomPad)/5;
+  const strY=s=>topPad+(5-s)*stringSpacing;
+  const fretX=f=>leftPad+(f-fretMin)*fretW;
+  // Tope de radio también por stringSpacing (43 con los paddings de arriba, para H=300 fijo):
+  // con solo el tope de 22 por fretW, dos notas en cuerdas contiguas del MISMO traste llegaban a
+  // solaparse un poco (22+22=44 > 43 de separación real entre cuerdas) — aquí se puede dar ese
+  // caso con las 6 cuerdas reveladas a la vez, más que en el resto de vistas de la app (bug
+  // reportado, con capturas: "los círculos... se siguen superponiendo").
+  const r=Math.min(22,fretW*0.38,stringSpacing*0.44);
+  miLastR=r; // expuesto para que la franja de escala use EXACTAMENTE el mismo tamaño en pantalla (ver miRender)
+  const tonicPc=miTonic?noteToSt(miTonic):null; // null = "sin tonalidad": todas las notas van en el mismo color, sin intervalos
+  const activePcs=new Set();
+  miRevealed.forEach(key=>{const[s0,f0]=key.split(':').map(Number);activePcs.add(getNoteStAtFret(s0,f0));});
+  const labelFor=pc=>miLabelFor(pc,tonicPc);
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:100%;display:block;">`;
+  s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
+  for(let f=1;f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
+  for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${(0.45-si*0.04).toFixed(2)})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
+  [3,5,7,9,12,15,17,19,21].forEach(f=>{
+    if(f<=fretMax){
+      const x=fretX(f)-fretW/2;
+      s+=`<circle cx="${x}" cy="${topPad+2.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;
+      if(f===12){s+=`<circle cx="${x}" cy="${topPad+1.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/><circle cx="${x}" cy="${topPad+3.5*stringSpacing}" r="6" fill="rgba(255,255,255,.18)"/>`;}
+    }
+  });
+  for(let f=1;f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${H-10}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
+  for(let si=0;si<6;si++)for(let f=0;f<=fretMax;f++){
+    const pc=getNoteStAtFret(si,f);
+    const key=si+':'+f;
+    const on=miRevealed.has(key)||miFlash.has(key);
+    // Sin el Math.max de antes: con r cerca de su máximo (22), r+4 (26) superaba a leftPad-r-4
+    // (14), así que la nota al aire acababa MÁS CERCA del traste 1 de lo debido y se solapaba
+    // con él (bug reportado, con capturas). leftPad-r-4 solo, igual que generateNeckSVG.
+    const x=f===0?leftPad-r-4:fretX(f)-fretW/2;
+    const y=strY(si);
+    s+=`<g style="cursor:pointer;" onclick="miCellClick(${si},${f})">`;
+    // Círculo invisible del tamaño completo SOLO para ampliar la zona de click (fill casi
+    // transparente pero no "none": un fill none no recibe click en SVG) — sin ningún punto
+    // visible mientras no está revelada (pedido de Alberto: "no quiero círculos indicando
+    // dónde se dibujan las notas").
+    s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="rgba(255,255,255,.001)"/>`;
+    if(on){
+      // Mismo estilo que "forceOwnNoteStyle" (el que llevan los vídeos de tríadas que
+      // generamos, ver scripts/lib/default-triad-vis-config.json y renderSVGStatic): relleno
+      // semitransparente rojo/cian + borde blanco suave, NO el rojo/cian sólido de otras vistas.
+      const fill=(tonicPc!=null&&pc===tonicPc)?'rgba(229,57,53,.45)':'rgba(38,198,218,.5)';
+      s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="rgba(255,255,255,.25)" stroke-width="1" pointer-events="none"/>`;
+      s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="white" font-size="${Math.round(r*0.7)}" font-weight="bold" font-family="Arial" pointer-events="none">${labelFor(pc)}</text>`;
+    }else if(miShowGhosts&&activePcs.has(pc)){
+      // Fantasma de la tónica: mismo trazo discontinuo, pero en rojo — para que destaque igual
+      // que la tónica "de verdad" (revelada) se destaca en rojo, y no se confunda con el resto
+      // de fantasmas (pedido de Alberto).
+      const isGhostRoot=tonicPc!=null&&pc===tonicPc;
+      const ghostStroke=isGhostRoot?'rgba(229,57,53,.7)':'rgba(255,255,255,.3)';
+      s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="rgba(150,150,150,.14)" stroke="${ghostStroke}" stroke-width="1.5" stroke-dasharray="4,3" pointer-events="none"/>`;
+      s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="rgba(255,255,255,.55)" font-size="${Math.round(r*0.7)}" font-weight="600" font-family="Arial" pointer-events="none">${labelFor(pc)}</text>`;
+    }
+    s+='</g>';
+  }
+  s+='</svg>';
+  return s;
+}
+// Franja de escala: notas reveladas, DEDUPLICADAS por clase de altura (una C revelada en dos
+// trastes distintos cuenta una sola vez), ordenadas empezando en la tónica hacia arriba, con la
+// distancia en semitonos entre cada una y la siguiente — y la vuelta a la tónica (octava) al
+// final. Siempre en nombre de nota (no sigue miLabelMode: esta franja ya comunica la distancia
+// numérica por su cuenta, mezclar además intervalos ahí sería redundante).
+function miScaleStripHTML(noteDiamPx){
+  noteDiamPx=noteDiamPx||44;
+  const tonicPc=miTonic?noteToSt(miTonic):null;
+  if(!miRevealed.size)return'';
+  // Distancia ASCENDENTE de a hasta b (en semitonos, 0-11) — se usa tanto para ordenar (con
+  // tónica) como para medir el hueco entre notas consecutivas (con o sin tónica).
+  const fwd=(a,b)=>((b-a)%12+12)%12;
+  let seq;
+  if(tonicPc!=null){
+    // Con tónica: UNA entrada por nota (deduplicada por clase de altura — dos C en octavas
+    // distintas cuentan como la misma), orden musical real empezando en la tónica y subiendo.
+    // Así SÍ tiene sentido cerrar con la vuelta automática a la tónica (octava) al final.
+    const pcs=new Set();
+    miRevealed.forEach(key=>{const[s,f]=key.split(':').map(Number);pcs.add(getNoteStAtFret(s,f));});
+    seq=[...pcs].sort((a,b)=>fwd(tonicPc,a)-fwd(tonicPc,b));
+  }else{
+    // SIN tónica: una entrada por CADA traste revelado, en el orden en que se han pulsado — sin
+    // deduplicar por nota. Si repites una nota en otra octava (p.ej. el C tras el B, cerrando la
+    // escala) tiene que aparecer igual (bug reportado: "pongo un C después del B y ya no se pone
+    // en la escala, es la octava y hay que ponerla") — y tampoco reordenar por altura, o la más
+    // grave mandaría como si fuera la tónica (bug reportado antes: "sale C-G en vez de G-C").
+    seq=[...miRevealed].map(key=>{const[s,f]=key.split(':').map(Number);return getNoteStAtFret(s,f);});
+  }
+  const rel=seq.map(pc=>({pc}));
+  // Círculo con el mismo estilo que las notas del mástil (forceOwnNoteStyle): rojo solo si hay
+  // tónica Y esta nota coincide con ella, cian para el resto — pedido de Alberto: "con más
+  // diseño dentro de un círculo, como las del mástil".
+  // Círculo del MISMO tamaño en pantalla que las notas del mástil (noteDiamPx, ver miRender) —
+  // antes era un tamaño fijo en CSS px que solo coincidía con el mástil a un ancho de ventana
+  // concreto (bug reportado, con captura: "las notas de la escala... del mismo tamaño que las
+  // del mástil").
+  const fontPx=Math.round(noteDiamPx*0.44);
+  const noteCircle=pc=>{
+    const isRoot=tonicPc!=null&&pc===tonicPc;
+    const bg=isRoot?'rgba(229,57,53,.55)':'rgba(38,198,218,.6)';
+    return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${noteDiamPx}px;height:${noteDiamPx}px;border-radius:50%;background:${bg};border:2px solid rgba(255,255,255,.35);color:#fff;font-weight:700;font-size:${fontPx}px;vertical-align:middle;">${miLabelFor(pc,tonicPc)}</span>`;
+  };
+  // Distancia en tonos/semitonos (T = tono entero, 1/2T = semitono), no en nº de semitonos —
+  // pedido de Alberto. g=1→"1/2T", g=2→"T", g=3→"T 1/2", g=4→"2T", g=5→"2T 1/2"...
+  const toneLabel=g=>{
+    const whole=Math.floor(g/2),half=g%2;
+    if(whole===0)return'1/2T';
+    let s=whole===1?'T':`${whole}T`;
+    if(half)s+=' 1/2';
+    return s;
+  };
+  const gapFontPx=Math.max(11,Math.round(noteDiamPx*0.28));
+  const gapMarginPx=Math.max(4,Math.round(noteDiamPx*0.18));
+  const gapSpan=g=>`<span style="color:rgba(255,255,255,.45);margin:0 ${gapMarginPx}px;font-weight:400;font-size:${gapFontPx}px;vertical-align:middle;">—${toneLabel(g)}—</span>`;
+  const parts=[];
+  const octaveSpan=`<span style="color:rgba(255,255,255,.45);margin:0 ${gapMarginPx}px;font-weight:400;font-size:${gapFontPx}px;vertical-align:middle;">—8ª—</span>`;
+  rel.forEach((n,i)=>{
+    parts.push(noteCircle(n.pc));
+    if(i<rel.length-1){
+      const nxt=rel[i+1].pc;
+      // Misma clase de altura que la anterior (p.ej. la MISMA nota repetida en otra octava sin
+      // ninguna otra nota en medio): fwd() da 0 por la aritmética modular, que se leería como
+      // "0" o "1/2T" sin sentido — es una octava exacta, se etiqueta como tal.
+      parts.push(nxt===n.pc?octaveSpan:gapSpan(fwd(n.pc,nxt)));
+    }
+  });
+  if(tonicPc!=null&&rel.length>1){parts.push(gapSpan(fwd(rel[rel.length-1].pc,tonicPc)));parts.push(noteCircle(tonicPc));}
+  return parts.join('');
+}
+function miRender(){
+  const host=document.getElementById('miNeckHost');if(!host)return;
+  host.innerHTML=miNeckSVG();
+  const lbl=document.getElementById('miFretCountLbl');if(lbl)lbl.textContent=miFretCount+' trastes';
+  const gb=document.getElementById('miGhostBtn');if(gb)gb.classList.toggle('active',miShowGhosts);
+  const tsel=document.getElementById('miTonic');if(tsel&&tsel.value!==miTonic)tsel.value=miTonic;
+  const strip=document.getElementById('miScaleStrip');
+  if(strip){
+    // Diámetro EN PANTALLA de una nota del mástil ahora mismo: el radio (miLastR) está en
+    // unidades del viewBox (fijo, 1001 de ancho) — hay que escalarlo al ancho real ya renderizado
+    // del SVG, o la franja no coincide de tamaño con el mástil salvo a un ancho de ventana
+    // concreto (bug reportado, con captura: "las notas de la escala... del mismo tamaño que las
+    // del mástil").
+    const svgEl=host.querySelector('svg');
+    const scale=svgEl?svgEl.getBoundingClientRect().width/NECK_W:1;
+    const noteDiamPx=Math.max(16,Math.round(2*miLastR*scale));
+    strip.innerHTML=miScaleStripHTML(noteDiamPx);
+  }
+  // El botón muestra el modo ACTIVO ahora mismo (igual que Pintar/Sonar) — antes mostraba el modo
+  // al que cambiarías al pulsar, al revés que el resto de botones de la barra (bug reportado).
+  const lm=document.getElementById('miLabelModeLbl');if(lm)lm.textContent=miLabelMode==='intervals'?'Intervalos':'Notas';
+}
+function miToggle(s,f){
+  const key=s+':'+f;
+  const wasOn=miRevealed.has(key);
+  if(wasOn)miRevealed.delete(key);else{miRevealed.add(key);miPlayTone(miFreqFor(s,f));} // solo suena al REVELAR, no al ocultar
+  miHistory.push({key,wasOn});
+  miRender();
+}
+// Click en modo "sonar": recorrer una escala ya dibujada nota a nota sin borrar nada (en modo
+// "dibujar" el primer click sobre una nota revelada la borra, así que había que pulsar dos veces
+// para volver a oírla — pedido de Alberto). No toca miRevealed ni miHistory: solo reproduce y, si
+// la casilla no tenía nota pintada, la muestra un instante (mientras dura el sonido) y desaparece.
+function miCellClick(s,f){
+  if(miClickMode==='play'){
+    miPlayTone(miFreqFor(s,f));
+    const key=s+':'+f;
+    if(!miRevealed.has(key)){
+      miFlash.add(key);
+      miRender();
+      clearTimeout(miFlashTimers[key]);
+      miFlashTimers[key]=setTimeout(()=>{miFlash.delete(key);delete miFlashTimers[key];miRender();},900);
+    }
+    return;
+  }
+  miToggle(s,f);
+}
+function miToggleClickMode(){
+  miClickMode=miClickMode==='draw'?'play':'draw';
+  const b=document.getElementById('miClickModeBtn');if(b)b.classList.toggle('active',miClickMode==='play');
+  const lbl=document.getElementById('miClickModeLbl');if(lbl)lbl.textContent=miClickMode==='play'?'Sonar':'Pintar';
+}
+function miUndo(){
+  const last=miHistory.pop();
+  if(!last)return;
+  if(last.wasOn)miRevealed.add(last.key);else miRevealed.delete(last.key);
+  miRender();
+}
+function miChangeFrets(delta){
+  miFretCount=Math.max(4,Math.min(24,miFretCount+delta));
+  miRender();
+}
+function miClear(){miRevealed.clear();miHistory=[];Object.values(miFlashTimers).forEach(clearTimeout);miFlashTimers={};miFlash.clear();miRender();}
+function miToggleGhosts(){miShowGhosts=!miShowGhosts;miRender();}
+function miTonicChanged(){const sel=document.getElementById('miTonic');if(sel)miTonic=sel.value;miRender();}
+function miToggleLabelMode(){
+  miLabelMode=miLabelMode==='notes'?'intervals':'notes';
+  // Sin tónica no hay respecto a qué medir el intervalo (miLabelFor ya cae a nombre de nota) —
+  // el botón cambia igual, pero el mástil no se ve distinto y puede parecer que "no hace nada"
+  // (bug reportado). Un aviso lo deja claro en vez de fallar en silencio.
+  if(miLabelMode==='intervals'&&!miTonic)alert('Elige una tonalidad (arriba a la izquierda) para ver los intervalos — sin tónica no hay respecto a qué medirlos.');
+  miRender();
+}
+
+// Título/descripción escritos directamente encima del vídeo (contenteditable, no un
+// formulario aparte) — persisten en localStorage para no perderlos si se recarga a media
+// explicación. Solo se inicializan UNA VEZ (no en cada miRender, que solo toca #miNeckHost).
+let miFieldsInited=false;
+function miInitEditableFields(){
+  if(miFieldsInited)return;
+  miFieldsInited=true;
+  const t=document.getElementById('miTitle'),d=document.getElementById('miDesc');
+  if(t){
+    // Texto de partida (no un placeholder que desaparece al enfocar): pensado para seguir
+    // escribiendo justo detrás ("Hoy vamos a hablar de..." + el tema). Solo la primera vez que
+    // se usa (localStorage null) — si el usuario ya lo borró a propósito, se respeta vacío.
+    const savedT=localStorage.getItem('gv_mi_title_v2');
+    t.textContent=savedT||'Hoy vamos a hablar de...';
+    t.addEventListener('input',()=>localStorage.setItem('gv_mi_title_v2',t.textContent));
+    // stopPropagation: SIN esto, el atajo global de la barra espaciadora (Play/Pausa, ver
+    // document.addEventListener('keydown',...) al final del archivo) intercepta cada espacio
+    // que se escribe aquí — ese atajo solo descarta INPUT/SELECT, no contenteditable — y
+    // dispara togglePlay() a media escritura (bug reportado: el campo se quedaba con rect
+    // 0×0/inutilizable en cuanto se escribía un espacio).
+    t.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter'){e.preventDefault();t.blur();}}); // título a una sola línea
+  }
+  if(d){
+    const savedD=localStorage.getItem('gv_mi_desc_v2');
+    d.textContent=savedD||'Ayudados por nuestro mástil interactivo...';
+    d.addEventListener('input',()=>localStorage.setItem('gv_mi_desc_v2',d.textContent));
+    d.addEventListener('keydown',e=>e.stopPropagation());
+  }
+}
+
 function showTab(name){
   try{
-    const panels=['editor','library','audio','player','video','settings','help','generate','sequence','targets','scales','triads','ritmos','arpscale','scalestory'];
+    const panels=['editor','library','audio','player','video','settings','help','generate','sequence','targets','scales','triads','ritmos','arpscale','scalestory','mastilInteractivo'];
     panels.forEach(t=>{
       const p=document.getElementById('tab-'+t);
       if(!p)return;
@@ -12056,6 +12465,7 @@ function showTab(name){
     if(name==='sequence')initSequenceTab();
     if(name==='scales')try{spRenderPanel();}catch(e2){console.error(e2);}
     if(name==='arpscale')try{asInit();}catch(e3){console.error(e3);}
+    if(name==='mastilInteractivo')try{miRender();miInitEditableFields();}catch(e4){console.error(e4);}
     {const _p2=getCurrentParsedForBadge();if(_p2)updateExerciseBadge(_p2);}
   }catch(e){console.error('showTab error:',e);}
 }
