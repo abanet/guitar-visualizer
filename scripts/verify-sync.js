@@ -24,10 +24,19 @@
  * .json junto, se puede dar un valor común para todo el lote con --expected <segundos>
  * (útil también para los vídeos de scripts/generate-triad-videos.js, que no vienen de sesión).
  *
+ * Para lotes del módulo RITMO (scripts/render-rhythm-video.js, --dir de audios a BPM fijo, sin
+ * .json de sesión y con un BPM distinto por archivo): si no hay .json y tampoco se pasa
+ * --expected, se intenta leer el BPM del propio nombre de archivo (misma convención que
+ * bpmFromFilename() en render-rhythm-video.js) y calcular el instante esperado como
+ * introBars*beats*(60/bpm) — usa --intro-bars/--beats para pisar los valores por defecto (2/4)
+ * si el lote usó otros en su config.json.
+ *
  * Opciones:
  *   --dir <path>          Carpeta con los .mp4 a comprobar (obligatorio)
  *   --expected <seg>      Instante esperado del primer acorde, igual para todos los .mp4 del
  *                         lote — se usa solo si un vídeo no tiene .json de sesión junto
+ *   --intro-bars <n>      Solo para el fallback por BPM del nombre de archivo (por defecto: 2)
+ *   --beats <n>           Solo para el fallback por BPM del nombre de archivo (por defecto: 4)
  *   --tolerance <seg>     Margen tolerado entre audio y vídeo antes de marcar sospechoso
  *                         (por defecto: 0.15)
  */
@@ -49,6 +58,22 @@ function parseArgs(argv) {
     }
   }
   return out;
+}
+
+// Misma convención que bpmFromFilename() en render-rhythm-video.js — número al final del
+// nombre, o antes de un sufijo "_Render" (algunos exports de BiaB llevan el BPM justo antes).
+function bpmFromFilename(file) {
+  const name = path.parse(file).name.replace(/[_\-\s]*render$/i, '');
+  const m = name.match(/(\d+)\s*$/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+// intro (en compases) * beats por compás * segundos por beat a ese BPM — misma fórmula que
+// introBars*beats*(60/bpm) en render-rhythm-video.js para el modo --dir (BPM fijo por archivo).
+function expectedOnsetFromBpmFilename(file, introBars, beats) {
+  const bpm = bpmFromFilename(file);
+  if (!bpm) return null;
+  return introBars * beats * (60 / bpm);
 }
 
 // intro (en compases) * segundos por compás a introBPM, más el offset manual — misma fórmula
@@ -111,6 +136,8 @@ async function main() {
   const dir = path.resolve(args.dir);
   const tolerance = args.tolerance !== undefined ? parseFloat(args.tolerance) : 0.15;
   const globalExpected = args.expected !== undefined ? parseFloat(args.expected) : null;
+  const introBars = args['intro-bars'] !== undefined ? parseFloat(args['intro-bars']) : 2;
+  const beats = args.beats !== undefined ? parseFloat(args.beats) : 4;
 
   const files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.mp4')).sort();
   if (!files.length) { console.error('No hay .mp4 en ' + dir); process.exitCode = 1; return; }
@@ -128,8 +155,9 @@ async function main() {
         if (fromSession != null) expected = fromSession;
       } catch (e) {}
     }
+    if (expected == null) expected = expectedOnsetFromBpmFilename(f, introBars, beats);
     if (expected == null) {
-      console.log(`⚠ ${f}: sin .json de sesión junto y sin --expected — omitido`);
+      console.log(`⚠ ${f}: sin .json de sesión, sin --expected y sin BPM reconocible en el nombre — omitido`);
       continue;
     }
 
