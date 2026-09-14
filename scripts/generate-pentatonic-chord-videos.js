@@ -51,6 +51,7 @@ const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileP = promisify(execFile);
+const { acquireRenderLock } = require('./lib/batch-sessions');
 
 const CAGED_POS_LABELS = ['E', 'D', 'C', 'A', 'G'];
 
@@ -287,6 +288,10 @@ async function main() {
   if (!args.xml || !args.audio) { console.error(usage); process.exit(1); }
   if (args.cyclelen && args['whole-theme']) { console.error('--cyclelen y --whole-theme son excluyentes.'); process.exit(1); }
   await waitFfmpeg();
+  // Ver el comentario grande de acquireRenderLock() en scripts/lib/batch-sessions.js: esto
+  // graba en tiempo real, así que dos grabaciones a la vez en la misma máquina se estropean
+  // entre sí (pasó de verdad: lote de Ritmo Soul, sep 2026).
+  await acquireRenderLock();
 
   const appPath = path.resolve(args.app || path.join(__dirname, '..', 'guitarvisualizer.html'));
   const appUrl = 'file://' + appPath;

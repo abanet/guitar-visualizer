@@ -50,7 +50,7 @@ const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileP = promisify(execFile);
-const { waitFfmpeg, getAudioDurationSeconds } = require('./lib/batch-sessions');
+const { waitFfmpeg, acquireRenderLock, getAudioDurationSeconds } = require('./lib/batch-sessions');
 
 const AUDIO_EXT_RE = /\.(m4a|mp3|wav|aac|aiff?|caf)$/i;
 
@@ -83,6 +83,9 @@ async function main() {
     process.exit(1);
   }
   await waitFfmpeg();
+  // Ver el comentario grande de acquireRenderLock() en scripts/lib/batch-sessions.js: esto graba
+  // en tiempo real, así que dos grabaciones a la vez en la misma máquina se estropean entre sí.
+  await acquireRenderLock();
 
   const repoRoot = path.resolve(__dirname, '..');
   const appPath = path.resolve(repoRoot, args.app || 'guitarvisualizer.html');

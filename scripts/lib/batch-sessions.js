@@ -17,6 +17,72 @@ async function waitFfmpeg() {
   catch (e) { throw new Error('No se encuentra "ffmpeg" en el PATH. Instálalo antes de continuar.'); }
 }
 
+// Bloqueo entre PROCESOS (no solo entre jobs de un mismo lote): toda esta familia de scripts
+// graba en tiempo real con Playwright (recordVideo mientras la app reproduce de verdad, ver el
+// comentario grande de render-rhythm-video.js) — no es un render "offline" fotograma a fotograma,
+// así que dos grabaciones a la vez en la misma máquina compiten por CPU y el resultado se nota:
+// pantalla equivocada al arrancar, animación a tirones, primer golpe de sincronización adelantado.
+// Pasó de verdad (lote de Ritmo Soul, sep 2026): al regenerar UN vídeo suelto mientras un `--dir`
+// grande seguía grabando en otro proceso, se estropearon los 2-3 vídeos que se solaparon en el
+// tiempo con esa segunda grabación. Por eso cada script de esta familia debe llamar a
+// acquireRenderLock() justo después de waitFfmpeg(), antes de tocar Playwright.
+//
+// Si algún día se usa una máquina con margen de sobra para grabar varias cosas a la vez sin que
+// se note, se puede saltar el bloqueo con GV_ALLOW_CONCURRENT_RENDER=1 (env var) — a propósito NO
+// hay un flag de CLI por script para esto, así queda claro que es una decisión consciente y no un
+// valor por defecto que alguien active sin darse cuenta.
+const RENDER_LOCK_PATH = path.join(os.tmpdir(), 'guitar-visualizer-render.lock');
+
+function pidIsAlive(pid) {
+  try { process.kill(pid, 0); return true; }
+  catch (e) { return false; }
+}
+
+function releaseRenderLockFile() {
+  try {
+    const info = JSON.parse(fs.readFileSync(RENDER_LOCK_PATH, 'utf8'));
+    if (info.pid === process.pid) fs.rmSync(RENDER_LOCK_PATH, { force: true });
+  } catch (e) { /* ya no existe, o es de otro proceso — nada que limpiar */ }
+}
+
+// Handlers registrados UNA sola vez por proceso (no en cada acquireRenderLock() — server.js
+// puede llamarlo muchas veces a lo largo de su vida, una por cada "Generar vídeos" desde la app,
+// y apilar listeners en cada llamada acabaría en un proceso de larga duración con cientos de
+// listeners de 'exit'/SIGINT/SIGTERM).
+let renderLockHandlersInstalled = false;
+function installRenderLockHandlersOnce() {
+  if (renderLockHandlersInstalled) return;
+  renderLockHandlersInstalled = true;
+  process.on('exit', releaseRenderLockFile);
+  process.on('SIGINT', () => { releaseRenderLockFile(); process.exit(130); });
+  process.on('SIGTERM', () => { releaseRenderLockFile(); process.exit(143); });
+}
+
+// Devuelve una función release() — llámala cuando termine la grabación (el finally de runBatch()
+// lo hace por ti). Los scripts de un solo uso (todo el resto: generate-triad-videos.js,
+// render-rhythm-video.js, etc.) pueden ignorar el valor de vuelta sin problema: al ser procesos
+// de un solo lote que terminan solos, el handler de 'exit' de arriba ya libera el lock igual.
+async function acquireRenderLock() {
+  if (process.env.GV_ALLOW_CONCURRENT_RENDER === '1') return () => {};
+  if (fs.existsSync(RENDER_LOCK_PATH)) {
+    const info = JSON.parse(fs.readFileSync(RENDER_LOCK_PATH, 'utf8'));
+    if (pidIsAlive(info.pid)) {
+      throw new Error(
+        `Ya hay otra generación de vídeo en marcha en esta máquina (PID ${info.pid}, comando: "${info.cmd}", ` +
+        `arrancó a las ${new Date(info.startedAt).toLocaleTimeString()}). Grabar dos vídeos a la vez satura la CPU ` +
+        `y produce vídeos con fallos (pantalla equivocada, animación a tirones, sync mal al principio) — espera a ` +
+        `que termine antes de lanzar otra. Si de verdad quieres forzarlo (p.ej. en una máquina mucho más potente), ` +
+        `pon GV_ALLOW_CONCURRENT_RENDER=1 en el entorno.`
+      );
+    }
+    // Lock huérfano de un proceso que murió sin limpiar (crash, kill -9) — se descarta.
+    fs.rmSync(RENDER_LOCK_PATH, { force: true });
+  }
+  fs.writeFileSync(RENDER_LOCK_PATH, JSON.stringify({ pid: process.pid, cmd: process.argv.slice(1).join(' '), startedAt: Date.now() }));
+  installRenderLockHandlersOnce();
+  return releaseRenderLockFile;
+}
+
 async function getAudioDurationSeconds(audioPath) {
   try {
     await execFileP('ffmpeg', ['-i', audioPath]);
@@ -338,8 +404,13 @@ async function runBatch({ appPath, dir, audioPath, outDir, extraSec = 2, visConf
     jobs: [],
   };
 
+  let releaseRenderLock = () => {};
   try {
     await waitFfmpeg();
+    // server.js es un proceso de larga duración (no termina entre lotes), así que aquí SÍ hace
+    // falta liberar el lock a mano en el finally de abajo — el handler de 'exit' de
+    // acquireRenderLock() es solo la red de seguridad para cuando el proceso entero muere.
+    releaseRenderLock = await acquireRenderLock();
     const appUrl = 'file://' + path.resolve(appPath);
     const audioAbs = path.resolve(audioPath);
     const dirAbs = path.resolve(dir);
@@ -386,6 +457,8 @@ async function runBatch({ appPath, dir, audioPath, outDir, extraSec = 2, visConf
     fs.rmSync(tmpDir, { recursive: true, force: true });
   } catch (e) {
     state.fatalError = e.message;
+  } finally {
+    releaseRenderLock();
   }
   state.running = false;
   state.finishedAt = Date.now();
@@ -393,4 +466,4 @@ async function runBatch({ appPath, dir, audioPath, outDir, extraSec = 2, visConf
   return state;
 }
 
-module.exports = { waitFfmpeg, getAudioDurationSeconds, listSessionFiles, runOne, runPool, runBatch, requestCancel };
+module.exports = { waitFfmpeg, acquireRenderLock, getAudioDurationSeconds, listSessionFiles, runOne, runPool, runBatch, requestCancel };

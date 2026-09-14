@@ -111,6 +111,7 @@ const { promisify } = require('util');
 const execFileP = promisify(execFile);
 const { parseTempoByMeasure, analyzeTempoProgression } = require('./lib/tempo-progression');
 const { buildChapters, fmtChapter } = require('./generate-youtube-chapters');
+const { acquireRenderLock } = require('./lib/batch-sessions');
 
 const AUDIO_EXT_RE = /\.(m4a|mp3|wav|aac)$/i;
 const XML_EXT_RE = /\.xml$/i;
@@ -209,8 +210,10 @@ function findMatchingAudio(files, xmlBase) {
 }
 
 // BPM = número final del nombre de archivo (sin extensión), ej. "Rock E12STSS_Render60" → 60.
+// Algunos exports de BiaB llevan el número ANTES del sufijo "_Render" en vez de al final
+// (SoulMediumSmooth-100_Render.m4a) — se quita ese sufijo antes de buscar el número final.
 function bpmFromFilename(file) {
-  const name = path.parse(file).name;
+  const name = path.parse(file).name.replace(/[_\-\s]*render$/i, '');
   const m = name.match(/(\d+)\s*$/);
   return m ? parseInt(m[1], 10) : null;
 }
@@ -637,6 +640,10 @@ async function main() {
     process.exit(1);
   }
   await waitFfmpeg();
+  // Ver el comentario grande de acquireRenderLock() en scripts/lib/batch-sessions.js: esto graba
+  // en tiempo real, así que dos grabaciones a la vez en la misma máquina se estropean entre sí
+  // (pasó de verdad: lote de Ritmo Soul, sep 2026 — ver historial de esa conversación).
+  await acquireRenderLock();
 
   const repoRoot = path.resolve(__dirname, '..');
   const appPath = path.resolve(repoRoot, args.app || 'guitarvisualizer.html');

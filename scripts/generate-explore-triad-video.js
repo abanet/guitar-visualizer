@@ -33,6 +33,7 @@ const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileP = promisify(execFile);
+const { acquireRenderLock } = require('./lib/batch-sessions');
 
 // Nombre de fichero final: <Acorde>_TodasTriadas_<Etiqueta>_<bpm>bpm.mp4 (p.ej.
 // Gm_TodasTriadas_Horizontal_90bpm.mp4) — convención pedida por Alberto para esta tanda de vídeos.
@@ -108,6 +109,10 @@ async function main() {
     process.exit(1);
   }
   await waitFfmpeg();
+  // Ver el comentario grande de acquireRenderLock() en scripts/lib/batch-sessions.js: esto
+  // graba en tiempo real, así que dos grabaciones a la vez en la misma máquina se estropean
+  // entre sí (pasó de verdad: lote de Ritmo Soul, sep 2026).
+  await acquireRenderLock();
 
   const repoRoot = path.resolve(__dirname, '..');
   const appPath = path.resolve(repoRoot, args.app || 'guitarvisualizer.html');
