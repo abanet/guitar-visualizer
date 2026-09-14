@@ -82,9 +82,13 @@ function bpmFromTitle(title) {
   return m ? parseInt(m[1], 10) : null;
 }
 
+// \b (frontera de PALABRA) no sirve aquí: "60bpm" pegado (sin espacio, formato real usado en el
+// título de referencia) no tiene frontera entre "0" y "b" (ambos son \w), así que \b60\b no lo
+// encuentra. Se usa en su lugar una frontera solo de DÍGITO (lookbehind/lookahead) — encuentra
+// "60" tanto en "60bpm" como en "60 BPM", pero no toca "160" ni "600".
 function replaceBpm(text, refBpm, newBpm) {
   if (!text) return { text, count: 0 };
-  const re = new RegExp(`\\b${refBpm}\\b`, 'g');
+  const re = new RegExp(`(?<!\\d)${refBpm}(?!\\d)`, 'g');
   const matches = text.match(re);
   return { text: text.replace(re, String(newBpm)), count: matches ? matches.length : 0 };
 }
