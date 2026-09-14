@@ -227,4 +227,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
-module.exports = { buildDescription };
+module.exports = { buildDescription, loadOAuthClient };
