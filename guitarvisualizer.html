@@ -740,6 +740,7 @@ body.presentation #channelWatermark{display:flex;}
           <option value="metal">Metal (plata/rojo)</option>
           <option value="pop">Pop (rosa/lima)</option>
           <option value="reggae">Reggae (verde/dorado)</option>
+          <option value="soul">Soul (cobre/oro vintage)</option>
         </select></label>
         <label>Idioma del vídeo: <select id="tvCfgLang" onchange="tvSync()">
           <option value="es" selected>Español</option>
@@ -13396,6 +13397,7 @@ const TV_COLOR_PRESETS={
   metal: {label:'Metal (plata/rojo)',    c1:'#b0b3b8', c2:'#e53935'},
   pop:   {label:'Pop (rosa/lima)',       c1:'#ec4899', c2:'#a3e635'},
   reggae:{label:'Reggae (verde/dorado)', c1:'#2e7d32', c2:'#f9a825'},
+  soul:  {label:'Soul (cobre/oro vintage)',c1:'#a8542e', c2:'#e0a458'},
 };
 // Partículas de fondo pastel, tintadas hacia el acento secundario del preset (mezcladas con
 // gris claro: a color plano quedaban demasiado saturadas para ser "polvo" de fondo).
