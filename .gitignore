@@ -4,4 +4,4 @@ video-out/
 *.webm
 .DS_Store
 scripts/lib/youtube-oauth-client.json
-scripts/.youtube-token.json
+scripts/.youtube-token*.json
