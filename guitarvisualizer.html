@@ -50,6 +50,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .mi-editable:hover{background:rgba(255,255,255,.05);}
 .mi-editable:focus{background:rgba(255,255,255,.08);}
 .mi-tonic-select{padding:7px 30px 7px 14px;font-size:14px;font-weight:700;border-radius:8px;border:1px solid rgba(255,255,255,.3);background-color:#1a1a1a;color:#fff;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='white'/></svg>");background-repeat:no-repeat;background-position:right 12px center;}
+.mi-play-select{padding:8px 28px 8px 12px;font-size:13px;font-weight:600;border-radius:8px;border:1px solid rgba(255,255,255,.14);background-color:#262626;color:#eee;cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='white'/></svg>");background-repeat:no-repeat;background-position:right 10px center;}
+.mi-play-select:hover{background-color:#333;border-color:rgba(255,255,255,.26);}
 .mi-legend-overlay{position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:6;}
 .mi-legend-card{background:rgba(28,28,28,.97);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:30px 40px;box-shadow:0 12px 40px rgba(0,0,0,.5);max-width:94%;max-height:92%;overflow-y:auto;}
 .mi-legend-title{color:#fff;font:700 22px Arial;margin-bottom:18px;text-align:center;letter-spacing:.02em;}
@@ -1846,7 +1848,12 @@ body.presentation #channelWatermark{display:flex;}
         </div>
         <div class="mi-toolbar-group">
           <button class="mi-btn" id="miClickModeBtn" onclick="miToggleClickMode()" title="Pintar: el click revela/oculta notas y suena. Sonar: el click solo reproduce la nota (aparece un instante si no estaba pintada), sin cambiar lo dibujado"><i class="ti ti-pointer"></i> <span id="miClickModeLbl">Pintar</span></button>
-          <button class="mi-btn" onclick="miPlayAll()" title="Reproduce a la vez todas las notas dibujadas en el mástil"><i class="ti ti-volume"></i> Sonar todas</button>
+          <select id="miPlayMode" class="mi-play-select" title="Cómo suenan las notas dibujadas al pulsar Sonar">
+            <option value="chord">Acorde (todas a la vez)</option>
+            <option value="scale" id="miPlayModeScaleOpt">Secuenciar (cuerda 6 → 1, izq → dcha)</option>
+          </select>
+          <button class="mi-btn" id="miPlayDirBtn" onclick="miTogglePlayDir()" title="Sentido: cuerda 6→1 (click para invertir)"><i class="ti ti-arrow-up" id="miPlayDirIcon"></i></button>
+          <button class="mi-btn" onclick="miPlayAll()" title="Reproduce las notas dibujadas en el mástil, según el modo elegido a la izquierda"><i class="ti ti-volume"></i> Sonar</button>
         </div>
       </div>
       <!-- Tabla de nombres de intervalo, desplegable (pedido de Alberto: "de forma clara y
@@ -12153,8 +12160,8 @@ function seekClick(e){if(!audioEl||!audioEl.duration)return;const p=e.offsetX/e.
 // fretStart=0 — "todo el mástil", igual que en los ejercicios de tríadas — y mismos colores de
 // nota que el resto de la app (rojo #E53935 = tónica seleccionada, cian #26C6DA = el resto).
 // ════════════════════════════════════════════════════════════════════════════
-let miFretCount=15; // trastes visibles (miFretStart..miFretCount), ajustable con los botones +/-
-let miFretStart=1; // traste de partida (0 = incluye la cuerda al aire) — pedido de Alberto: "elegir el traste de partida... por si quiero hacer gráficos de una zona concreta"
+let miFretCount=13; // trastes visibles (miFretStart..miFretCount), ajustable con los botones +/- — pedido de Alberto: por defecto 13 trastes desde el traste 1 (con fretStart=0, la cuerda al aire se ve además, como casilla previa)
+let miFretStart=0; // traste de partida (0 = incluye la cuerda al aire) — pedido de Alberto: "elegir el traste de partida... por si quiero hacer gráficos de una zona concreta". Por defecto en 0: fretStart=1 NO muestra el traste 1 con su etiqueta (limitación conocida del layout, ver comentario en miNeckSVG), así que para que salga el 1 hace falta partir de 0 (que además muestra la cuerda al aire).
 let miRevealed=new Set(); // "cuerda:traste" de las notas reveladas ahora mismo
 let miTonic=''; // '' = sin tonalidad (por defecto). Si hay una, decide el color (tónica=rojo, resto=cian) y el punto de partida de la franja de escala
 let miShowGhosts=false; // "ver en todo el mástil": marca tenue el resto de casillas con la misma nota
@@ -12165,16 +12172,38 @@ let miLastR=22; // radio (unidades del viewBox) de la última nota dibujada en m
 let miClickMode='draw'; // 'draw' ("Pintar": click = revela/oculta y suena) | 'play' ("Sonar": click = solo suena, no pinta nada permanente)
 let miFlash=new Set(); // "cuerda:traste" en preview temporal (modo Sonar sobre una casilla sin nota pintada): se ve mientras suena y luego desaparece
 let miFlashTimers={}; // key -> timeout, para reiniciar el preview si se pulsa varias veces seguidas
-let miAudioCtx=null,miReverbBuffer=null;
+// "cuerda:traste" con un resalte (anillo) mientras esa nota concreta está sonando desde
+// miPlayAll() — pedido de Alberto: "estaría bien tener una opción que destaque en el mástil la
+// nota/s que suenan mientras están sonando". Distinto de miFlash: una nota ya revelada no
+// necesita "aparecer", solo un acento extra encima de su círculo normal mientras suena.
+let miSounding=new Set();
+let miSoundingTimers={};
+const MI_SOUND_HILITE_MS=650; // cuánto se queda encendido el anillo de cada nota al sonar
+let miAudioCtx=null,miReverbBuffer=null,miMasterBus=null;
 const MI_OPEN_FREQ=[82.4069,110.0000,146.8324,195.9977,246.9417,329.6276]; // E2 A2 D3 G3 B3 E4, afinación estándar
 function miFreqFor(stringIdx,fret){return MI_OPEN_FREQ[stringIdx]*Math.pow(2,fret/12);}
 function miGetAudioCtx(){
   // Si el contexto llegó a cerrarse (p.ej. tras mucho rato de pestaña en segundo plano) hay que
   // crear uno nuevo, o cada nodo que se intente crear falla en silencio (el try/catch de
   // miPlayTone se lo come sin avisar) — bug reportado: "se ha estropeado el sonido, no suena nada".
-  if(!miAudioCtx||miAudioCtx.state==='closed'){miAudioCtx=new(window.AudioContext||window.webkitAudioContext)();miReverbBuffer=null;}
+  if(!miAudioCtx||miAudioCtx.state==='closed'){miAudioCtx=new(window.AudioContext||window.webkitAudioContext)();miReverbBuffer=null;miMasterBus=null;}
   if(miAudioCtx.state==='suspended')miAudioCtx.resume();
   return miAudioCtx;
+}
+// Bus maestro compartido por TODAS las notas: sin esto, pulsar "Sonar" varias veces seguidas
+// (sobre todo en modo Acorde) apila muchas notas sonando a la vez sobre ctx.destination sin
+// ningún control de volumen conjunto, y el resultado degenera en ruido/distorsión (clipping) —
+// bug reportado: "si pulso seguido el botón de sonar acorde acaba degenerando el ruido". Un
+// compresor con ataque rápido actúa de limitador: deja pasar una nota suelta tal cual, pero baja
+// el conjunto cuando se acumulan varias antes de que lleguen a saturar.
+function miGetMasterBus(ctx){
+  if(!miMasterBus){
+    miMasterBus=ctx.createDynamicsCompressor();
+    miMasterBus.threshold.value=-24;miMasterBus.knee.value=30;miMasterBus.ratio.value=12;
+    miMasterBus.attack.value=0.003;miMasterBus.release.value=0.25;
+    miMasterBus.connect(ctx.destination);
+  }
+  return miMasterBus;
 }
 function miBuildReverbImpulse(ctx,durSec,decay){
   const rate=ctx.sampleRate,len=Math.floor(rate*durSec);
@@ -12223,10 +12252,11 @@ function miPlayTone(freq){
     env.gain.linearRampToValueAtTime(0.9,now+0.004);
     env.gain.exponentialRampToValueAtTime(0.001,now+sustain);
     sum.connect(filt);filt.connect(env);
-    const dry=ctx.createGain();dry.gain.value=.8;dry.connect(ctx.destination);
+    const bus=miGetMasterBus(ctx);
+    const dry=ctx.createGain();dry.gain.value=.8;dry.connect(bus);
     if(!miReverbBuffer)miReverbBuffer=miBuildReverbImpulse(ctx,1.4,2.5);
     const conv=ctx.createConvolver();conv.buffer=miReverbBuffer;
-    const wet=ctx.createGain();wet.gain.value=.16;conv.connect(wet);wet.connect(ctx.destination);
+    const wet=ctx.createGain();wet.gain.value=.16;conv.connect(wet);wet.connect(bus);
     env.connect(dry);env.connect(conv);
   }catch(e){console.error('miPlayTone error',e);}
 }
@@ -12253,6 +12283,11 @@ function miNoteName(pc){
   return pair?pair[miEnh[pc]||0]:NTS[pc];
 }
 function miCycleEnh(pc,ev){
+  // En modo "Sonar" (miClickMode==='play'), el click en el NOMBRE debe sonar como cualquier otro
+  // punto del círculo, no cambiar la grafía — si no, pulsar sobre el nombre para oír la nota
+  // cambiaba C#/Db en vez de sonar (bug reportado). Al no llamar a stopPropagation(), el click
+  // sigue su curso hacia miCellClick() del círculo, que ya sabe sonar en ese modo.
+  if(miClickMode==='play')return;
   // Shift+click en el NOMBRE de una nota enarmónica: deja que el click siga su curso hacia el
   // círculo (Shift ahí significa "marcar para medir distancia", no alternar grafía) — si no, el
   // stopPropagation() de abajo se lo comía sin que el círculo se enterara (bug: Shift+click en
@@ -12391,6 +12426,11 @@ function miNeckSVG(){
   // cuerda al aire visible, el traste f+1 empieza justo después de la cejilla en fretMin (bug
   // corregido: con fretMin>0 el bucle heredado de generateNeckSVG dejaba la primera etiqueta
   // fuera del lienzo, medio traste a la izquierda del borde).
+  // OJO al tocar esto: como consecuencia, con fretMin>0 el traste fretMin en sí NUNCA se etiqueta
+  // ni se dibuja (el bucle empieza en fretMin+1) — "empezar en el traste N" (N>0) en la práctica
+  // enseña desde N+1. Para que el traste 1 aparezca de verdad con su etiqueta hace falta fretMin=0
+  // (incluye también la cuerda al aire). Detectado sep 2026 al poner "desde 1" por defecto y
+  // comprobar con una captura real que el mástil empezaba a etiquetar en el 2.
   for(let f=fretMin+1;f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${H-10}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
   for(let si=0;si<6;si++)for(let f=fretMin+(fretMin===0?0:1);f<=fretMax;f++){
     const pc=getNoteStAtFret(si,f);
@@ -12413,6 +12453,7 @@ function miNeckSVG(){
       // semitransparente rojo/cian + borde blanco suave, NO el rojo/cian sólido de otras vistas.
       const fill=(tonicPc!=null&&pc===tonicPc)?'rgba(229,57,53,.45)':'rgba(38,198,218,.5)';
       s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="rgba(255,255,255,.25)" stroke-width="1" pointer-events="none"/>`;
+      if(miSounding.has(key))s+=`<circle cx="${x}" cy="${y}" r="${r+5}" fill="none" stroke="#ffd640" stroke-width="3" pointer-events="none"/>`;
       // Si se está mostrando el NOMBRE de la nota (no el intervalo) y es una de las 5 notas
       // enarmónicas, el texto SÍ recibe click (el resto del círculo sigue revelando/ocultando o
       // sonando, según el modo) para poder alternar su grafía (p.ej. C#/Db).
@@ -12697,10 +12738,45 @@ function miToggleClickMode(){
   const b=document.getElementById('miClickModeBtn');if(b)b.classList.toggle('active',miClickMode==='play');
   const lbl=document.getElementById('miClickModeLbl');if(lbl)lbl.textContent=miClickMode==='play'?'Sonar':'Pintar';
 }
-// "Sonar todas": las notas dibujadas a la vez, como un acorde — pedido de Alberto porque hacer
-// sonar varias notas a la vez a golpe de click (una a una, muy seguidas) no era práctico.
+// "Sonar": reproduce todas las notas dibujadas, según el modo elegido en miPlayMode —
+// pedido de Alberto porque hacer sonar varias notas a golpe de click (una a una, muy seguidas)
+// no era práctico. "Acorde" es el modo de siempre (todas a la vez); "Secuenciar" es un añadido
+// posterior, mismo botón, un select al lado para elegir la forma de sonar en vez de multiplicar
+// botones. Hubo también un modo "Arpegio" (orden por ALTURA real en vez de por posición) que se
+// quitó: en el uso normal daba el mismo resultado que "Secuenciar" casi siempre (solo difieren
+// cuando una nota de una cuerda "grave" es más aguda que una de una cuerda "aguda", p.ej. cuerda6
+// traste12 frente a cuerda5 al aire) y Alberto prefirió quedarse con un único modo, por posición.
+const MI_PLAY_STEP_MS=200; // separación entre notas al secuenciar — probado a oído
+let miPlayDir='up'; // 'up' (cuerda 6→1, por defecto) | 'down' (cuerda 1→6) — pedido de Alberto, no afecta al modo Acorde (suena todo a la vez, no tiene "sentido")
+function miTogglePlayDir(){
+  miPlayDir=miPlayDir==='up'?'down':'up';
+  const icon=document.getElementById('miPlayDirIcon');if(icon)icon.className='ti ti-arrow-'+(miPlayDir==='up'?'up':'down');
+  const btn=document.getElementById('miPlayDirBtn');if(btn)btn.title=miPlayDir==='up'?'Sentido: cuerda 6→1 (click para invertir)':'Sentido: cuerda 1→6 (click para invertir)';
+  // La etiqueta de "Secuenciar" tiene que reflejar el sentido activo — al invertir, el recorrido
+  // real es cuerda 1→6 y de derecha a izquierda, no lo que ponía por defecto (pedido de Alberto).
+  const opt=document.getElementById('miPlayModeScaleOpt');
+  if(opt)opt.textContent=miPlayDir==='up'?'Secuenciar (cuerda 6 → 1, izq → dcha)':'Secuenciar (cuerda 1 → 6, dcha → izq)';
+}
+// Anillo amarillo temporal sobre una nota YA revelada mientras suena desde miPlayAll() — no usa
+// miFlash porque esa es para "aparecer" una nota que no está pintada (modo Sonar por click); aquí
+// la nota ya está pintada, solo hace falta un acento extra encima.
+function miHighlightSounding(key){
+  miSounding.add(key);
+  clearTimeout(miSoundingTimers[key]);
+  miSoundingTimers[key]=setTimeout(()=>{miSounding.delete(key);delete miSoundingTimers[key];miRender();},MI_SOUND_HILITE_MS);
+  miRender();
+}
 function miPlayAll(){
-  miRevealed.forEach(key=>{const[s,f]=key.split(':').map(Number);miPlayTone(miFreqFor(s,f));});
+  const mode=document.getElementById('miPlayMode')?.value||'chord';
+  const notes=[...miRevealed].map(key=>{const[s,f]=key.split(':').map(Number);return{s,f,key,freq:miFreqFor(s,f)};});
+  if(!notes.length)return;
+  if(mode==='chord'){notes.forEach(n=>{miPlayTone(n.freq);miHighlightSounding(n.key);});return;}
+  // Secuenciar: cuerda 6 (s=0, afinación grave→aguda en MI_OPEN_FREQ) hasta cuerda 1 (s=5), y
+  // dentro de cada cuerda de traste más bajo a más alto (izquierda a derecha en el mástil tal
+  // como se dibuja). miPlayDir='down' invierte el recorrido entero (cuerda 1→6).
+  const ordered=notes.slice().sort((a,b)=>a.s-b.s||a.f-b.f);
+  if(miPlayDir==='down')ordered.reverse();
+  ordered.forEach((n,i)=>setTimeout(()=>{miPlayTone(n.freq);miHighlightSounding(n.key);},i*MI_PLAY_STEP_MS));
 }
 // Frecuencia para una nota de la franja de escala (solo tiene la clase de altura, pc 0-11, no
 // cuerda/traste): si esa nota está pintada en el mástil ahora mismo, usamos la MISMA octava que
@@ -12729,7 +12805,7 @@ function miChangeFretStart(delta){
   miFretStart=Math.max(0,Math.min(miFretCount-1,miFretStart+delta));
   miRender();
 }
-function miClear(){miRevealed.clear();miHistory=[];Object.values(miFlashTimers).forEach(clearTimeout);miFlashTimers={};miFlash.clear();miMeasureSel=[];miRender();}
+function miClear(){miRevealed.clear();miHistory=[];Object.values(miFlashTimers).forEach(clearTimeout);miFlashTimers={};miFlash.clear();Object.values(miSoundingTimers).forEach(clearTimeout);miSoundingTimers={};miSounding.clear();miMeasureSel=[];miRender();}
 function miToggleGhosts(){miShowGhosts=!miShowGhosts;miRender();}
 function miToggleIvTags(){
   miIvTagsMode=miIvTagsMode==='up'?'both':(miIvTagsMode==='both'?'off':'up');
