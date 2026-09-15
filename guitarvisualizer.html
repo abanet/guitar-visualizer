@@ -6310,8 +6310,14 @@ const EXPLORE_TRIAD_SEQ_C=[
 // leading — como el "Barrido de posiciones" de arriba, pero con un orden propio explícito en vez
 // de sus 2 estrategias (secuencial por etiqueta / aleatorio). Da 2 pasadas completas de la
 // secuencia (nombres de nota, luego intervalos); los compases que sobren tras esas 2 pasadas se
-// quedan en la última posición de la 2ª pasada.
-async function applyExploreTriadSequence(seq,barsPerPos,label){
+// quedan en la última posición de la 2ª pasada — pensado para A/B (secuencia de 23 pasos con ida
+// y vuelta, así que 2 pasadas = 46 compases, cerca del final de cualquier backing habitual).
+// loop=true (solo lo usa generateExploreTriadC): en vez de congelarse tras la 2ª pasada, sigue
+// dando vueltas a la secuencia mientras queden compases — la secuencia C, al no tener ida/vuelta
+// (solo 12 posiciones), agotaba sus 2 pasadas a los 24 compases y se quedaba congelada el resto
+// de un backing de 50 compases (bug reportado: vídeos "Azar" que se congelan sobre el 1:07,
+// mientras que Horizontal/Vertical van bien).
+async function applyExploreTriadSequence(seq,barsPerPos,label,loop){
   if(!cycles.length){alert('Carga primero un tema (XML con acordes).');return null;}
   // La secuencia recorre TODO el tema sin repetirse cada vuelta — las vueltas 'ref' (que por
   // defecto solo reflejan los compases de la vuelta 0, ver getTargetBars) necesitan sus propios
@@ -6329,9 +6335,10 @@ async function applyExploreTriadSequence(seq,barsPerPos,label){
   const totalBlocks=Math.max(1,Math.ceil(flat.length/barsPerPos));
   const plan=[]; // por bloque de barsPerPos compases: {gi,inv,mode}
   for(let k=0;k<totalBlocks;k++){
-    const idx=Math.min(k,2*lapLen-1); // más allá de las 2 pasadas: se queda en la última posición
+    const idx=loop?(k%lapLen):Math.min(k,2*lapLen-1); // loop: da la vuelta sin congelarse nunca
+    const lapNum=loop?Math.floor(k/lapLen):(idx<lapLen?0:1);
     const[gi,inv]=seq[idx%lapLen];
-    plan.push({gi,inv,mode:idx<lapLen?'name':'interval'});
+    plan.push({gi,inv,mode:lapNum===0?'name':'interval'});
   }
 
   const INV_NAMES=['Fund.','1ª inv','2ª inv'];
@@ -6416,7 +6423,7 @@ async function generateExploreTriadB(){
     '\nModo cambiado a Tríadas. Revísalas en el editor y pulsa Visualizador.');
 }
 async function generateExploreTriadC(){
-  const r=await applyExploreTriadSequence(EXPLORE_TRIAD_SEQ_C,1,'Muévete al azar entre las tríadas');
+  const r=await applyExploreTriadSequence(EXPLORE_TRIAD_SEQ_C,1,'Muévete al azar entre las tríadas',true);
   if(r)alert('✓ Explora tríada C (al azar) — '+r.applied+' compases generados.'+
     (r.skipped?'\n⚠ '+r.skipped+' compás(es) no admitían esa posición y se dejaron sin generar.':'')+
     (r.bumpedTo?'\n↔ Se ha ampliado el mástil hasta el traste '+r.bumpedTo+'.':'')+
@@ -10374,21 +10381,46 @@ async function asSendToEditorTriadExplore(){
 
   // Para cada acorde diatónico: de las 12 combinaciones (grupo de cuerdas × inversión), solo
   // las que caen ENTERAS dentro de la caja fija — por CELDA EXACTA (cuerda:traste), no por rango
-  // de trastes (una posición CAGED tiene huecos, no es un bloque rectangular). SIEMPRE en el
-  // mismo sentido — cuerdas 3-2-1 primero y subiendo hacia 6-5-4 (mismo orden que
-  // buildExploreTriadSeqA/groupOrder para "Explora una tríada": 321→432→543→654, pedido de
-  // Alberto — antes se ordenaba por traste ascendente, que no seguía un sentido consistente de
-  // acorde a acorde).
+  // de trastes (una posición CAGED tiene huecos, no es un bloque rectangular). Orden canónico
+  // cuerdas 3-2-1 primero y subiendo hacia 6-5-4 (mismo orden que buildExploreTriadSeqA/groupOrder
+  // para "Explora una tríada": 321→432→543→654) — pero OJO, esto es solo el orden CANÓNICO de este
+  // helper (se cachea por nombre de acorde en localVoicingsForCached): quien lo llama alterna el
+  // sentido acorde a acorde invirtiendo el array entero (ver comentario grande junto a "runIdx" más
+  // abajo) para que el último voicing de un acorde y el primero del siguiente queden en el MISMO
+  // grupo de cuerdas, en vez de saltar siempre de 654 a 321 en cada cambio (pedido de Alberto: "el
+  // salto brusco... cambiar al siguiente acorde en las cuerdas en las que estamos e ir bajando,
+  // para después subir, después bajar").
   const boxCellSet=new Set(boxNotes.map(n=>n.string+':'+n.fret));
   const GROUP_ORDER=[3,0,1,2]; // 321,432,543,654 — ver TRIAD_GROUP_LABELS
+  const GROUP_POS=[];GROUP_ORDER.forEach((gi,pos)=>{GROUP_POS[gi]=pos;}); // gi→su posición 0..3 en GROUP_ORDER
   function localVoicingsFor(chord){
     const cands=[];
     GROUP_ORDER.forEach(gi=>{
       for(let inv=0;inv<3;inv++){
         const v=getChordVoicing(chord,TRIAD_STRING_GROUPS[gi],inv);
-        if(v&&v.frets&&v.frets.length&&v.strings.every((sIdx,i)=>boxCellSet.has(sIdx+':'+v.frets[i])))cands.push(v);
+        // __gi (grupo de cuerdas de origen) va PEGADO al voicing — lo necesita pickDirection()
+        // para saber por qué extremo empieza/acaba esta lista sin recalcular nada; no estorba a
+        // los consumidores normales (voicingToNotes/svgForChord), que solo miran frets/strings/etc.
+        if(v&&v.frets&&v.frets.length&&v.strings.every((sIdx,i)=>boxCellSet.has(sIdx+':'+v.frets[i]))){v.__gi=gi;cands.push(v);}
       }
     });
+    return cands;
+  }
+  // No todos los acordes rellenan los 4 grupos dentro de esta caja FIJA (una posición CAGED tiene
+  // huecos): a diferencia de "Explora una tríada" (todo el mástil, los 4 grupos SIEMPRE están
+  // completos), aquí alternar el sentido a ciegas turno a turno no basta — si el acorde anterior
+  // terminó en un grupo que el siguiente no tiene, seguiría saltando. En su lugar, cada vez que
+  // cambia el acorde se elige el sentido (321→654 o 654→321) que haga que el PRIMER grupo del
+  // acorde nuevo caiga lo más cerca posible del ÚLTIMO grupo usado por el acorde anterior — y así
+  // sucesivamente, encadenando (pedido de Alberto: "cambiar al siguiente acorde en las cuerdas en
+  // las que estamos e ir bajando, para después subir, después bajar").
+  let prevEndPos=null;
+  function pickDirection(candsBase){
+    if(!candsBase.length)return candsBase;
+    const firstPos=GROUP_POS[candsBase[0].__gi],lastPos=GROUP_POS[candsBase[candsBase.length-1].__gi];
+    let cands=candsBase;
+    if(prevEndPos!=null&&Math.abs(prevEndPos-lastPos)<Math.abs(prevEndPos-firstPos))cands=candsBase.slice().reverse();
+    prevEndPos=(cands===candsBase)?lastPos:firstPos;
     return cands;
   }
   const candsCache={};
@@ -10487,6 +10519,14 @@ async function asSendToEditorTriadExplore(){
       alloc.push(Math.max(0,total-used));
       return alloc;
     }
+    // Sentido de cada RACHA decidido por pickDirection() (ver comentario grande junto a
+    // GROUP_POS/prevEndPos más arriba): engancha con el último grupo de cuerdas de la racha
+    // anterior en vez de alternar a ciegas, porque un acorde puede no rellenar los 4 grupos dentro
+    // de esta caja fija (pedido de Alberto: "evitar el salto brusco... cambiar al siguiente acorde
+    // en las cuerdas en las que estamos e ir bajando, para después subir, después bajar").
+    // localVoicingsForCached() sigue devolviendo el orden canónico 321→654 (se cachea por NOMBRE
+    // de acorde, reutilizable si el acorde se repite más adelante); pickDirection() decide aquí,
+    // racha a racha, si se usa tal cual o invertido.
     let runStart=0;
     while(runStart<all.length){
       const chord=(all[runStart].chord||'').trim();
@@ -10494,7 +10534,7 @@ async function asSendToEditorTriadExplore(){
       let runEnd=runStart+1;
       while(runEnd<all.length&&(all[runEnd].chord||'').trim()===chord)runEnd++;
       const runBars=[];for(let k=runStart;k<runEnd;k++)runBars.push(k);
-      const cands=localVoicingsForCached(chord);
+      const cands=pickDirection(localVoicingsForCached(chord));
       const N=cands.length;
       const totalSlots=runBars.length*4;
       const slotAlloc=allocateSlots(N||1,totalSlots);
@@ -10529,9 +10569,11 @@ async function asSendToEditorTriadExplore(){
     // habitual — el 2º compás repetía la misma en vez de pasar a algo distinto, y con 3
     // posiciones válidas la 3ª nunca llegaba a verse). Si un acorde no tiene NINGUNA posición
     // limpia dentro de esta caja, ocupa 1 compás igual con el fallback de svgForChord.
+    // Mismo pickDirection() que el modo tema (ver comentario grande de arriba): cada grado de la
+    // escala engancha con el último grupo de cuerdas del anterior en vez de alternar a ciegas.
     const barPlan=[];
     asState.chords.forEach(c=>{
-      const cands=localVoicingsForCached(c.chord);
+      const cands=pickDirection(localVoicingsForCached(c.chord));
       if(cands.length)cands.forEach(v=>barPlan.push({chord:c.chord,voicing:v}));
       else barPlan.push({chord:c.chord,voicing:null});
     });
