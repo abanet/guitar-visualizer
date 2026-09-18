@@ -1,0 +1,1244 @@
+{
+ "boxes": {
+  "A": [
+   {
+    "string": 0,
+    "fret": 3
+   },
+   {
+    "string": 0,
+    "fret": 5
+   },
+   {
+    "string": 1,
+    "fret": 2
+   },
+   {
+    "string": 1,
+    "fret": 3
+   },
+   {
+    "string": 1,
+    "fret": 5
+   },
+   {
+    "string": 2,
+    "fret": 2
+   },
+   {
+    "string": 2,
+    "fret": 3
+   },
+   {
+    "string": 2,
+    "fret": 5
+   },
+   {
+    "string": 3,
+    "fret": 2
+   },
+   {
+    "string": 3,
+    "fret": 4
+   },
+   {
+    "string": 3,
+    "fret": 5
+   },
+   {
+    "string": 4,
+    "fret": 3
+   },
+   {
+    "string": 4,
+    "fret": 5
+   },
+   {
+    "string": 4,
+    "fret": 6
+   },
+   {
+    "string": 5,
+    "fret": 3
+   },
+   {
+    "string": 5,
+    "fret": 5
+   }
+  ],
+  "C": [
+   {
+    "string": 0,
+    "fret": 0
+   },
+   {
+    "string": 0,
+    "fret": 1
+   },
+   {
+    "string": 0,
+    "fret": 3
+   },
+   {
+    "string": 1,
+    "fret": 0
+   },
+   {
+    "string": 1,
+    "fret": 2
+   },
+   {
+    "string": 1,
+    "fret": 3
+   },
+   {
+    "string": 2,
+    "fret": 0
+   },
+   {
+    "string": 2,
+    "fret": 2
+   },
+   {
+    "string": 2,
+    "fret": 3
+   },
+   {
+    "string": 3,
+    "fret": 0
+   },
+   {
+    "string": 3,
+    "fret": 2
+   },
+   {
+    "string": 4,
+    "fret": 0
+   },
+   {
+    "string": 4,
+    "fret": 1
+   },
+   {
+    "string": 4,
+    "fret": 3
+   },
+   {
+    "string": 5,
+    "fret": 0
+   },
+   {
+    "string": 5,
+    "fret": 1
+   },
+   {
+    "string": 5,
+    "fret": 3
+   }
+  ],
+  "D": [
+   {
+    "string": 0,
+    "fret": 10
+   },
+   {
+    "string": 0,
+    "fret": 12
+   },
+   {
+    "string": 0,
+    "fret": 13
+   },
+   {
+    "string": 1,
+    "fret": 10
+   },
+   {
+    "string": 1,
+    "fret": 12
+   },
+   {
+    "string": 2,
+    "fret": 9
+   },
+   {
+    "string": 2,
+    "fret": 10
+   },
+   {
+    "string": 2,
+    "fret": 12
+   },
+   {
+    "string": 3,
+    "fret": 9
+   },
+   {
+    "string": 3,
+    "fret": 10
+   },
+   {
+    "string": 3,
+    "fret": 12
+   },
+   {
+    "string": 4,
+    "fret": 10
+   },
+   {
+    "string": 4,
+    "fret": 12
+   },
+   {
+    "string": 4,
+    "fret": 13
+   },
+   {
+    "string": 5,
+    "fret": 10
+   },
+   {
+    "string": 5,
+    "fret": 12
+   },
+   {
+    "string": 5,
+    "fret": 13
+   }
+  ],
+  "E": [
+   {
+    "string": 0,
+    "fret": 7
+   },
+   {
+    "string": 0,
+    "fret": 8
+   },
+   {
+    "string": 0,
+    "fret": 10
+   },
+   {
+    "string": 1,
+    "fret": 7
+   },
+   {
+    "string": 1,
+    "fret": 8
+   },
+   {
+    "string": 1,
+    "fret": 10
+   },
+   {
+    "string": 2,
+    "fret": 7
+   },
+   {
+    "string": 2,
+    "fret": 9
+   },
+   {
+    "string": 2,
+    "fret": 10
+   },
+   {
+    "string": 3,
+    "fret": 7
+   },
+   {
+    "string": 3,
+    "fret": 9
+   },
+   {
+    "string": 3,
+    "fret": 10
+   },
+   {
+    "string": 4,
+    "fret": 8
+   },
+   {
+    "string": 4,
+    "fret": 10
+   },
+   {
+    "string": 5,
+    "fret": 7
+   },
+   {
+    "string": 5,
+    "fret": 8
+   },
+   {
+    "string": 5,
+    "fret": 10
+   }
+  ],
+  "G": [
+   {
+    "string": 0,
+    "fret": 5
+   },
+   {
+    "string": 0,
+    "fret": 7
+   },
+   {
+    "string": 0,
+    "fret": 8
+   },
+   {
+    "string": 1,
+    "fret": 5
+   },
+   {
+    "string": 1,
+    "fret": 7
+   },
+   {
+    "string": 1,
+    "fret": 8
+   },
+   {
+    "string": 2,
+    "fret": 5
+   },
+   {
+    "string": 2,
+    "fret": 7
+   },
+   {
+    "string": 3,
+    "fret": 4
+   },
+   {
+    "string": 3,
+    "fret": 5
+   },
+   {
+    "string": 3,
+    "fret": 7
+   },
+   {
+    "string": 4,
+    "fret": 5
+   },
+   {
+    "string": 4,
+    "fret": 6
+   },
+   {
+    "string": 4,
+    "fret": 8
+   },
+   {
+    "string": 5,
+    "fret": 5
+   },
+   {
+    "string": 5,
+    "fret": 7
+   },
+   {
+    "string": 5,
+    "fret": 8
+   }
+  ]
+ },
+ "shapes": {
+  "triads|A|0": [
+   [
+    {
+     "string": 4,
+     "fret": 5
+    },
+    {
+     "string": 3,
+     "fret": 5
+    },
+    {
+     "string": 2,
+     "fret": 5
+    },
+    {
+     "string": 1,
+     "fret": 3
+    }
+   ]
+  ],
+  "triads|A|1": [
+   [
+    {
+     "string": 4,
+     "fret": 3
+    },
+    {
+     "string": 3,
+     "fret": 2
+    },
+    {
+     "string": 2,
+     "fret": 3
+    },
+    {
+     "string": 1,
+     "fret": 5
+    }
+   ]
+  ],
+  "triads|A|2": [
+   [
+    {
+     "string": 5,
+     "fret": 3
+    },
+    {
+     "string": 4,
+     "fret": 5
+    },
+    {
+     "string": 3,
+     "fret": 4
+    },
+    {
+     "string": 2,
+     "fret": 2
+    }
+   ]
+  ],
+  "triads|A|3": [
+   [
+    {
+     "string": 5,
+     "fret": 5
+    },
+    {
+     "string": 4,
+     "fret": 6
+    },
+    {
+     "string": 3,
+     "fret": 5
+    },
+    {
+     "string": 2,
+     "fret": 3
+    }
+   ],
+   [
+    {
+     "string": 4,
+     "fret": 6
+    },
+    {
+     "string": 3,
+     "fret": 5
+    },
+    {
+     "string": 2,
+     "fret": 3
+    },
+    {
+     "string": 0,
+     "fret": 5
+    }
+   ]
+  ],
+  "triads|A|4": [
+   [
+    {
+     "string": 5,
+     "fret": 3
+    },
+    {
+     "string": 4,
+     "fret": 3
+    },
+    {
+     "string": 3,
+     "fret": 4
+    },
+    {
+     "string": 2,
+     "fret": 5
+    },
+    {
+     "string": 1,
+     "fret": 5
+    },
+    {
+     "string": 0,
+     "fret": 3
+    }
+   ]
+  ],
+  "triads|A|5": [
+   [
+    {
+     "string": 5,
+     "fret": 5
+    },
+    {
+     "string": 4,
+     "fret": 5
+    },
+    {
+     "string": 3,
+     "fret": 5
+    },
+    {
+     "string": 2,
+     "fret": 2
+    }
+   ]
+  ],
+  "triads|A|6": [
+   [
+    {
+     "string": 4,
+     "fret": 3
+    },
+    {
+     "string": 3,
+     "fret": 4
+    },
+    {
+     "string": 2,
+     "fret": 3
+    },
+    {
+     "string": 1,
+     "fret": 2
+    }
+   ]
+  ],
+  "triads|C|0": [
+   [
+    {
+     "string": 5,
+     "fret": 0
+    },
+    {
+     "string": 4,
+     "fret": 1
+    },
+    {
+     "string": 3,
+     "fret": 0
+    },
+    {
+     "string": 2,
+     "fret": 2
+    },
+    {
+     "string": 1,
+     "fret": 3
+    }
+   ]
+  ],
+  "triads|C|1": [
+   [
+    {
+     "string": 4,
+     "fret": 3
+    },
+    {
+     "string": 3,
+     "fret": 2
+    },
+    {
+     "string": 2,
+     "fret": 0
+    },
+    {
+     "string": 0,
+     "fret": 1
+    }
+   ],
+   [
+    {
+     "string": 5,
+     "fret": 1
+    },
+    {
+     "string": 4,
+     "fret": 3
+    },
+    {
+     "string": 3,
+     "fret": 2
+    },
+    {
+     "string": 2,
+     "fret": 3
+    }
+   ]
+  ],
+  "triads|C|2": [
+   [
+    {
+     "string": 5,
+     "fret": 0
+    },
+    {
+     "string": 4,
+     "fret": 0
+    },
+    {
+     "string": 3,
+     "fret": 0
+    },
+    {
+     "string": 2,
+     "fret": 2
+    },
+    {
+     "string": 1,
+     "fret": 2
+    },
+    {
+     "string": 0,
+     "fret": 0
+    }
+   ]
+  ],
+  "triads|C|3": [
+   [
+    {
+     "string": 5,
+     "fret": 1
+    },
+    {
+     "string": 4,
+     "fret": 1
+    },
+    {
+     "string": 3,
+     "fret": 2
+    },
+    {
+     "string": 2,
+     "fret": 3
+    },
+    {
+     "string": 1,
+     "fret": 3
+    },
+    {
+     "string": 0,
+     "fret": 1
+    }
+   ]
+  ],
+  "triads|C|4": [
+   [
+    {
+     "string": 5,
+     "fret": 3
+    },
+    {
+     "string": 4,
+     "fret": 0
+    },
+    {
+     "string": 3,
+     "fret": 0
+    },
+    {
+     "string": 2,
+     "fret": 0
+    },
+    {
+     "string": 1,
+     "fret": 2
+    },
+    {
+     "string": 0,
+     "fret": 3
+    }
+   ]
+  ],
+  "triads|C|5": [
+   [
+    {
+     "string": 5,
+     "fret": 0
+    },
+    {
+     "string": 4,
+     "fret": 1
+    },
+    {
+     "string": 3,
+     "fret": 2
+    },
+    {
+     "string": 2,
+     "fret": 2
+    },
+    {
+     "string": 1,
+     "fret": 0
+    }
+   ]
+  ],
+  "triads|C|6": [
+   [
+    {
+     "string": 4,
+     "fret": 3
+    },
+    {
+     "string": 2,
+     "fret": 3
+    },
+    {
+     "string": 1,
+     "fret": 2
+    }
+   ]
+  ],
+  "triads|D|0": [
+   [
+    {
+     "string": 4,
+     "fret": 13
+    },
+    {
+     "string": 3,
+     "fret": 12
+    },
+    {
+     "string": 2,
+     "fret": 10
+    },
+    {
+     "string": 0,
+     "fret": 12
+    }
+   ],
+   [
+    {
+     "string": 5,
+     "fret": 12
+    },
+    {
+     "string": 4,
+     "fret": 13
+    },
+    {
+     "string": 3,
+     "fret": 12
+    },
+    {
+     "string": 2,
+     "fret": 10
+    }
+   ]
+  ],
+  "triads|D|1": [
+   [
+    {
+     "string": 5,
+     "fret": 10
+    },
+    {
+     "string": 4,
+     "fret": 10
+    },
+    {
+     "string": 2,
+     "fret": 12
+    },
+    {
+     "string": 1,
+     "fret": 12
+    },
+    {
+     "string": 0,
+     "fret": 10
+    }
+   ]
+  ],
+  "triads|D|2": [
+   [
+    {
+     "string": 5,
+     "fret": 12
+    },
+    {
+     "string": 4,
+     "fret": 12
+    },
+    {
+     "string": 3,
+     "fret": 12
+    },
+    {
+     "string": 2,
+     "fret": 9
+    }
+   ]
+  ],
+  "triads|D|3": [
+   [
+    {
+     "string": 5,
+     "fret": 13
+    },
+    {
+     "string": 4,
+     "fret": 10
+    },
+    {
+     "string": 3,
+     "fret": 10
+    },
+    {
+     "string": 2,
+     "fret": 10
+    },
+    {
+     "string": 1,
+     "fret": 12
+    },
+    {
+     "string": 0,
+     "fret": 13
+    }
+   ]
+  ],
+  "triads|D|4": [
+   [
+    {
+     "string": 5,
+     "fret": 10
+    },
+    {
+     "string": 4,
+     "fret": 12
+    },
+    {
+     "string": 3,
+     "fret": 12
+    },
+    {
+     "string": 2,
+     "fret": 12
+    },
+    {
+     "string": 1,
+     "fret": 10
+    }
+   ]
+  ],
+  "triads|D|5": [
+   [
+    {
+     "string": 4,
+     "fret": 10
+    },
+    {
+     "string": 3,
+     "fret": 9
+    },
+    {
+     "string": 2,
+     "fret": 10
+    },
+    {
+     "string": 1,
+     "fret": 12
+    }
+   ]
+  ],
+  "triads|D|6": [
+   [
+    {
+     "string": 5,
+     "fret": 13
+    },
+    {
+     "string": 4,
+     "fret": 12
+    },
+    {
+     "string": 2,
+     "fret": 12
+    }
+   ],
+   [
+    {
+     "string": 0,
+     "fret": 10
+    },
+    {
+     "string": 2,
+     "fret": 9
+    },
+    {
+     "string": 3,
+     "fret": 10
+    }
+   ]
+  ],
+  "triads|E|0": [
+   [
+    {
+     "string": 5,
+     "fret": 8
+    },
+    {
+     "string": 4,
+     "fret": 8
+    },
+    {
+     "string": 3,
+     "fret": 9
+    },
+    {
+     "string": 2,
+     "fret": 10
+    },
+    {
+     "string": 1,
+     "fret": 10
+    },
+    {
+     "string": 0,
+     "fret": 8
+    }
+   ]
+  ],
+  "triads|E|1": [
+   [
+    {
+     "string": 5,
+     "fret": 10
+    },
+    {
+     "string": 4,
+     "fret": 10
+    },
+    {
+     "string": 3,
+     "fret": 10
+    },
+    {
+     "string": 2,
+     "fret": 7
+    }
+   ]
+  ],
+  "triads|E|2": [
+   [
+    {
+     "string": 5,
+     "fret": 7
+    },
+    {
+     "string": 4,
+     "fret": 8
+    },
+    {
+     "string": 3,
+     "fret": 9
+    },
+    {
+     "string": 2,
+     "fret": 9
+    },
+    {
+     "string": 1,
+     "fret": 7
+    }
+   ]
+  ],
+  "triads|E|3": [
+   [
+    {
+     "string": 5,
+     "fret": 8
+    },
+    {
+     "string": 4,
+     "fret": 10
+    },
+    {
+     "string": 3,
+     "fret": 10
+    },
+    {
+     "string": 2,
+     "fret": 10
+    },
+    {
+     "string": 1,
+     "fret": 8
+    }
+   ]
+  ],
+  "triads|E|4": [
+   [
+    {
+     "string": 5,
+     "fret": 7
+    },
+    {
+     "string": 4,
+     "fret": 8
+    },
+    {
+     "string": 3,
+     "fret": 7
+    },
+    {
+     "string": 2,
+     "fret": 9
+    },
+    {
+     "string": 1,
+     "fret": 10
+    }
+   ]
+  ],
+  "triads|E|5": [
+   [
+    {
+     "string": 5,
+     "fret": 8
+    },
+    {
+     "string": 4,
+     "fret": 10
+    },
+    {
+     "string": 3,
+     "fret": 9
+    },
+    {
+     "string": 2,
+     "fret": 10
+    }
+   ],
+   [
+    {
+     "string": 4,
+     "fret": 10
+    },
+    {
+     "string": 3,
+     "fret": 9
+    },
+    {
+     "string": 2,
+     "fret": 7
+    },
+    {
+     "string": 0,
+     "fret": 8
+    }
+   ]
+  ],
+  "triads|E|6": [
+   [
+    {
+     "string": 3,
+     "fret": 7
+    },
+    {
+     "string": 2,
+     "fret": 9
+    },
+    {
+     "string": 1,
+     "fret": 8
+    }
+   ]
+  ],
+  "triads|G|0": [
+   [
+    {
+     "string": 5,
+     "fret": 8
+    },
+    {
+     "string": 4,
+     "fret": 5
+    },
+    {
+     "string": 3,
+     "fret": 5
+    },
+    {
+     "string": 2,
+     "fret": 5
+    },
+    {
+     "string": 1,
+     "fret": 7
+    },
+    {
+     "string": 0,
+     "fret": 8
+    }
+   ]
+  ],
+  "triads|G|1": [
+   [
+    {
+     "string": 5,
+     "fret": 5
+    },
+    {
+     "string": 4,
+     "fret": 6
+    },
+    {
+     "string": 3,
+     "fret": 7
+    },
+    {
+     "string": 2,
+     "fret": 7
+    },
+    {
+     "string": 1,
+     "fret": 5
+    }
+   ]
+  ],
+  "triads|G|2": [
+   [
+    {
+     "string": 4,
+     "fret": 5
+    },
+    {
+     "string": 3,
+     "fret": 4
+    },
+    {
+     "string": 2,
+     "fret": 5
+    },
+    {
+     "string": 1,
+     "fret": 7
+    }
+   ]
+  ],
+  "triads|G|3": [
+   [
+    {
+     "string": 5,
+     "fret": 5
+    },
+    {
+     "string": 4,
+     "fret": 6
+    },
+    {
+     "string": 3,
+     "fret": 5
+    },
+    {
+     "string": 2,
+     "fret": 7
+    },
+    {
+     "string": 1,
+     "fret": 8
+    }
+   ]
+  ],
+  "triads|G|4": [
+   [
+    {
+     "string": 5,
+     "fret": 7
+    },
+    {
+     "string": 4,
+     "fret": 8
+    },
+    {
+     "string": 3,
+     "fret": 7
+    },
+    {
+     "string": 2,
+     "fret": 5
+    },
+    {
+     "string": 0,
+     "fret": 7
+    }
+   ],
+   [
+    {
+     "string": 4,
+     "fret": 8
+    },
+    {
+     "string": 3,
+     "fret": 7
+    },
+    {
+     "string": 2,
+     "fret": 5
+    },
+    {
+     "string": 0,
+     "fret": 7
+    }
+   ]
+  ],
+  "triads|G|5": [
+   [
+    {
+     "string": 5,
+     "fret": 5
+    },
+    {
+     "string": 4,
+     "fret": 5
+    },
+    {
+     "string": 3,
+     "fret": 5
+    },
+    {
+     "string": 2,
+     "fret": 7
+    },
+    {
+     "string": 1,
+     "fret": 7
+    },
+    {
+     "string": 0,
+     "fret": 5
+    }
+   ]
+  ],
+  "triads|G|6": [
+   [
+    {
+     "string": 5,
+     "fret": 7
+    },
+    {
+     "string": 4,
+     "fret": 6
+    },
+    {
+     "string": 3,
+     "fret": 7
+    }
+   ]
+  ]
+ }
+}
