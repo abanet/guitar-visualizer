@@ -19,6 +19,8 @@
  *   --description <texto>            Alternativa a --description-file para descripciones cortas
  *   --tags <lista>                   Tags separados por coma
  *   --category <id>                  ID de categoría de YouTube (por defecto 10 = Music)
+ *   --language <código>              Idioma del vídeo y del audio (p.ej. es). Sin esto, videos.update
+ *                                    borra el idioma que ya tuviera el vídeo (el snippet se reemplaza entero)
  *   --privacy <valor>                private | unlisted | public (por defecto: public, o private
  *                                    si se pasa --publish-at, que lo exige la API)
  *   --publish-at <fecha>             Fecha/hora ISO 8601 futura para programar la publicación
@@ -141,7 +143,10 @@ async function main() {
     part: ['snippet', 'status', 'paidProductPlacementDetails'],
     requestBody: {
       id: args['video-id'],
-      snippet: { title: args.title, description, tags, categoryId },
+      snippet: {
+        title: args.title, description, tags, categoryId,
+        ...(args.language ? { defaultLanguage: args.language, defaultAudioLanguage: args.language } : {}),
+      },
       status: {
         privacyStatus: privacy,
         selfDeclaredMadeForKids: false,
