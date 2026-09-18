@@ -5,3 +5,4 @@ video-out/
 .DS_Store
 scripts/lib/youtube-oauth-client.json
 scripts/.youtube-token*.json
+__pycache__/
