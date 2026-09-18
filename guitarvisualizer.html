@@ -1821,7 +1821,7 @@ body.presentation #channelWatermark{display:flex;}
            fatal"). Con flex-direction:column + justify-content:flex-end, el hueco sobrante
            siempre queda ARRIBA (bajo el título), nunca entre la franja y el mástil ni entre el
            mástil y los botones. -->
-      <div style="position:absolute;left:0;right:0;top:112px;bottom:84px;z-index:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;padding:0 30px;">
+      <div id="miNeckWrap" style="position:absolute;left:0;right:0;top:150px;bottom:84px;z-index:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;padding:0 30px;">
         <div id="miScaleStrip" style="z-index:2;font:600 15px Arial;letter-spacing:.02em;min-height:46px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;user-select:none;-webkit-user-select:none;"></div>
         <div id="miMeasureInfo" style="z-index:2;color:#ffd640;font:700 15px Arial;text-align:center;min-height:20px;margin-bottom:6px;"></div>
         <div id="miNeckHost" style="display:flex;justify-content:center;user-select:none;-webkit-user-select:none;"></div>
@@ -1855,6 +1855,10 @@ body.presentation #channelWatermark{display:flex;}
           </select>
           <button class="mi-btn" id="miPlayDirBtn" onclick="miTogglePlayDir()" title="Sentido: cuerda 6→1 (click para invertir)"><i class="ti ti-arrow-up" id="miPlayDirIcon"></i></button>
           <button class="mi-btn" onclick="miPlayAll()" title="Reproduce las notas dibujadas en el mástil, según el modo elegido a la izquierda"><i class="ti ti-volume"></i> Sonar</button>
+        </div>
+        <div class="mi-toolbar-group">
+          <button class="mi-btn" id="miShiftLeftBtn" onclick="miShift(-1)" title="Desplaza todas las notas reveladas un traste hacia la izquierda (hacia la cejuela)"><i class="ti ti-arrow-left"></i></button>
+          <button class="mi-btn" id="miShiftRightBtn" onclick="miShift(1)" title="Desplaza todas las notas reveladas un traste hacia la derecha (hacia la caja)"><i class="ti ti-arrow-right"></i></button>
         </div>
       </div>
       <!-- Tabla de nombres de intervalo, desplegable (pedido de Alberto: "de forma clara y
@@ -12830,12 +12834,41 @@ function miScaleStripHTML(noteDiamPx){
   requestAnimationFrame(miDrawScaleOverlays);
   return parts.join('');
 }
+// La barra de botones (abajo, position:absolute) se parte en 2 filas cuando el recuadro es
+// estrecho, y entonces tapaba la numeración de trastes del mástil (bug reportado por Alberto).
+// El bloque franja+mástil está anclado por abajo con un hueco fijo (84px, pensado para UNA fila),
+// así que se sube según la altura REAL de la barra: se recalcula al cambiar su tamaño (ResizeObserver
+// — cubre redimensionar la ventana y que las filas cambien sin tocar nada más).
+let miToolbarObserver=null;
+function miFitNeckToToolbar(){
+  const wrap=document.getElementById('miNeckWrap'),tb=document.querySelector('#miRecordZone .mi-toolbar');
+  if(!wrap||!tb)return;
+  const h=tb.getBoundingClientRect().height;
+  if(!h)return; // pestaña oculta (display:none): sin medida fiable, se recalcula al mostrarla
+  wrap.style.bottom=Math.max(84,Math.round(16+h+12))+'px'; // 16 = bottom de la barra, 12 = respiro
+  // Con la barra en 2-3 filas el hueco para franja+mástil se reduce; como el SVG escala por ANCHO
+  // (width:100%), en recuadros medianos el mástil no cabía y la franja de escala se montaba sobre
+  // el título/descripción. Se limita su altura al hueco que queda (el SVG se reduce manteniendo
+  // proporción, centrado) — la franja mide su escala con el mismo criterio, ver miRender.
+  const svg=document.querySelector('#miNeckHost svg'),strip=document.getElementById('miScaleStrip'),info=document.getElementById('miMeasureInfo');
+  if(svg&&strip&&info){
+    const avail=wrap.getBoundingClientRect().height-strip.offsetHeight-10-info.offsetHeight-6;
+    if(avail>60)svg.style.maxHeight=Math.floor(avail)+'px';
+  }
+}
 function miRender(){
   const host=document.getElementById('miNeckHost');if(!host)return;
+  if(!miToolbarObserver&&window.ResizeObserver){
+    const tb=document.querySelector('#miRecordZone .mi-toolbar');
+    if(tb){miToolbarObserver=new ResizeObserver(miFitNeckToToolbar);miToolbarObserver.observe(tb);}
+  }
+  miFitNeckToToolbar();
   host.innerHTML=miNeckSVG();
+  miFitNeckToToolbar();
   const lbl=document.getElementById('miFretCountLbl');if(lbl)lbl.textContent='hasta '+miFretCount;
   const lblStart=document.getElementById('miFretStartLbl');if(lblStart)lblStart.textContent='desde '+(miFretStart===0?'al aire':miFretStart);
   const gb=document.getElementById('miGhostBtn');if(gb)gb.classList.toggle('active',miShowGhosts);
+  miUpdateShiftBtns();
   const tsel=document.getElementById('miTonic');if(tsel&&tsel.value!==miTonic)tsel.value=miTonic;
   const strip=document.getElementById('miScaleStrip');
   if(strip){
@@ -12845,9 +12878,11 @@ function miRender(){
     // concreto (bug reportado, con captura: "las notas de la escala... del mismo tamaño que las
     // del mástil").
     const svgEl=host.querySelector('svg');
-    const scale=svgEl?svgEl.getBoundingClientRect().width/NECK_W:1;
+    // Escala real del dibujo: con max-height activo manda el eje más limitado (meet), no el ancho.
+    const scale=svgEl?Math.min(svgEl.getBoundingClientRect().width/svgEl.viewBox.baseVal.width,svgEl.getBoundingClientRect().height/svgEl.viewBox.baseVal.height):1;
     const noteDiamPx=Math.max(16,Math.round(2*miLastR*scale));
     strip.innerHTML=miScaleStripHTML(noteDiamPx);
+    miFitNeckToToolbar(); // la franja pudo cambiar de altura (varias líneas) — reajusta el hueco del mástil
   }
   // El botón muestra el modo ACTIVO ahora mismo (igual que Pintar/Sonar) — antes mostraba el modo
   // al que cambiarías al pulsar, al revés que el resto de botones de la barra (bug reportado).
@@ -12935,9 +12970,51 @@ function miFreqForPc(pc){
   }
   return 130.8128*Math.pow(2,pc/12);
 }
+// Desplazar TODAS las notas reveladas un traste a la izquierda (-1) o a la derecha (+1) — pedido
+// de Alberto: dos botones con flecha para mover la forma dibujada por el mástil sin volver a
+// pintarla. Solo se mueve si TODAS las notas siguen dentro de las casillas visibles (con
+// miFretStart>0 el traste de partida es solo el borde izquierdo, no una casilla — ver miNeckSVG):
+// si una se saliera, se perdería o quedaría oculta y la forma se deformaría, así que el botón se
+// desactiva (miUpdateShiftBtns) en vez de mover a medias.
+function miCanShift(dir){
+  if(!miRevealed.size)return false;
+  const lo=miFretStart===0?0:miFretStart+1,hi=Math.max(miFretCount,miFretStart+1);
+  for(const key of miRevealed){const f=Number(key.split(':')[1])+dir;if(f<lo||f>hi)return false;}
+  return true;
+}
+function miShift(dir,undoEntry){
+  if(!miCanShift(dir))return;
+  const prevTonic=miTonic;
+  const moved=new Set();
+  miRevealed.forEach(key=>{const[s,f]=key.split(':').map(Number);moved.add(s+':'+(f+dir));});
+  miRevealed=moved;
+  // Con tonalidad elegida, la tónica se desplaza los mismos semitonos que la forma (pedido de
+  // Alberto) — si no, las notas se moverían pero el rojo/los intervalos seguirían respecto a la
+  // tónica vieja. Se nombra con miNoteName() (la misma grafía que ya ven las notas del mástil,
+  // incluida la elección C#/Db del usuario); todos sus nombres existen como <option> de #miTonic.
+  if(miTonic)miTonic=miNoteName((noteToSt(miTonic)+dir+12)%12);
+  miMeasureSel=[]; // los índices apuntan a posiciones de la franja de escala, que cambia al cambiar las notas
+  // Al deshacer se restaura la tonalidad EXACTA de antes (no se recalcula: evitaría derivar de grafía).
+  if(undoEntry)miTonic=undoEntry.tonic;
+  else miHistory.push({shift:dir,tonic:prevTonic}); // el Deshacer lo revierte con el desplazamiento contrario
+  miRender();
+}
+function miUpdateShiftBtns(){
+  [['miShiftLeftBtn',-1],['miShiftRightBtn',1]].forEach(([id,dir])=>{
+    const b=document.getElementById(id);if(!b)return;
+    const ok=miCanShift(dir);b.disabled=!ok;b.style.opacity=ok?'':'.35';b.style.cursor=ok?'':'default';
+  });
+}
 function miUndo(){
-  const last=miHistory.pop();
+  const last=miHistory[miHistory.length-1];
   if(!last)return;
+  if(last.shift){
+    if(!miCanShift(-last.shift))return; // el rango visible cambió desde entonces y ya no cabe: se deja la entrada, no se pierde
+    miHistory.pop();
+    miShift(-last.shift,last);
+    return;
+  }
+  miHistory.pop();
   if(last.wasOn)miRevealed.add(last.key);else miRevealed.delete(last.key);
   miRender();
 }
