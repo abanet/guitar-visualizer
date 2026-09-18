@@ -47,6 +47,19 @@
  *   --positions <lista>     Formas a generar, coma-separadas (por defecto E,D,C,A,G)
  *   --positions-lib <path>  JSON de formas CAGED corregidas a mano (por defecto
  *                           scripts/lib/caged-scale-positions.json)
+ *   --closed-only           Generar SOLO la variante "Cerrada" de las Formas que la necesiten
+ *                           (saltando la versión normal por completo) — para rellenar a
+ *                           posteriori una Cerrada que faltase sin re-grabar la normal ya
+ *                           existente. Excluyente con --no-closed.
+ *   --no-closed             No generar la variante "Cerrada" (+12 trastes) para las Formas que
+ *                           caigan en cuerdas al aire (p.ej. Forma C en C mayor, frets 0-3) — por
+ *                           defecto SÍ se genera automáticamente, un segundo vídeo
+ *                           <...>_Forma<X>_Cerrada_TriadasEnPosicion.mp4 con la misma forma
+ *                           subida una octava, para poder tocarla sin cuerdas al aire (pedido de
+ *                           Alberto: "crear un vídeo igual con la misma forma de escala pero en
+ *                           el traste 12"). Se detecta antes de grabar nada (traste mínimo de la
+ *                           caja automática = 0), sin tocar guitarvisualizer.html: se inyecta como
+ *                           si fuera una corrección manual de caja (asSetCustomNotes).
  *   --extra <seg>           Segundos extra al final de cada vídeo (por defecto 2)
  *   --out <dir>             Carpeta de salida (por defecto ./video-out)
  *   --concurrency <n>       Vídeos en paralelo (por defecto 1)
@@ -125,8 +138,8 @@ async function detectMarkerFrameTime(videoPath, tmpDir) {
   }
 }
 
-async function runOne({ appUrl, root, scale, posLabel, introBars, bpm, xmlPath, cycleLen, wholeTheme, audioPath, extraSec, positionsLib, width, height, outDir, tmpDir }) {
-  const log = (msg) => console.log(`[forma${posLabel}] ${msg}`);
+async function runOne({ appUrl, root, scale, posLabel, closed, introBars, bpm, xmlPath, cycleLen, wholeTheme, audioPath, extraSec, positionsLib, width, height, outDir, tmpDir }) {
+  const log = (msg) => console.log(`[forma${posLabel}${closed ? 'Cerrada' : ''}] ${msg}`);
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({
     viewport: { width, height },
@@ -155,7 +168,7 @@ async function runOne({ appUrl, root, scale, posLabel, introBars, bpm, xmlPath, 
     await page.waitForFunction(() => { const el = document.getElementById('audioStatus'); return el && el.classList.contains('ok'); }, null, { timeout: 20000 });
 
     log('generando posición y tríadas por acorde…');
-    genResult = await page.evaluate(async ({ root, scale, posLabel, bpm, introBars, hasXml }) => {
+    genResult = await page.evaluate(async ({ root, scale, posLabel, closed, bpm, introBars, hasXml }) => {
       showTab('arpscale'); // asegura que #asScale tiene sus <option> (asInit) antes de fijar el valor
       const posIdx = ['E', 'D', 'C', 'A', 'G'].indexOf(posLabel);
       document.getElementById('asRoot').value = root;
@@ -163,12 +176,15 @@ async function runOne({ appUrl, root, scale, posLabel, introBars, bpm, xmlPath, 
       document.getElementById('asPos').value = String(posIdx);
       document.getElementById('asQuality').value = 'triads';
       asGenerate();
-      const r = await asSendToEditorTriadExplore();
+      // Variante "cerrada": misma forma y mismas tríadas, subidas una octava (+12 trastes) para
+      // no depender de cuerdas al aire — ver el comentario grande de fretShift dentro de
+      // asSendToEditorTriadExplore() en guitarvisualizer.html.
+      const r = await asSendToEditorTriadExplore(closed ? 12 : 0);
       if (!hasXml && bpm) document.getElementById('bpmInput').value = String(bpm); // modo tema: el tempo ya lo trae el XML, no lo pisamos
       document.getElementById('introCount').value = String(introBars);
       if (typeof updateIntroLbl === 'function') updateIntroLbl();
       return { ...r, totalBars: (r ? r.applied + r.skipped : 0) };
-    }, { root, scale, posLabel, bpm, introBars, hasXml: !!xmlPath });
+    }, { root, scale, posLabel, closed, bpm, introBars, hasXml: !!xmlPath });
     if (!genResult || !genResult.applied) throw new Error('No se generó ningún compás (revisa la posición/escala).');
     log(`ok: ${genResult.applied} compás(es) generados${genResult.skipped ? `, ${genResult.skipped} sin voicing limpio` : ''}`);
 
@@ -248,7 +264,7 @@ async function runOne({ appUrl, root, scale, posLabel, introBars, bpm, xmlPath, 
   const audioDuration = await getAudioDurationSeconds(audioPath);
   const mixDuration = Math.min(genResult.contentSec, audioDuration);
 
-  const outPath = path.join(outDir, `${root}_${scale}_Forma${posLabel}_TriadasEnPosicion.mp4`);
+  const outPath = path.join(outDir, `${root}_${scale}_Forma${posLabel}${closed ? '_Cerrada' : ''}_TriadasEnPosicion.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque, ${mixDuration.toFixed(1)}s de duración)…`);
   await execFileP('ffmpeg', [
     '-y',
@@ -264,6 +280,37 @@ async function runOne({ appUrl, root, scale, posLabel, introBars, bpm, xmlPath, 
   ]);
   log(`✓ ${outPath}`);
   return outPath;
+}
+
+// Detecta, SIN grabar nada (una sola pestaña ligera, reutilizada para todas las posiciones
+// pedidas), qué Formas caen en cuerdas al aire (traste mínimo de la caja = 0) — típico de
+// Forma C en C mayor por el wraparound de seqBuildCagedPosition() (ver guitarvisualizer.html).
+// Esas Formas necesitan además su variante "Cerrada" (+12 trastes, ver runOne) para poder
+// tocarse sin depender de cuerdas al aire, tal y como pidió Alberto.
+async function detectOpenPositions({ appUrl, root, scale, positions, positionsLib }) {
+  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const page = await browser.newPage();
+  const open = new Set();
+  try {
+    await page.goto(appUrl);
+    if (positionsLib) await page.evaluate((lib) => localStorage.setItem('gv_arpscale_positions', JSON.stringify(lib)), positionsLib);
+    for (const posLabel of positions) {
+      const minFret = await page.evaluate(({ root, scale, posLabel }) => {
+        showTab('arpscale');
+        const posIdx = ['E', 'D', 'C', 'A', 'G'].indexOf(posLabel);
+        document.getElementById('asRoot').value = root;
+        document.getElementById('asScale').value = scale;
+        document.getElementById('asPos').value = String(posIdx);
+        document.getElementById('asQuality').value = 'triads';
+        asGenerate();
+        return asState.notes.length ? Math.min(...asState.notes.map((n) => n.fret)) : null;
+      }, { root, scale, posLabel });
+      if (minFret === 0) open.add(posLabel);
+    }
+  } finally {
+    await browser.close().catch(() => {});
+  }
+  return open;
 }
 
 async function runPool(jobs, concurrency, worker) {
@@ -325,16 +372,29 @@ async function main() {
   const appUrl = 'file://' + appPath;
   console.log(`Escala: ${args.root} ${args.scale} · posiciones: ${positions.join(', ')} · ${xmlPath ? `modo tema (${path.basename(xmlPath)})` : `modo diapositivas (${bpm} bpm)`} · audio: ${path.basename(audioPath)}`);
 
-  const jobs = positions.map((posLabel) => ({ posLabel }));
+  const noClosed = !!args['no-closed'];
+  let openPositions = new Set();
+  if (!noClosed) {
+    console.log('Comprobando qué Formas caen en cuerdas al aire (necesitan variante Cerrada +12)…');
+    openPositions = await detectOpenPositions({ appUrl, root: args.root, scale: args.scale, positions, positionsLib });
+    if (openPositions.size) console.log(`  Formas al aire detectadas: ${[...openPositions].join(', ')} → se generará también su variante Cerrada`);
+    else console.log('  Ninguna Forma cae en cuerdas al aire — todas se generan solo en su versión normal.');
+  }
+
+  const closedOnly = !!args['closed-only'];
+  const jobs = positions.flatMap((posLabel) => {
+    if (!openPositions.has(posLabel)) return closedOnly ? [] : [{ posLabel, closed: false }];
+    return closedOnly ? [{ posLabel, closed: true }] : [{ posLabel, closed: false }, { posLabel, closed: true }];
+  });
   const t0 = Date.now();
   const results = await runPool(jobs, concurrency, (job) =>
-    runOne({ appUrl, root: args.root, scale: args.scale, posLabel: job.posLabel, introBars, bpm, xmlPath, cycleLen, wholeTheme, audioPath, extraSec, positionsLib, width, height, outDir, tmpDir })
+    runOne({ appUrl, root: args.root, scale: args.scale, posLabel: job.posLabel, closed: job.closed, introBars, bpm, xmlPath, cycleLen, wholeTheme, audioPath, extraSec, positionsLib, width, height, outDir, tmpDir })
   );
 
   const ok = results.filter((r) => r.ok).length;
   const fail = results.filter((r) => !r.ok);
   console.log(`\nHecho en ${((Date.now() - t0) / 1000).toFixed(1)}s: ${ok}/${jobs.length} vídeos generados en ${outDir}`);
-  fail.forEach((f, i) => console.error(`  ✗ ${jobs[i].posLabel}: ${f.error && f.error.message}`));
+  fail.forEach((f, i) => console.error(`  ✗ ${jobs[i].posLabel}${jobs[i].closed ? ' (Cerrada)' : ''}: ${f.error && f.error.message}`));
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
   process.exitCode = fail.length ? 1 : 0;

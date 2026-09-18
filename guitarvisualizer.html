@@ -743,6 +743,7 @@ body.presentation #channelWatermark{display:flex;}
           <option value="pop">Pop (rosa/lima)</option>
           <option value="reggae">Reggae (verde/dorado)</option>
           <option value="soul">Soul (cobre/oro vintage)</option>
+          <option value="afrocubano">Afrocubano (coral/turquesa)</option>
         </select></label>
         <label>Idioma del vídeo: <select id="tvCfgLang" onchange="tvSync()">
           <option value="es" selected>Español</option>
@@ -10367,15 +10368,28 @@ async function asSendToEditor(){
 // caben ENTERAS dentro de esta misma caja — la misma animación de zoom/crossfade que usan
 // generateExploreTriadA/B/C, pero sin salir nunca de la posición fija (a diferencia de esos, que
 // recorren las 12 posiciones por todo el mástil).
-async function asSendToEditorTriadExplore(){
+async function asSendToEditorTriadExplore(fretShift=0){
   if(!asState.chords.length){alert('Esta escala no tiene acordes diatónicos limpios de ese tipo — prueba con tríadas o cambia de escala.');return null;}
   const label='Tríadas dentro de la posición';
 
   // Caja FIJA: idéntica a la que usa asSendToEditor/asRenderPreview para arpegios — nunca
   // cambia durante todo el vídeo, es la "única posición de la escala" pedida.
+  //
+  // fretShift (típicamente 0 o 12, ver generate-scale-triad-explore-videos.js "variante
+  // Cerrada"): getChordVoicing() SIEMPRE devuelve la voicing de menor span más cercana al
+  // traste 0 para cada combinación (grupo de cuerdas × inversión) — nunca "la misma forma una
+  // octava arriba" — así que para desplazar todo el ejercicio +12 trastes (posición cerrada,
+  // sin cuerdas al aire) NO basta con desplazar la caja antes de buscar candidatos: casi
+  // ninguna voicing candidata (calculada cerca del traste 0) caería dentro de una caja ya
+  // desplazada a 12-15, y se perderían la mayoría de las tríadas válidas (probado a mano:
+  // Forma C de C mayor pasaba de 21 compases a solo 7). En su lugar, boxNotes (la caja SIN
+  // desplazar) se usa tal cual para encontrar las MISMAS voicings que la posición abierta, y
+  // dispBoxNotes (+fretShift) se usa solo para lo que se DIBUJA (rango de trastes, fondo de
+  // escala, voicing final) — mismo repertorio de acordes, solo movido una octava arriba.
   const boxNotes=asActiveNotes();
   if(!boxNotes.length){alert('Genera primero una posición (paso 1).');return null;}
-  const frets=boxNotes.map(n=>n.fret);
+  const dispBoxNotes=fretShift?boxNotes.map(n=>({...n,fret:n.fret+fretShift})):boxNotes;
+  const frets=dispBoxNotes.map(n=>n.fret);
   const fretMin=Math.max(0,Math.min(...frets)-1);
   const fretMax=Math.min(24,Math.max(...frets)+1);
 
@@ -10435,7 +10449,7 @@ async function asSendToEditorTriadExplore(){
   // altura adaptativa vía arpNeckH). Transformación idéntica a la que generateNeckSVG hace por
   // dentro (isRoot=intervals[i]==='R', st=getNoteStAtFret(string,fret)).
   function voicingToNotes(v){
-    return v.strings.map((sIdx,i)=>({string:sIdx,fret:v.frets[i],st:getNoteStAtFret(sIdx,v.frets[i]),note:v.notes[i],isRoot:v.intervals[i]==='R'}));
+    return v.strings.map((sIdx,i)=>{const fret=v.frets[i]+fretShift;return{string:sIdx,fret,st:getNoteStAtFret(sIdx,fret),note:v.notes[i],isRoot:v.intervals[i]==='R'};});
   }
   // arpBuildZoneSVG(notes,chord,shape,heldSts,fretStart,fretEnd,asScaleMode,posBox,...) — el
   // MISMO dibujante que asBuildArpeggioSVG usa para "Estructuras en escala" (asScaleMode=true ya
@@ -10455,8 +10469,8 @@ async function asSendToEditorTriadExplore(){
   function retagAsTriads(svg){return svg?svg.replace('data-gen="arpeggios"','data-gen="triads"'):svg;}
   function svgForChord(chord,voicing){
     return retagAsTriads(voicing
-      ?arpBuildZoneSVG(voicingToNotes(voicing),chord,'',[],fretMin,fretMax,true,boxNotes)
-      :asBuildArpeggioSVG(boxNotes,asChordInfo(chord),chord,fretMin,fretMax));
+      ?arpBuildZoneSVG(voicingToNotes(voicing),chord,'',[],fretMin,fretMax,true,dispBoxNotes)
+      :asBuildArpeggioSVG(dispBoxNotes,asChordInfo(chord),chord,fretMin,fretMax));
   }
 
   const nameEl=document.getElementById('exerciseName');
@@ -10469,8 +10483,8 @@ async function asSendToEditorTriadExplore(){
   // dibujado (bug reportado: "al principio no se dibuja el mástil, solo notas fantasma").
   {
     const rootPc=noteToSt(asState.root);
-    const introNotes=boxNotes.map(n=>({...n,isRoot:((n.st%12)+12)%12===rootPc}));
-    const introSvg=retagAsTriads(arpBuildZoneSVG(introNotes,'Escala','',[],fretMin,fretMax,true,boxNotes));
+    const introNotes=dispBoxNotes.map(n=>({...n,isRoot:((n.st%12)+12)%12===rootPc}));
+    const introSvg=retagAsTriads(arpBuildZoneSVG(introNotes,'Escala','',[],fretMin,fretMax,true,dispBoxNotes));
     const introParsed=svgStringToParsed(introSvg);
     let introThumb=null;try{introThumb=await svgToThumb(introSvg,320,116);}catch(e){}
     asIntroScaleFrame={type:'svg',data:introSvg,name:'Escala',thumb:introThumb,svgParsed:introParsed};
@@ -13605,6 +13619,7 @@ const TV_COLOR_PRESETS={
   pop:   {label:'Pop (rosa/lima)',       c1:'#ec4899', c2:'#a3e635'},
   reggae:{label:'Reggae (verde/dorado)', c1:'#2e7d32', c2:'#f9a825'},
   soul:  {label:'Soul (cobre/oro vintage)',c1:'#a8542e', c2:'#e0a458'},
+  afrocubano:{label:'Afrocubano (coral/turquesa)',c1:'#ff5a36', c2:'#00c2c7'},
 };
 // Partículas de fondo pastel, tintadas hacia el acento secundario del preset (mezcladas con
 // gris claro: a color plano quedaban demasiado saturadas para ser "polvo" de fondo).
@@ -13778,6 +13793,23 @@ window.tvComputeBars=function(){
   tvSync();
 };
 
+// Tamaño del nombre de estilo (#tvOStyle, 118px fijo en CSS): pensado para palabras cortas
+// como "ROCK" — con un nombre largo (p.ej. "AFROCUBANO") se metía encima del círculo de tempo,
+// que está centrado en la pantalla (bug reportado por Alberto). Se reduce el font-size paso a
+// paso hasta que quepa en el hueco real hasta el círculo (medido en el propio DOM, no a mano,
+// para no tener que reajustar esto si cambia el layout) — nunca por debajo de un tamaño mínimo
+// legible.
+function tvFitStyleTitle(){
+  const el=document.getElementById('tvOStyle');
+  if(!el||!refs.circle)return;
+  el.style.fontSize='118px';
+  const gap=40; // margen antes del círculo, para que no quede pegado
+  const maxW=refs.circle.getBoundingClientRect().left-el.getBoundingClientRect().left-gap;
+  if(maxW<=0)return;
+  let size=118;
+  while(el.scrollWidth>maxW&&size>40){size-=4;el.style.fontSize=size+'px';}
+}
+
 /* ---- Volcar config → pantalla (estático) ---- */
 window.tvSync=function(){
   if(!built) return;
@@ -13787,6 +13819,7 @@ window.tvSync=function(){
   const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
   const t=tvT();
   set('tvOStyle',(val('tvCfgStyle','ROCK')||'ROCK').toUpperCase());
+  tvFitStyleTitle();
   set('tvOSub',(val('tvCfgSub','')||'').toUpperCase());
   set('tvOSig',beats+'/4');
   set('tvOBpbLabel',t.beatsPerBar(beats));
