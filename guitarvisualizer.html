@@ -12695,6 +12695,15 @@ function seekClick(e){if(!audioEl||!audioEl.duration)return;const p=e.offsetX/e.
 let miFretCount=13; // trastes visibles (miFretStart..miFretCount), ajustable con los botones +/- — pedido de Alberto: por defecto 13 trastes desde el traste 1 (con fretStart=0, la cuerda al aire se ve además, como casilla previa)
 let miFretStart=0; // traste de partida (0 = incluye la cuerda al aire) — pedido de Alberto: "elegir el traste de partida... por si quiero hacer gráficos de una zona concreta". Por defecto en 0: fretStart=1 NO muestra el traste 1 con su etiqueta (limitación conocida del layout, ver comentario en miNeckSVG), así que para que salga el 1 hace falta partir de 0 (que además muestra la cuerda al aire).
 let miRevealed=new Set(); // "cuerda:traste" de las notas reveladas ahora mismo
+// Dedo asignado a mano a una nota ya pintada (opcional, pedido de Alberto: "no siempre, pero si
+// quiero hacerlo tener la opción") — "cuerda:traste" -> 1-4. Click DERECHO sobre una nota pintada
+// lo hace ciclar (sin dedo → 1 → 2 → 3 → 4 → sin dedo...), igual de opcional/discreto que
+// miCycleEnh (alternar C#/Db) — el click izquierdo de siempre no cambia. Se borra al ocultar la
+// nota (miToggle) o al limpiar (miClear): cada vez que se vuelve a pintar esa casilla empieza sin
+// dedo, no hay que "deshacerlo" a mano.
+let miFingers={};
+let miContextMenuBound=false; // true tras enganchar el listener de click derecho una vez (ver miRender) — nunca se vuelve a enganchar en redibujados posteriores
+let miHoverCell=null; // "cuerda:traste" bajo el ratón ahora mismo (ver miRender) — null si el ratón no está sobre ninguna casilla. Lo usan las teclas 0-4 para saber a qué nota ponerle el dedo sin tener que clicar.
 let miAnimateKeys=new Set(); // "cuerda:traste" que deben dibujarse con la animación de "caída" en el PRÓXIMO miRender() — se rellena justo antes de llamar a miRender() (ver miToggle/miCellClick) y se vacía justo después de usarla (ver miRender), así que solo afecta al render inmediatamente siguiente al click, nunca a redibujados posteriores (resize, deshacer, etc.)
 let miAnimEnabled=true; // botón "Con caída" de la barra — apaga/enciende la animación de caída (notas Y fantasmas), pedido de Alberto para poder desactivarla si estorba
 let miAnimateGhosts=false; // true = el PRÓXIMO miNeckSVG() anima (con caída escalonada, ver miNeckSVG) los fantasmas de "Ver en todo el mástil" al aparecer — se pone en miToggleGhosts() y se vacía justo después de usarla, igual que miAnimateKeys
@@ -12984,7 +12993,7 @@ function miNeckSVG(){
     // con él (bug reportado, con capturas). leftPad-r-4 solo, igual que generateNeckSVG.
     const x=f===0?leftPad-r-4:fretX(f)-fretW/2;
     const y=strY(si);
-    s+=`<g style="cursor:pointer;" onclick="miCellClick(${si},${f})">`;
+    s+=`<g style="cursor:pointer;" onclick="miCellClick(${si},${f})" data-cell="${si}:${f}">`;
     // Círculo invisible del tamaño completo SOLO para ampliar la zona de click (fill casi
     // transparente pero no "none": un fill none no recibe click en SVG) — sin ningún punto
     // visible mientras no está revelada (pedido de Alberto: "no quiero círculos indicando
@@ -13010,6 +13019,14 @@ function miNeckSVG(){
       const enhOk=MI_ENH_PAIRS[pc]&&!(miLabelMode==='intervals'&&tonicPc!=null);
       const textEvt=enhOk?`cursor="pointer" onclick="miCycleEnh(${pc},event)"`:`pointer-events="none"`;
       s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="white" font-size="${Math.round(r*0.7)}" font-weight="bold" font-family="Arial" ${textEvt}>${labelFor(pc)}</text>`;
+      // Número de dedo asignado a mano (click derecho, ver miCycleFinger) — misma placa oscura
+      // pequeña que ya usa la tríada abierta (Drop 2), arriba a la derecha de la nota.
+      if(miFingers[key]!=null){
+        const fr=Math.max(8,Math.round(r*0.4));
+        const fx=x+r*0.72,fy=y-r*0.72;
+        s+=`<circle cx="${fx}" cy="${fy}" r="${fr}" fill="rgba(20,20,20,.75)" stroke="rgba(255,255,255,.4)" stroke-width="1" pointer-events="none"/>`;
+        s+=`<text x="${fx}" y="${fy}" text-anchor="middle" dominant-baseline="central" fill="#ffd640" font-size="${Math.round(fr*1.15)}" font-weight="bold" font-family="Arial" pointer-events="none">${miFingers[key]}</text>`;
+      }
       s+=fallClose;
     }else if(miShowGhosts&&activePcs.has(pc)){
       // Fantasma de la tónica: mismo trazo discontinuo, pero en rojo — para que destaque igual
@@ -13040,6 +13057,16 @@ function miScaleStripHTML(noteDiamPx){
   const tonicPc=miTonic?noteToSt(miTonic):null;
   if(!miRevealed.size){
     const infoEl0=document.getElementById('miMeasureInfo');if(infoEl0)infoEl0.textContent='';
+    // Sin esto, si la última vez que se llegó hasta el final (con notas) la línea de dirección
+    // estaba activa (miLastShowNoteTagDown=true), ese valor se quedaba colgado para siempre: al
+    // no haber notas la función SIEMPRE vuelve aquí, así que ningún miDrawScaleOverlays() futuro
+    // vuelve a leer el estado real hasta que se pinte otra nota — y si mientras tanto quedaba
+    // algún requestAnimationFrame ya en cola de un render anterior, podía redibujar la línea con
+    // ese dato viejo sobre una franja que ya no tiene esas notas (bug reportado: "la línea
+    // amarilla se queda a veces cuando tiene que desaparecer"). Al vaciar el mástil no hay nada
+    // que mostrar, así que el estado correcto es siempre "ninguna línea".
+    miLastShowNoteTagDown=false;
+    const descOv=document.getElementById('miDescDirOverlay');if(descOv)descOv.innerHTML='';
     return'';
   }
   // Distancia ASCENDENTE de a hasta b (en semitonos, 0-11) — se usa tanto para ordenar (con
@@ -13269,6 +13296,45 @@ function miRender(){
     const tb=document.querySelector('#miRecordZone .mi-toolbar');
     if(tb){miToolbarObserver=new ResizeObserver(miFitNeckToToolbar);miToolbarObserver.observe(tb);}
   }
+  // Click derecho → ciclar dedo (miCycleFinger): un único listener en el CONTENEDOR (sobrevive a
+  // que host.innerHTML se reemplace entero en cada render), no un atributo oncontextmenu por
+  // celda — un atributo inline en un <g> de SVG insertado por innerHTML no siempre cancela el
+  // menú contextual nativo en todos los navegadores (bug reportado: "en el Mac con botón derecho
+  // sale un menú" — Safari, a diferencia de Chrome, no lo respetaba). addEventListener en el
+  // propio host, delegando por data-cell, es la forma robusta de verdad. Se engancha UNA sola vez
+  // (miContextMenuBound), igual que el ResizeObserver de arriba.
+  if(!miContextMenuBound){
+    miContextMenuBound=true;
+    host.addEventListener('contextmenu',e=>{
+      e.preventDefault();
+      const g=e.target.closest('[data-cell]');if(!g)return;
+      const[s,f]=g.getAttribute('data-cell').split(':').map(Number);
+      miCycleFinger(s,f);
+    });
+    // Hover: qué casilla está bajo el ratón AHORA MISMO (miHoverCell) — lo consultan las teclas
+    // 0-4 de abajo, para poner el dedo "apuntando" con el ratón en vez de tener que clicar varias
+    // veces (pedido de Alberto: "más cómodo pulsar 1,2,3,4 con el ratón encima de la nota").
+    host.addEventListener('mousemove',e=>{
+      const g=e.target.closest('[data-cell]');
+      miHoverCell=g?g.getAttribute('data-cell'):null;
+    });
+    host.addEventListener('mouseleave',()=>{miHoverCell=null;});
+    // Teclas 1-4: ponen ESE dedo directamente en la nota bajo el ratón (si está pintada) — no
+    // ciclan, van directas al número pulsado. 0: quita el dedo. Nunca si el foco está en un campo
+    // editable (título/descripción de arriba, ver miInitEditableFields) para no robarle el "1" al
+    // usuario mientras escribe ahí.
+    document.addEventListener('keydown',e=>{
+      if(!miHoverCell)return;
+      if(!/^[0-4]$/.test(e.key))return;
+      const ae=document.activeElement;
+      if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable))return;
+      const[s,f]=miHoverCell.split(':').map(Number);
+      if(!miRevealed.has(miHoverCell))return;
+      const n=parseInt(e.key,10);
+      if(n===0)delete miFingers[miHoverCell];else miFingers[miHoverCell]=n;
+      miRender();
+    });
+  }
   miFitNeckToToolbar();
   host.innerHTML=miNeckSVG();
   miAnimateKeys=new Set(); // ya consumida por el miNeckSVG() de arriba — un redibujado posterior no debe repetir la animación
@@ -13302,8 +13368,21 @@ function miToggle(s,f){
   const key=s+':'+f;
   const wasOn=miRevealed.has(key);
   miAnimateKeys=(wasOn||!miAnimEnabled)?new Set():new Set([key]); // solo anima al APARECER, no al borrar, y solo si "Con caída" está activo
-  if(wasOn)miRevealed.delete(key);else{miRevealed.add(key);miPlayTone(miFreqFor(s,f));} // solo suena al REVELAR, no al ocultar
+  if(wasOn){miRevealed.delete(key);delete miFingers[key];}else{miRevealed.add(key);miPlayTone(miFreqFor(s,f));} // solo suena al REVELAR, no al ocultar; al ocultar también se olvida el dedo (la próxima vez que se pinte esa casilla, empieza sin dedo)
   miHistory.push({key,wasOn});
+  miRender();
+}
+// Click DERECHO sobre una nota YA pintada: cicla su dedo asignado a mano (sin dedo → 1 → 2 → 3 →
+// 4 → sin dedo...) — pedido de Alberto: "no siempre, pero si quiero hacerlo tener la opción de
+// indicar el dedo". El menú contextual del navegador ya se cancela en el listener del host (ver
+// miRender); en casillas vacías no hace nada (no tiene sentido poner dedo a una nota que no está
+// pintada).
+function miCycleFinger(s,f){
+  const key=s+':'+f;
+  if(!miRevealed.has(key))return;
+  const cur=miFingers[key];
+  const next=cur==null?1:(cur>=4?null:cur+1);
+  if(next==null)delete miFingers[key];else miFingers[key]=next;
   miRender();
 }
 // Click en modo "sonar": recorrer una escala ya dibujada nota a nota sin borrar nada (en modo
@@ -13398,8 +13477,13 @@ function miShift(dir,undoEntry){
   if(!miCanShift(dir))return;
   const prevTonic=miTonic;
   const moved=new Set();
-  miRevealed.forEach(key=>{const[s,f]=key.split(':').map(Number);moved.add(s+':'+(f+dir));});
-  miRevealed=moved;
+  const movedFingers={};
+  miRevealed.forEach(key=>{
+    const[s,f]=key.split(':').map(Number);const newKey=s+':'+(f+dir);
+    moved.add(newKey);
+    if(miFingers[key]!=null)movedFingers[newKey]=miFingers[key]; // el dedo viaja con su nota, no se pierde al desplazar la forma
+  });
+  miRevealed=moved;miFingers=movedFingers;
   // Con tonalidad elegida, la tónica se desplaza los mismos semitonos que la forma (pedido de
   // Alberto) — si no, las notas se moverían pero el rojo/los intervalos seguirían respecto a la
   // tónica vieja. Se nombra con miNoteName() (la misma grafía que ya ven las notas del mástil,
@@ -13439,7 +13523,7 @@ function miChangeFretStart(delta){
   miFretStart=Math.max(0,Math.min(miFretCount-1,miFretStart+delta));
   miRender();
 }
-function miClear(){miRevealed.clear();miHistory=[];Object.values(miFlashTimers).forEach(clearTimeout);miFlashTimers={};miFlash.clear();Object.values(miSoundingTimers).forEach(clearTimeout);miSoundingTimers={};miSounding.clear();miMeasureSel=[];miRender();}
+function miClear(){miRevealed.clear();miFingers={};miHistory=[];Object.values(miFlashTimers).forEach(clearTimeout);miFlashTimers={};miFlash.clear();Object.values(miSoundingTimers).forEach(clearTimeout);miSoundingTimers={};miSounding.clear();miMeasureSel=[];miRender();}
 function miToggleGhosts(){
   const turningOn=!miShowGhosts;
   miShowGhosts=!miShowGhosts;
@@ -13464,6 +13548,12 @@ function miToggleIvTags(){
     const lbl={up:'Ver intervalos',both:'Ver intervalos (2 sentidos)',off:'Intervalos ocultos'}[miIvTagsMode];
     const span=b.querySelector('span');if(span)span.textContent=lbl;
   }
+  // "Medir distancia" (Shift+click, flecha amarilla) queda referida a la posición de dos notas en
+  // la franja — al cambiar este modo cambia el formato de esa franja, así que se suelta la
+  // selección (igual que ya hace miTonicChanged) en vez de dejar la flecha/texto de una medición
+  // vieja colgando (bug reportado: "la línea amarilla... se queda a veces cuando tiene que
+  // desaparecer").
+  miMeasureSel=[];
   miRender();
 }
 function miToggleLegend(){
