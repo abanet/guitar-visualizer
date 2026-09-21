@@ -29,6 +29,18 @@
  *                          apuntarlo a la MISMA carpeta donde están el XML/audio de origen)
  *   --arpeggio             En vez de la pentatónica del acorde, usa sus chord tones (el modo
  *                          "arpegio" de siempre) — para comparar o si en realidad quieres eso.
+ *   --fullneck              Mástil completo fijo (0-13, sin zoom) para TODO el vídeo en vez de
+ *                          encuadrar acorde a acorde — pensado para temas que recorren muchas
+ *                          tonalidades a propósito (p.ej. por quintas/cuartas): se ve la posición
+ *                          desplazarse por un mástil fijo en vez de la cámara persiguiéndola.
+ *   --no-next-preview       Oculta el panel "Siguiente" (previsualización de la próxima
+ *                          pentatónica) — por defecto sale siempre. El nombre del vídeo lleva
+ *                          "_sinSiguiente" para no pisar la versión con el panel.
+ *   --closecircle           "Cerrar el círculo": el último acorde de la vuelta encadena de
+ *                          vuelta a la MISMA "Forma de partida" (obligatoria con esta opción) en
+ *                          vez de dejar que la posición derive — pensado para vídeos cortos
+ *                          (1-2 vueltas), no para temas largos (el cierre paga un salto fijo en
+ *                          cada vuelta, ver comentario grande en ashSendToEditor).
  *   --positions <lista>     Formas de partida a generar, coma-separadas (por defecto: las 5,
  *                          E,D,C,A,G) — una única "Forma de partida" por vídeo, el resto del tema
  *                          encadena por cercanía a partir de ahí (ver "Forma de partida" en la
@@ -114,7 +126,7 @@ async function detectMarkerFrameTime(videoPath, tmpDir) {
   }
 }
 
-async function runOne({ appUrl, xmlPath, audioPath, audioDuration, usePenta, startPos, cycleLen, wholeTheme, extraSec, width, height, outDir, tmpDir, visConfig }) {
+async function runOne({ appUrl, xmlPath, audioPath, audioDuration, usePenta, startPos, fullNeck, noNextPreview, closeCircle, cycleLen, wholeTheme, extraSec, width, height, outDir, tmpDir, visConfig }) {
   const tag = `forma${startPos}`;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
@@ -163,7 +175,7 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, usePenta, sta
     // que aparezca nada del ejercicio).
     await page.waitForTimeout(600);
     await page.evaluate(() => { const m = document.getElementById('__syncMarker'); if (m) m.remove(); });
-    await page.evaluate((vc) => { const cfg = { ...getVisConfig(), ...(vc || {}), nextPreview: true }; localStorage.setItem('gv_vis', JSON.stringify(cfg)); applyVisConfig(cfg); }, visConfig || null);
+    await page.evaluate(({ vc, nextPreview }) => { const cfg = { ...getVisConfig(), ...(vc || {}), nextPreview }; localStorage.setItem('gv_vis', JSON.stringify(cfg)); applyVisConfig(cfg); }, { vc: visConfig || null, nextPreview: !noNextPreview });
 
     log('cargando XML…');
     await page.setInputFiles('#xmlPicker', [xmlPath]);
@@ -177,19 +189,23 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, usePenta, sta
     }
 
     log('generando posiciones y encadenando por cercanía desde Forma ' + startPos + '…');
-    const result = await page.evaluate(({ usePenta, startPos }) => {
+    const result = await page.evaluate(({ usePenta, startPos, fullNeck, closeCircle }) => {
       showTab('generate');
       const cb = document.getElementById('ashUsePenta');
       if (cb) cb.checked = usePenta;
       const sp = document.getElementById('ashStartPos');
       if (sp) sp.value = startPos || '';
+      const fn = document.getElementById('ashFullNeck');
+      if (fn) fn.checked = !!fullNeck;
+      const cc = document.getElementById('ashCloseCircle');
+      if (cc) cc.checked = !!closeCircle;
       ashAutoGenerateForTheme();
       return {
         autoStatus: document.getElementById('ashAutoStatus')?.textContent || '',
         sendStatus: document.getElementById('ashSendStatus')?.textContent || '',
         exerciseType: typeof getExerciseType === 'function' ? getExerciseType() : null,
       };
-    }, { usePenta, startPos });
+    }, { usePenta, startPos, fullNeck, closeCircle });
     log('estado: ' + result.autoStatus);
     if (!/todos los acordes cubiertos/.test(result.sendStatus)) {
       log('AVISO — algún acorde del tema se quedó sin fotograma: ' + result.sendStatus);
@@ -262,8 +278,8 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, usePenta, sta
   const trimOffsetSec = Math.max(0, ((playStartAt || videoStartRef) - videoStartRef) / 1000 - playStartCurrentTime);
 
   const baseName = path.basename(xmlPath, path.extname(xmlPath));
-  const kindTag = usePenta ? 'Pentatonica' : 'Arpegio';
-  const outPath = path.join(outDir, `${baseName}_${kindTag}_${tag}.mp4`);
+  const kindTag = (usePenta ? 'Pentatonica' : 'Arpegio') + (fullNeck ? 'MastilCompleto' : '') + (closeCircle ? 'Circulo' : '');
+  const outPath = path.join(outDir, `${baseName}_${kindTag}_${tag}${noNextPreview ? '_sinSiguiente' : ''}.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
   await execFileP('ffmpeg', [
     '-y',
@@ -300,6 +316,9 @@ async function main() {
   const outDir = path.resolve(args.out || './video-out');
   fs.mkdirSync(outDir, { recursive: true });
   const usePenta = !args.arpeggio;
+  const fullNeck = !!args.fullneck;
+  const noNextPreview = !!args['no-next-preview'];
+  const closeCircle = !!args.closecircle;
   const positions = (args.positions ? String(args.positions).split(',') : CAGED_POS_LABELS).map((s) => s.trim().toUpperCase());
   for (const p of positions) {
     if (!CAGED_POS_LABELS.includes(p)) { console.error(`Forma desconocida: ${p} (debe ser una de ${CAGED_POS_LABELS.join(', ')})`); process.exit(1); }
@@ -321,7 +340,7 @@ async function main() {
   async function worker() {
     while (idx < positions.length) {
       const startPos = positions[idx++];
-      const out = await runOne({ appUrl, xmlPath, audioPath, audioDuration, usePenta, startPos, cycleLen, wholeTheme, extraSec, width, height, outDir, tmpDir, visConfig });
+      const out = await runOne({ appUrl, xmlPath, audioPath, audioDuration, usePenta, startPos, fullNeck, noNextPreview, closeCircle, cycleLen, wholeTheme, extraSec, width, height, outDir, tmpDir, visConfig });
       results.push(out);
     }
   }

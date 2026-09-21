@@ -1532,6 +1532,19 @@ body.presentation #channelWatermark{display:flex;}
           <button class="btn" onclick="ashSendToEditor()"><i class="ti ti-refresh"></i> Re-sincronizar editor manualmente</button>
           <span id="ashSendStatus" style="font-size:12px;color:var(--text2);"></span>
         </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-top:8px;">
+          <input type="checkbox" id="ashCloseCircle" onchange="ashSendToEditor()" style="width:15px;height:15px;cursor:pointer;">
+          Cerrar el círculo — con "Forma de partida" fijada, el ÚLTIMO acorde de la vuelta encadena de
+          vuelta a esa MISMA forma (en vez de dejar que la posición derive sin parar en una progresión
+          circular larga, p.ej. por quintas/cuartas). Resuelve una sola vuelta cerrada y la repite igual
+          en todo el tema: sin deriva, la posición nunca se aleja del punto de partida.
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-top:8px;">
+          <input type="checkbox" id="ashFullNeck" onchange="ashSendToEditor()" style="width:15px;height:15px;cursor:pointer;">
+          Mástil completo (0-13, sin zoom) en vez de encuadre por acorde — pensado para temas que recorren
+          muchas tonalidades a propósito (p.ej. por quintas/cuartas): en vez de una ventana que se reajusta
+          acorde a acorde, todo el ejercicio usa el mismo mástil fijo y se ve la posición desplazarse por él.
+        </label>
         <div style="margin-top:14px;">
           <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:6px;">
             Posición de cada acorde (opcional — fuerza una forma concreta, sin importar la cercanía al acorde
@@ -7487,11 +7500,122 @@ function ashBuildByKey(){
   });
   return byKey;
 }
+// Coste de movimiento (voice leading real) entre dos formas: para cada cuerda, empareja las
+// notas de "cand" con las de "prev" en ese orden (emparejar dos listas YA ordenadas por traste
+// minimiza siempre la suma de |Δtraste| — no hace falta probar combinaciones) y suma |Δtraste|;
+// una nota que no tenga pareja en esa cuerda (cuerda que gana o pierde una nota) penaliza aparte.
+// Sustituye a comparar solo el traste MEDIO de toda la caja (bug reportado, ver "Em→Bm" más
+// abajo): dos formas pueden tener un traste medio parecido y aun así no compartir ni una sola
+// nota real, o al revés — compartir varias notas exactas (mismo traste Y cuerda, coste 0, p.ej.
+// el Fa# que ya sonaba en Bm y sigue sonando igual en Fa#m) y tener el traste medio algo distinto.
+function ashMovementCost(candNotes,prevNotes){
+  let total=0;
+  for(let s=0;s<6;s++){
+    const cf=(candNotes||[]).filter(n=>n.string===s).map(n=>n.fret).sort((a,b)=>a-b);
+    const pf=(prevNotes||[]).filter(n=>n.string===s).map(n=>n.fret).sort((a,b)=>a-b);
+    if(!cf.length&&!pf.length)continue;
+    if(!cf.length||!pf.length){total+=6;continue;}
+    const n=Math.min(cf.length,pf.length);
+    for(let i=0;i<n;i++)total+=Math.abs(cf[i]-pf[i]);
+    total+=Math.abs(cf.length-pf.length)*6;
+  }
+  return total;
+}
+// Una misma forma CAGED suena IGUAL una octava arriba/abajo (±12 trastes) — así que, además de la
+// forma "nativa" de la entrada, la ofrecemos como candidata también desplazada ±12, filtrando lo
+// que se salga de un mástil razonable (0-22). Esto es lo que permite a ashSendToEditor recolocarse
+// en una octava más cómoda cuando la cadena por quintas/cuartas lleva muchos acordes seguidos
+// derivando hacia un extremo del mástil (ver comentario grande en ashSendToEditor sobre el
+// "salto inevitable" — con esto deja de serlo, porque ya no hay un único traste posible por forma).
+// DP en dos pasadas reutilizable, dado un array de POOLS (uno por paso de la secuencia, cada pool
+// una lista de candidatas {notes,...}) — PASADA A minimax (minimiza el PEOR salto de toda la
+// ruta), PASADA B min-suma restringida a no superar ese peor salto ya garantizado (evita que la
+// pasada A "desperdicie" margen en tramos donde había una opción mejor con el mismo peor-caso; ver
+// comentario grande en ashSendToEditor). Devuelve {chosenIdx,worstFloor}: chosenIdx[i] es el índice
+// dentro de pools[i] elegido para ese paso.
+function ashTwoPassDP(pools){
+  const dpA=[pools[0].map(()=>({cost:0,back:-1}))];
+  for(let i=1;i<pools.length;i++){
+    const prevPool=pools[i-1],curPool=pools[i],prevDp=dpA[i-1];
+    dpA.push(curPool.map(c=>{
+      let best=Infinity,backIdx=0;
+      for(let k=0;k<prevPool.length;k++){
+        const edge=ashMovementCost(c.notes,prevPool[k].notes);
+        const total=Math.max(prevDp[k].cost,edge);
+        if(total<best){best=total;backIdx=k;}
+      }
+      return{cost:best,back:backIdx};
+    }));
+  }
+  let worstFloor=Infinity;
+  dpA[dpA.length-1].forEach(d=>{if(d.cost<worstFloor)worstFloor=d.cost;});
+
+  const dpB=[pools[0].map(()=>({cost:0,back:-1}))];
+  for(let i=1;i<pools.length;i++){
+    const prevPool=pools[i-1],curPool=pools[i],prevDp=dpB[i-1];
+    dpB.push(curPool.map(c=>{
+      let best=Infinity,backIdx=-1;
+      for(let k=0;k<prevPool.length;k++){
+        if(prevDp[k].cost===Infinity)continue;
+        const edge=ashMovementCost(c.notes,prevPool[k].notes);
+        if(edge>worstFloor)continue;
+        const total=prevDp[k].cost+edge;
+        if(total<best){best=total;backIdx=k;}
+      }
+      return{cost:best,back:backIdx};
+    }));
+  }
+  let lastIdx=0,lastBest=Infinity;
+  dpB[dpB.length-1].forEach((d,j)=>{if(d.cost<lastBest){lastBest=d.cost;lastIdx=j;}});
+  const chosenIdx=new Array(pools.length);
+  chosenIdx[pools.length-1]=lastIdx;
+  for(let i=pools.length-1;i>0;i--)chosenIdx[i-1]=dpB[i][chosenIdx[i]].back;
+  return{chosenIdx,worstFloor};
+}
+// Pool de candidatas para UN acorde (misma lógica en los dos modos de ashSendToEditor: override
+// manual > forma forzada (solo si "forced" es true, p.ej. primer acorde de la secuencia o del
+// lazo cerrado) > pool completo con variantes de octava. Devuelve null si el acorde no tiene
+// ninguna entrada generada (el llamador decide qué hacer: marcar "missing" y saltarlo).
+function ashPoolForChord(chordKey,byKey,forced,startPos){
+  const candidates=byKey[chordKey];
+  if(!candidates||!candidates.length)return null;
+  const manualPos=ashPosOverride[chordKey];
+  const manual=manualPos?candidates.find(c=>c.pos===manualPos):null;
+  if(manual)return[{entry:manual.entry,shift:0,notes:manual.entry.notes,pos:manual.pos}];
+  if(forced&&startPos){
+    const preferred=candidates.find(c=>c.pos===startPos);
+    if(preferred)return[{entry:preferred.entry,shift:0,notes:preferred.entry.notes,pos:preferred.pos}];
+  }
+  const pool=[];
+  candidates.forEach(c=>ashOctaveVariants(c.entry).forEach(v=>pool.push({entry:c.entry,shift:v.shift,notes:v.notes,pos:c.pos})));
+  if(!pool.length)return candidates.map(c=>({entry:c.entry,shift:0,notes:c.entry.notes,pos:c.pos}));
+  return pool;
+}
+function ashOctaveVariants(entry){
+  const out=[];
+  const base=entry.notes||[];
+  if(!base.length)return[{entry,shift:0,notes:base}];
+  for(const shift of[-12,0,12]){
+    const notes=shift===0?base:base.map(n=>({...n,fret:n.fret+shift}));
+    if(notes.every(n=>n.fret>=0&&n.fret<=22))out.push({entry,shift,notes});
+  }
+  return out;
+}
 function ashSendToEditor(silent){
   const status=document.getElementById('ashSendStatus');
   const say=t=>{if(status)status.textContent=t;};
   try{
   if(!cycles.length){if(!silent)alert('Carga primero un tema (XML con acordes) en Audio & XML.');else say('Sin tema cargado.');return;}
+  // Ciclos en modo 'ref' (misma progresión que el ciclo 0, para no duplicar almacenamiento —
+  // ver buildCycles/_cycleBarsMatchMaster) NO tienen su propio array de compases: getTargetBars
+  // devuelve null para ellos, así que cualquier escritura ahí se saltaba en SILENCIO (bug real,
+  // no del algoritmo de posiciones: en un tema con el mismo ciclo de 12 acordes repetido varias
+  // veces —p.ej. una progresión por quintas— casi todos los ciclos quedan en 'ref', y el envío
+  // automático solo llegaba a escribir de verdad en el ciclo 0 y el último —el resto se quedaba
+  // con lo que ya hubiera ahí, que "por casualidad" coincidía con el ciclo 0). Mismo patrón que ya
+  // usa el resto de la app antes de escribir en bloque (ver los demás "mode==='ref'→
+  // makeCycleCustom" en el archivo): convertir a 'custom' ANTES de calcular barLoc/asignaciones.
+  for(let ci=0;ci<cycles.length;ci++){if(cycles[ci].mode==='ref')makeCycleCustom(ci);}
   {
     const want=getCycleLen();
     const allNow=getAllBars();
@@ -7510,49 +7634,111 @@ function ashSendToEditor(silent){
 
   const byKey=ashBuildByKey();
 
-  let prevFret=null; // traste "actual" de la posición elegida, para minimizar el salto al siguiente acorde
-  let isFirst=true; // solo el primer acorde con candidatas usa la "forma de partida" elegida por el usuario
   const startPos=document.getElementById('ashStartPos')?.value||'';
+  const closeCircle=!!document.getElementById('ashCloseCircle')?.checked;
   const missing=new Set();
-  const assignments=[]; // {f,entry,pos} — decisión de voice-leading, ANTES de construir ningún SVG
-  for(const f of flat){
-    const chord=(f.chord||'').trim();
-    if(!chord||chord==='—')continue;
-    const cm=chord.match(/^([A-G][b#]?)(.*)$/);if(!cm)continue;
-    const pc=noteToSt(cm[1]);
-    const chordKey=pc+'|'+cm[2].trim().toLowerCase();
-    const candidates=byKey[chordKey];
-    if(!candidates||!candidates.length){missing.add(chord);continue;}
-    // Varias posiciones disponibles (formas CAGED distintas): PRIORIDAD 1, elección MANUAL del
-    // usuario para este acorde concreto (ashPosOverride, ver selector "Posición de cada acorde"
-    // en ashRenderPosPicker) — si existe y sigue teniendo entrada generada, gana siempre, sin
-    // pasar por voice-leading. PRIORIDAD 2 (sin override, comportamiento de siempre): la más
-    // cercana en trastes a la posición anterior (voice leading, igual que hacen las tríadas);
-    // sin posición previa (primer acorde del tema), se elige la más grave/abierta por defecto,
-    // salvo que el usuario haya fijado una "forma de partida" en ashStartPos — en ese caso,
-    // si el primer acorde tiene una candidata en esa forma, se usa esa como ancla y el resto
-    // del tema encadena por cercanía a partir de ahí (mismo criterio de siempre).
-    let choice=candidates[0];
-    const manualPos=ashPosOverride[chordKey];
-    const manual=manualPos?candidates.find(c=>c.pos===manualPos):null;
-    if(manual){
-      choice=manual;
-    }else if(isFirst&&startPos){
-      const preferred=candidates.find(c=>c.pos===startPos);
-      if(preferred)choice=preferred;
-      else if(candidates.length>1){
-        choice=candidates.reduce((best,c)=>c.avgFret<best.avgFret?c:best,candidates[0]);
-      }
-    }else if(candidates.length>1){
-      choice=candidates.reduce((best,c)=>{
-        const d=prevFret==null?c.avgFret:Math.abs(c.avgFret-prevFret);
-        const bd=prevFret==null?best.avgFret:Math.abs(best.avgFret-prevFret);
-        return d<bd?c:best;
-      },candidates[0]);
+  const assignments=[]; // {f,chord,entry,pos,shift,notes} — decisión final, ANTES de construir SVGs
+  // Optimización GLOBAL en DOS PASADAS (ver ashTwoPassDP), no solo mirar al acorde anterior.
+  // PASADA A (minimax): minimiza el PEOR salto de TODA la secuencia (no la suma total) —
+  // exactamente lo pedido: "que no haya ningún salto". Antes se elegía por cercanía SOLO al
+  // acorde inmediatamente anterior (voraz): en una progresión circular larga (p.ej. las 12
+  // tonalidades por quintas) eso deriva de forma constante hacia un extremo del mástil hasta que,
+  // varias decenas de acordes después, ya no queda ninguna forma cercana y hace falta un salto
+  // grande y feo para "rebotar" (bug reportado, ver ashOctaveVariants). Con el pool ampliado (±1
+  // octava) y esta DP, el algoritmo puede pagar un pequeño coste antes de llegar al borde —
+  // cambiando de octava en el momento óptimo global — así el salto máximo de TODA la secuencia
+  // queda minimizado en vez de relegado a un único punto crítico. A veces ese máximo sigue sin
+  // poder bajar de cierto valor (una progresión que recorre las 12 tonalidades por quintas/cuartas
+  // con solo 5 formas CAGED por tonalidad no siempre puede evitarlo del todo — confirmado con este
+  // mismo motor: es un límite geométrico de las formas, no del algoritmo).
+  // PASADA B (bug reportado: "Fm→Cm dibuja forma G en vez de forma A, que es la que comparte
+  // notas"): la pasada A solo garantiza que el PEOR salto de la ruta sea mínimo — una vez ese
+  // máximo queda fijado por el cuello de botella real (p.ej. Em→Bm), CUALQUIER otra transición
+  // que no lo supere le resulta indiferente a la pasada A, así que puede "desperdiciar" ese margen
+  // eligiendo una forma peor de lo necesario en un tramo que no tenía por qué serlo. La pasada B
+  // repite la DP minimizando ahora la SUMA de costes, pero prohibiendo cualquier salto por encima
+  // del máximo ya garantizado en la pasada A — así el peor salto sigue siendo el mismo (óptimo), y
+  // todo lo demás se ajusta al mínimo movimiento real posible, no a un empate arbitrario.
+  if(closeCircle){
+    // "Cerrar el círculo" (pedido: "si empezamos con Cm en forma de G, al cerrar el círculo
+    // tenemos que volver a Cm en forma de G"): en vez de optimizar TODA la secuencia lineal (que
+    // deriva sin parar en una progresión circular larga, ver comentario de arriba), resolvemos
+    // UNA SOLA vuelta de los acordes DISTINTOS (en su primer orden de aparición) como un lazo
+    // CERRADO — el primer acorde y el "acorde de cierre" (el mismo primer acorde repetido al
+    // final) usan la MISMA candidata fija (la "forma de partida"), y la DP de dos pasadas reparte
+    // el ajuste de "volver exactamente al mismo sitio" entre las transiciones intermedias, en vez
+    // de concentrarlo en un salto al reiniciar el ciclo. Esa solución (una posición fija por
+    // acorde) se aplica luego a TODAS las repeticiones del tema — perfectamente cíclica, sin
+    // deriva acumulada acorde a acorde ni de vuelta a vuelta.
+    const loopChords=[]; // [{chordKey,chord}] — acordes distintos, primer orden de aparición
+    const seenKeys=new Set();
+    for(const f of flat){
+      const chord=(f.chord||'').trim();
+      if(!chord||chord==='—')continue;
+      const cm=chord.match(/^([A-G][b#]?)(.*)$/);if(!cm)continue;
+      const pc=noteToSt(cm[1]);
+      const chordKey=pc+'|'+cm[2].trim().toLowerCase();
+      if(seenKeys.has(chordKey))continue;
+      seenKeys.add(chordKey);
+      loopChords.push({chordKey,chord});
     }
-    isFirst=false;
-    prevFret=choice.avgFret;
-    assignments.push({f,chord,entry:choice.entry,pos:choice.pos});
+    const loopPools=[]; // pool por acorde distinto (índices paralelos a loopChords)
+    loopChords.forEach((lc,idx)=>{
+      const pool=ashPoolForChord(lc.chordKey,byKey,idx===0,startPos);
+      if(!pool){missing.add(lc.chord);loopPools.push(null);return;}
+      loopPools.push(pool);
+    });
+    const chordPosMap={}; // chordKey -> {entry,pos,shift,notes}
+    const validIdx=[];loopPools.forEach((p,i)=>{if(p)validIdx.push(i);});
+    if(validIdx.length){
+      // Nodo de cierre: MISMA pool que el primer acorde válido (si esa pool es una candidata
+      // fija forzada —"forma de partida"/override manual—, garantiza volver EXACTAMENTE a esa
+      // misma posición; si no hay forma forzada, la DP igualmente tiende a la más barata, aunque
+      // sin garantía estricta de identidad).
+      const firstPool=loopPools[validIdx[0]];
+      const dpPools=validIdx.map(i=>loopPools[i]).concat([firstPool]);
+      const{chosenIdx}=ashTwoPassDP(dpPools);
+      validIdx.forEach((li,i)=>{
+        const c=loopPools[li][chosenIdx[i]];
+        chordPosMap[loopChords[li].chordKey]={entry:c.entry,pos:c.pos,shift:c.shift,notes:c.notes};
+      });
+    }
+    for(const f of flat){
+      const chord=(f.chord||'').trim();
+      if(!chord||chord==='—')continue;
+      const cm=chord.match(/^([A-G][b#]?)(.*)$/);if(!cm)continue;
+      const pc=noteToSt(cm[1]);
+      const chordKey=pc+'|'+cm[2].trim().toLowerCase();
+      const c=chordPosMap[chordKey];
+      if(!c)continue; // ya está en "missing" si le faltaba la entrada
+      assignments.push({f,chord,entry:c.entry,pos:c.pos,shift:c.shift,notes:c.notes});
+    }
+  }else{
+    // PASO 1 (modo lineal, de siempre): agrupar flat en "segmentos" (acordes consecutivos
+    // idénticos, con la misma anulación manual si la hay, colapsados en uno) y darle a cada
+    // segmento su POOL de candidatas.
+    const segments=[]; // {segId,chord,fs:[...],pool:[{entry,shift,notes,pos}]}
+    for(const f of flat){
+      const chord=(f.chord||'').trim();
+      if(!chord||chord==='—')continue;
+      const cm=chord.match(/^([A-G][b#]?)(.*)$/);if(!cm)continue;
+      const pc=noteToSt(cm[1]);
+      const chordKey=pc+'|'+cm[2].trim().toLowerCase();
+      const pool=ashPoolForChord(chordKey,byKey,segments.length===0,startPos);
+      if(!pool){missing.add(chord);continue;}
+      const forcedTag=pool.length===1?(pool[0].pos+'|'+pool[0].shift):'';
+      const segId=chordKey+'|'+forcedTag;
+      const cur=segments.length?segments[segments.length-1]:null;
+      if(cur&&cur.segId===segId)cur.fs.push(f);
+      else segments.push({segId,chord,fs:[f],pool});
+    }
+    if(segments.length){
+      const{chosenIdx}=ashTwoPassDP(segments.map(s=>s.pool));
+      segments.forEach((seg,i)=>{
+        const c=seg.pool[chosenIdx[i]];
+        seg.fs.forEach(f=>assignments.push({f,chord:seg.chord,entry:c.entry,pos:c.pos,shift:c.shift,notes:c.notes}));
+      });
+    }
   }
   // Segunda pasada: MISMO NÚMERO DE TRASTES (mismo ANCHO, no la misma ventana absoluta) para
   // TODAS las formas realmente usadas en este envío — el ancho es el máximo que necesite la
@@ -7568,25 +7754,46 @@ function ashSendToEditor(silent){
   // coordenadas horneadas de otra ventana. forceFloating=true en TODAS las formas evita además
   // el cambio de fórmula leftPad/fretW entre formas con/sin cuerdas al aire (bug "Em→Bm").
   let applied=0;
-  const usedEntries=[...new Set(assignments.map(a=>a.entry))];
-  if(usedEntries.length){
-    let maxSpan=0;
-    usedEntries.forEach(e=>{
-      const fr=(e.notes||[]).map(n=>n.fret);
-      if(!fr.length)return;
-      maxSpan=Math.max(maxSpan,Math.max(...fr)-Math.min(...fr)+2); // +2 = ±1 de margen, igual que la ventana propia de cada forma
-    });
-    const rebuilt=new Map();
-    usedEntries.forEach(e=>{
-      if(!(e.notes||[]).length){rebuilt.set(e,{svg:e.data,parsed:e.svgParsed});return;}
-      const fr=e.notes.map(n=>n.fret);
-      const ownMin=Math.min(...fr),ownMax=Math.max(...fr);
-      const ownSpan=ownMax-ownMin;
-      const extra=Math.max(0,maxSpan-ownSpan);
-      let lo=ownMin-Math.ceil(extra/2),hi=ownMax+Math.floor(extra/2);
-      if(lo<0){hi+=-lo;lo=0;}
-      if(hi>24){lo-=(hi-24);hi=24;}
-      lo=Math.max(0,lo);
+  // Agrupamos por (entrada, octava) — no solo por entrada — porque la DP puede usar la MISMA
+  // forma a distinta octava en distintos puntos de la secuencia, y cada una necesita su propio
+  // SVG (las notas reales, y por tanto la ventana, son distintas aunque la forma "de origen" sea
+  // la misma).
+  const usedVariants=new Map(); // key "entryId|shift" -> {entry,shift,notes}
+  assignments.forEach(a=>{
+    const key=a.entry.id+'|'+a.shift;
+    if(!usedVariants.has(key))usedVariants.set(key,{entry:a.entry,shift:a.shift,notes:a.notes});
+  });
+  // UNA SOLA ventana de trastes, FIJA e INMUTABLE para TODO el ejercicio (pedido explícito: "la
+  // zona de mástil que se enseña tiene que ser fija e inmutable a lo largo de todo el vídeo" — no
+  // basta con que todas las formas tengan el mismo ANCHO si cada una centra ese ancho en su propia
+  // posición, porque entonces la ventana absoluta [lo,hi] sigue cambiando de acorde a acorde: unas
+  // veces empieza en el traste 0, otras en el 1, otras en el 2… — eso es exactamente lo que se
+  // reportó como "la zona de mástil no es la misma", visible tanto en el margen/cejilla que
+  // aparece o no según el acorde como en la nota fantasma de la posición siguiente saliéndose del
+  // recuadro cuando su ventana "propia" no coincidía con la de la posición activa). En vez de
+  // perseguir cada forma con su propio zoom, se calcula la UNIÓN de trastes que necesitan TODAS
+  // las formas realmente usadas en este envío (con ±1 traste de margen) y esa MISMA ventana,
+  // calculada una única vez, se usa para construir el SVG de cada una — así ninguna imagen cambia
+  // de tamaño ni de posición entre acordes, y cualquier nota (incluida la fantasma de la siguiente
+  // posición) siempre cae dentro del mismo recuadro.
+  const fullNeck=!!document.getElementById('ashFullNeck')?.checked;
+  if(usedVariants.size){
+    let lo=0,hi=13;
+    if(!fullNeck){
+      let unionMin=Infinity,unionMax=-Infinity;
+      usedVariants.forEach(v=>{
+        const fr=(v.notes||[]).map(n=>n.fret);
+        if(!fr.length)return;
+        unionMin=Math.min(unionMin,...fr);unionMax=Math.max(unionMax,...fr);
+      });
+      if(unionMin<=unionMax){
+        lo=Math.max(0,unionMin-1);hi=Math.min(24,unionMax+1);
+      }
+    }
+    const rebuilt=new Map(); // key -> {svg,parsed}
+    usedVariants.forEach((v,key)=>{
+      const e=v.entry;
+      if(!(v.notes||[]).length){rebuilt.set(key,{svg:e.data,parsed:e.svgParsed});return;}
       let pentaLabel=null;
       if(e.arpKindWord==='pentatónica'){
         const cm=(e.chordName||'').match(/^([A-G][b#]?)(.*)$/);
@@ -7595,16 +7802,17 @@ function ashSendToEditor(silent){
           pentaLabel=(isMinor?'Pentatónica menor de ':'Pentatónica mayor de ')+cm[1];
         }
       }
-      const svg=arpBuildZoneSVG(e.notes,e.chordName||'','',[],lo,hi,true,null,true,pentaLabel,true);
-      rebuilt.set(e,{svg,parsed:svgStringToParsed(svg)});
+      const svg=arpBuildZoneSVG(v.notes,e.chordName||'','',[],lo,hi,true,null,true,pentaLabel,true);
+      rebuilt.set(key,{svg,parsed:svgStringToParsed(svg)});
     });
     for(const a of assignments){
       const slotIdx=Math.round((a.f.beat||1)-1);
       const loc=barLoc[a.f.bi];if(!loc)continue;
       const target=getTargetBars(loc.ci);
       if(target&&target[loc.local]){
-        const built=rebuilt.get(a.entry);
-        target[loc.local].imgs[slotIdx]={type:'svg',data:built.svg,name:a.chord+' '+(a.entry.arpKindWord||'arpegio')+' (auto, forma '+a.pos+')',
+        const built=rebuilt.get(a.entry.id+'|'+a.shift);
+        const octTag=a.shift?(a.shift>0?'+8va':'-8va'):'';
+        target[loc.local].imgs[slotIdx]={type:'svg',data:built.svg,name:a.chord+' '+(a.entry.arpKindWord||'arpegio')+' (auto, forma '+a.pos+octTag+')',
           thumb:a.entry.thumb||null,svgParsed:built.parsed?JSON.parse(JSON.stringify(built.parsed)):null};
         applied++;
       }
