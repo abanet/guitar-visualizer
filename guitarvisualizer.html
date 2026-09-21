@@ -7114,11 +7114,27 @@ function buildDrop2Voicing(shape,rootRaw,quality){
 // leyendo las formas de DROP2_TRIAD_SHAPES en vez de calcularlas. Ida y vuelta de la secuencia
 // COMPLETA (21 posiciones ida + 20 vuelta, sin repetir la de giro) — cada grupo de 4 cuerdas ya
 // trae su propio ida/vuelta interno (ver comentario de arriba), esto añade el del ejercicio entero.
+// Busca en DROP2_TRIAD_SHAPES por CLASE DE ALTURA + calidad, no por el string exacto de la
+// tónica — las 24 claves se guardaron con una grafía fija (sostenidos para las tonalidades de
+// menor con sostenidos, p.ej. 'G#|m'), pero el acorde real del vamp puede venir con la grafía
+// enarmónica (p.ej. "Abm" en vez de "G#m" — bug reportado: "no hay posiciones... para Ab|m" con
+// el vamp Abm, que SÍ existe transcrito como G#|m). Las posiciones (traste/cuerda/dedo) no
+// cambian con la grafía —solo el NOMBRE que se muestra, que ya resuelve buildDrop2Voicing con el
+// rootRaw real—, así que basta con encontrar la entrada por semitono.
+function findDrop2Shapes(rootRaw,quality){
+  const qNorm=quality||'major';
+  const wantSt=noteToSt(rootRaw);
+  for(const key in DROP2_TRIAD_SHAPES){
+    const[kRoot,kQual]=key.split('|');
+    if(kQual!==qNorm)continue;
+    if(noteToSt(kRoot)===wantSt)return DROP2_TRIAD_SHAPES[key];
+  }
+  return null;
+}
 async function generateExploreDrop2Triad(rootRaw,quality,barsPerPos){
   barsPerPos=barsPerPos||2;
-  const key=rootRaw+'|'+(quality||'major');
-  const baseSeq=DROP2_TRIAD_SHAPES[key];
-  if(!baseSeq){alert('Todavía no hay posiciones de tríada abierta transcritas para '+key+'.');return null;}
+  const baseSeq=findDrop2Shapes(rootRaw,quality);
+  if(!baseSeq){alert('Todavía no hay posiciones de tríada abierta transcritas para '+rootRaw+'|'+(quality||'major')+'.');return null;}
   const seq=baseSeq.concat(baseSeq.slice(0,-1).reverse());
   if(!cycles.length){alert('Carga primero un tema (XML con acordes) — un vamp de un solo acorde tipo "Explora una tríada".');return null;}
   for(let ci=0;ci<cycles.length;ci++){if(cycles[ci].mode==='ref'){makeCycleCustom(ci);}}
