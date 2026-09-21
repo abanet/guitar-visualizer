@@ -1880,6 +1880,7 @@ body.presentation #channelWatermark{display:flex;}
         </div>
         <div class="mi-toolbar-group">
           <button class="mi-btn" id="miGhostBtn" onclick="miToggleGhosts()" title="Muestra/oculta, tenues, las demás casillas con la misma nota"><i class="ti ti-eye"></i> Ver en todo el mástil</button>
+          <button class="mi-btn active" id="miAnimBtn" onclick="miToggleAnim()" title="Las notas nuevas (y los fantasmas de 'Ver en todo el mástil') caen y se enganchan al aparecer. Desactívalo para que aparezcan al instante."><i class="ti ti-arrow-down"></i> Con caída</button>
           <button class="mi-btn" onclick="miUndo()" title="Deshacer el último click"><i class="ti ti-arrow-back-up"></i> Deshacer</button>
           <button class="mi-btn" onclick="miClear()" title="Ocultar todas las notas reveladas"><i class="ti ti-eraser"></i> Limpiar</button>
         </div>
@@ -12663,6 +12664,8 @@ let miFretCount=13; // trastes visibles (miFretStart..miFretCount), ajustable co
 let miFretStart=0; // traste de partida (0 = incluye la cuerda al aire) — pedido de Alberto: "elegir el traste de partida... por si quiero hacer gráficos de una zona concreta". Por defecto en 0: fretStart=1 NO muestra el traste 1 con su etiqueta (limitación conocida del layout, ver comentario en miNeckSVG), así que para que salga el 1 hace falta partir de 0 (que además muestra la cuerda al aire).
 let miRevealed=new Set(); // "cuerda:traste" de las notas reveladas ahora mismo
 let miAnimateKeys=new Set(); // "cuerda:traste" que deben dibujarse con la animación de "caída" en el PRÓXIMO miRender() — se rellena justo antes de llamar a miRender() (ver miToggle/miCellClick) y se vacía justo después de usarla (ver miRender), así que solo afecta al render inmediatamente siguiente al click, nunca a redibujados posteriores (resize, deshacer, etc.)
+let miAnimEnabled=true; // botón "Con caída" de la barra — apaga/enciende la animación de caída (notas Y fantasmas), pedido de Alberto para poder desactivarla si estorba
+let miAnimateGhosts=false; // true = el PRÓXIMO miNeckSVG() anima (con caída escalonada, ver miNeckSVG) los fantasmas de "Ver en todo el mástil" al aparecer — se pone en miToggleGhosts() y se vacía justo después de usarla, igual que miAnimateKeys
 let miTonic=''; // '' = sin tonalidad (por defecto). Si hay una, decide el color (tónica=rojo, resto=cian) y el punto de partida de la franja de escala
 let miShowGhosts=false; // "ver en todo el mástil": marca tenue el resto de casillas con la misma nota
 let miIvTagsMode='up'; // 'up' (por defecto: solo ascendente, desde la tónica) | 'both' (+ descendente, desde el final) | 'off' (nada) — pedido de Alberto: 3 estados en un solo botón
@@ -12935,6 +12938,11 @@ function miNeckSVG(){
   // (incluye también la cuerda al aire). Detectado sep 2026 al poner "desde 1" por defecto y
   // comprobar con una captura real que el mástil empezaba a etiquetar en el 2.
   for(let f=fretMin+1;f<=fretMax;f++){const x=fretX(f)-fretW/2;s+=`<text x="${x}" y="${H-10}" text-anchor="middle" font-size="16" fill="rgba(255,255,255,.5)" font-family="Arial">${f}</text>`;}
+  // Contador para escalonar la caída de los fantasmas (miAnimateGhosts) — cada fantasma nuevo se
+  // retrasa un poco más que el anterior (15ms), con techo en 550ms para que, con la propia
+  // animación (.38s), el conjunto entero nunca pase de ~930ms aunque haya muchos fantasmas a la
+  // vez (pedido de Alberto: "que la caída no sea más de 1 segundo").
+  let ghostAnimIdx=0;
   for(let si=0;si<6;si++)for(let f=fretMin+(fretMin===0?0:1);f<=fretMax;f++){
     const pc=getNoteStAtFret(si,f);
     const key=si+':'+f;
@@ -12977,8 +12985,13 @@ function miNeckSVG(){
       // de fantasmas (pedido de Alberto).
       const isGhostRoot=tonicPc!=null&&pc===tonicPc;
       const ghostStroke=isGhostRoot?'rgba(229,57,53,.7)':'rgba(255,255,255,.3)';
+      const gFallOpen=miAnimateGhosts?`<g class="mi-note-fall" style="animation-delay:${Math.min(550,ghostAnimIdx*15)}ms">`:'';
+      const gFallClose=miAnimateGhosts?'</g>':'';
+      if(miAnimateGhosts)ghostAnimIdx++;
+      s+=gFallOpen;
       s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="rgba(150,150,150,.14)" stroke="${ghostStroke}" stroke-width="1.5" stroke-dasharray="4,3" pointer-events="none"/>`;
       s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="rgba(255,255,255,.55)" font-size="${Math.round(r*0.7)}" font-weight="600" font-family="Arial" pointer-events="none">${labelFor(pc)}</text>`;
+      s+=gFallClose;
     }
     s+='</g>';
   }
@@ -13227,10 +13240,12 @@ function miRender(){
   miFitNeckToToolbar();
   host.innerHTML=miNeckSVG();
   miAnimateKeys=new Set(); // ya consumida por el miNeckSVG() de arriba — un redibujado posterior no debe repetir la animación
+  miAnimateGhosts=false; // ídem, para los fantasmas
   miFitNeckToToolbar();
   const lbl=document.getElementById('miFretCountLbl');if(lbl)lbl.textContent='hasta '+miFretCount;
   const lblStart=document.getElementById('miFretStartLbl');if(lblStart)lblStart.textContent='desde '+(miFretStart===0?'al aire':miFretStart);
   const gb=document.getElementById('miGhostBtn');if(gb)gb.classList.toggle('active',miShowGhosts);
+  const ab=document.getElementById('miAnimBtn');if(ab)ab.classList.toggle('active',miAnimEnabled);
   miUpdateShiftBtns();
   const tsel=document.getElementById('miTonic');if(tsel&&tsel.value!==miTonic)tsel.value=miTonic;
   const strip=document.getElementById('miScaleStrip');
@@ -13254,7 +13269,7 @@ function miRender(){
 function miToggle(s,f){
   const key=s+':'+f;
   const wasOn=miRevealed.has(key);
-  miAnimateKeys=wasOn?new Set():new Set([key]); // solo anima al APARECER, no al borrar
+  miAnimateKeys=(wasOn||!miAnimEnabled)?new Set():new Set([key]); // solo anima al APARECER, no al borrar, y solo si "Con caída" está activo
   if(wasOn)miRevealed.delete(key);else{miRevealed.add(key);miPlayTone(miFreqFor(s,f));} // solo suena al REVELAR, no al ocultar
   miHistory.push({key,wasOn});
   miRender();
@@ -13269,7 +13284,7 @@ function miCellClick(s,f){
     const key=s+':'+f;
     if(!miRevealed.has(key)){
       miFlash.add(key);
-      miAnimateKeys=new Set([key]);
+      if(miAnimEnabled)miAnimateKeys=new Set([key]);
       miRender();
       clearTimeout(miFlashTimers[key]);
       miFlashTimers[key]=setTimeout(()=>{miFlash.delete(key);delete miFlashTimers[key];miRender();},900);
@@ -13393,7 +13408,22 @@ function miChangeFretStart(delta){
   miRender();
 }
 function miClear(){miRevealed.clear();miHistory=[];Object.values(miFlashTimers).forEach(clearTimeout);miFlashTimers={};miFlash.clear();Object.values(miSoundingTimers).forEach(clearTimeout);miSoundingTimers={};miSounding.clear();miMeasureSel=[];miRender();}
-function miToggleGhosts(){miShowGhosts=!miShowGhosts;miRender();}
+function miToggleGhosts(){
+  const turningOn=!miShowGhosts;
+  miShowGhosts=!miShowGhosts;
+  // Solo animan los fantasmas cuando se ENCIENDEN de golpe (pedido de Alberto: "que caigan, no
+  // todas a la vez, caída de menos de 1 segundo") — al apagar no hay nada que animar (desaparecen
+  // sin más) y nunca suenan (miToggleGhosts no reproduce tono, esto era ya así).
+  if(turningOn&&miAnimEnabled)miAnimateGhosts=true;
+  miRender();
+}
+// Botón "Con caída" de la barra: apaga/enciende la animación de caída para TODO lo que aparezca de
+// aquí en adelante (notas normales y fantasmas) — no reproduce nada con efecto retroactivo sobre
+// lo ya dibujado, solo decide si el PRÓXIMO click/toggle anima o aparece al instante.
+function miToggleAnim(){
+  miAnimEnabled=!miAnimEnabled;
+  const b=document.getElementById('miAnimBtn');if(b)b.classList.toggle('active',miAnimEnabled);
+}
 function miToggleIvTags(){
   miIvTagsMode=miIvTagsMode==='up'?'both':(miIvTagsMode==='both'?'off':'up');
   const b=document.getElementById('miIvTagsBtn');
