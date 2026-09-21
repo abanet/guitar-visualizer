@@ -398,7 +398,13 @@ async function main() {
   }
   const trimOffsetSec = Math.max(0, ((playStartAt || videoStartRef) - videoStartRef) / 1000);
 
-  const outPath = path.join(outDir, `${chordName}_TodasTriadas_${SEQ_LABEL[seq]}_${bpmRounded}bpm.mp4`);
+  // DROP2: nombre corto y explícito (pedido de Alberto, p.ej. "CmDrop2.mp4", "DdimDrop2.mp4") —
+  // chordName ya lleva la calidad tal cual viene del vamp (Cm, Ddim, Caug...), así que basta con
+  // pegarle "Drop2" detrás. A/B/C mantienen el nombre de siempre (llevan bpm/secuencia porque de
+  // esos SÍ se generan varias variantes por tonalidad y hay que distinguirlas en la carpeta).
+  const outPath = seq === 'DROP2'
+    ? path.join(outDir, `${chordName}Drop2.mp4`)
+    : path.join(outDir, `${chordName}_TodasTriadas_${SEQ_LABEL[seq]}_${bpmRounded}bpm.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
   // "-ss" ANTES de "-i" busca por keyframe (rápido pero puede desviarse hasta un GOP entero —
   // con un cambio de posición cada 1 compás/2.67s ese desvío se notaba muchísimo, "está
