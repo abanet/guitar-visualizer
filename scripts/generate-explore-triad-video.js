@@ -124,7 +124,13 @@ async function main() {
   if (!['A', 'B', 'C', 'DROP2'].includes(seq)) { console.error('--seq debe ser A, B, C o DROP2'); process.exit(1); }
   const width = args.width ? parseInt(args.width, 10) : 1600;
   const height = args.height ? parseInt(args.height, 10) : 900;
-  const defaultVisConfigPath = path.resolve(repoRoot, 'scripts/lib/explore-triad-vis-config.json');
+  // DROP2 usa su propia config por defecto (mismo archivo base, solo cambia triadGhostBeats: 4 en
+  // vez de 1) — con 2 compases por posición en vez de 1, la fantasma de 1 beat de antelación
+  // apenas daba tiempo a leerla en un ejercicio ya de por sí difícil (pedido de Alberto: "que la
+  // siguiente posición empiece a aparecer en el segundo compás" — con 4/4, eso son 4 beats de
+  // antelación, el compás 2 entero). --vis-config sigue pudiendo forzar otra cosa explícitamente.
+  const defaultVisConfigPath = path.resolve(repoRoot,
+    seq === 'DROP2' ? 'scripts/lib/explore-triad-drop2-vis-config.json' : 'scripts/lib/explore-triad-vis-config.json');
   let visConfig;
   if (args['vis-config']) {
     visConfig = JSON.parse(fs.readFileSync(path.resolve(args['vis-config']), 'utf8'));

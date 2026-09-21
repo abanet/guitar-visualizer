@@ -5272,6 +5272,21 @@ function renderSVGStatic(parsed){
     t.setAttribute('fill',note.echo?'rgba(255,213,79,.85)':(_dimTN?'rgba(255,255,255,.45)':'white'));
     const fs=displayLabel&&displayLabel.length>2?Math.round(rr*0.65):Math.round(rr*0.85);
     t.setAttribute('font-size',fs);t.setAttribute('font-weight',_dimTN?'normal':'bold');t.setAttribute('font-family','Helvetica,Arial,sans-serif');t.setAttribute('pointer-events','none');t.textContent=displayLabel;g.appendChild(t);
+    // Número de dedo (Tríada abierta/Drop 2, ver data-finger en generateNeckSVG/svgStringToParsed):
+    // placa oscura pequeña arriba a la derecha de la nota, para leerse igual encima de una cuerda
+    // blanca que de un fantasma. Nada que ver con isTNparsed/ownStyle — el dedo es del PDF, no
+    // depende del estilo de color activo.
+    if(Number.isFinite(note.finger)){
+      const fr2=Math.max(8,Math.round(rr*0.4));
+      const fx2=note.cx+rr*0.72,fy2=note.cy-rr*0.72;
+      const fc=document.createElementNS(NS,'circle');fc.setAttribute('cx',fx2);fc.setAttribute('cy',fy2);fc.setAttribute('r',fr2);
+      fc.setAttribute('fill','rgba(20,20,20,.75)');fc.setAttribute('stroke','rgba(255,255,255,.4)');fc.setAttribute('stroke-width','1');fc.setAttribute('pointer-events','none');
+      g.appendChild(fc);
+      const ft=document.createElementNS(NS,'text');ft.setAttribute('x',fx2);ft.setAttribute('y',fy2);ft.setAttribute('text-anchor','middle');ft.setAttribute('dominant-baseline','central');
+      ft.setAttribute('fill','#ffd640');ft.setAttribute('font-size',Math.round(fr2*1.15));ft.setAttribute('font-weight','bold');ft.setAttribute('font-family','Helvetica,Arial,sans-serif');ft.setAttribute('pointer-events','none');
+      ft.textContent=String(note.finger);
+      g.appendChild(ft);
+    }
     canvas.appendChild(g);
   });
   }
@@ -5833,7 +5848,17 @@ function generateNeckSVG(voicing,chord,fretStart=0,fretEnd=15,msg=null,showEcho=
     const isRoot=intervals[i]==='R';
     const fill=isRoot?'#E53935':'#26C6DA';
     const lbl=notes[i];
-    s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" data-st="${getNoteStAtFret(sIdx,f)}"/>`;
+    // Número de dedo (opcional — solo lo trae buildDrop2Voicing, transcrito del PDF; el resto de
+    // voicings de este motor —Explora A/B/C, getChordVoicing— no llevan `fingers`, así que
+    // data-finger no se escribe para ellas). VA COMO ATRIBUTO en el propio círculo de la nota, NO
+    // como un círculo/texto aparte: el mástil en vivo no dibuja este SVG tal cual — lo parsea a
+    // notas (svgStringToParsed, que descarta cualquier círculo de radio<10 no reconocido, ver ese
+    // comentario) y las vuelve a dibujar (renderSVGStatic) — un badge aparte se perdía siempre en
+    // ese viaje (bug reportado: "no veo nada de los dedos", el badge SÍ salía en el SVG crudo pero
+    // nunca en el vídeo/mástil en vivo). Con data-finger en la nota real, sobrevive el viaje y
+    // renderSVGStatic dibuja el badge junto a ella (ver ese mismo comentario ahí).
+    const fingerAttr=(voicing.fingers&&voicing.fingers[i]!=null)?` data-finger="${voicing.fingers[i]}"`:'';
+    s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" data-st="${getNoteStAtFret(sIdx,f)}"${fingerAttr}/>`;
     s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="white" font-size="${lbl.length>2?Math.round(r*0.65):Math.round(r*0.85)}" font-weight="bold" font-family="Arial,sans-serif">${lbl}</text>`;
   });
   // Posición "eco" (ver "Explora una tríada en el mástil", feedback de Alberto): con el mástil
@@ -5960,6 +5985,9 @@ function svgStringToParsed(svgStr){
     // generated circles carry no stroke attribute, so this is a no-op for them.
     const stk=c.getAttribute('stroke');if(stk){note.stroke=stk;const sw=c.getAttribute('stroke-width');if(sw)note.strokeWidth=sw;}
     const dst=c.getAttribute('data-st');if(dst!=null&&dst!=='')note.st=parseInt(dst,10);
+    // data-finger (ver generateNeckSVG/buildDrop2Voicing): dedo transcrito del PDF para la
+    // tríada abierta (Drop 2) — renderSVGStatic dibuja el badge a partir de esto.
+    const dfg=c.getAttribute('data-finger');if(dfg!=null&&dfg!=='')note.finger=parseInt(dfg,10);
     // data-echo (ver generateNeckSVG): posición "eco" de "Explora una tríada" — renderSVGStatic
     // debe pintarla con su estilo amarillo tenue SIEMPRE, incluso con forceOwnNoteStyle activado
     // (que si no, repintaría este círculo con el rojo/cian fijo y perdería el marcador).
@@ -6490,29 +6518,32 @@ async function generateExploreTriadC(){
 // = 7 posiciones por grupo, 21 en total). string: 0=6ª(Mi grave) … 5=1ª(mi agudo), igual que
 // TRIAD_STRING_GROUPS. De momento solo está transcrita Do mayor (ver conversación) — se irán
 // añadiendo el resto de tónicas/calidades del mismo PDF sin tocar el motor de reproducción.
+// finger: dedo de la mano izquierda tal cual lo indica el PDF (0=cuerda al aire), también
+// transcrito literal — nunca calculado (un dedo "razonable" por geometría no tiene por qué ser el
+// que de verdad usa el método, sobre todo en los tramos con estiramiento).
 const DROP2_TRIAD_SHAPES={
   'C|major':[
-    [{string:3,fret:0},{string:1,fret:3},{string:0,fret:0}],
-    [{string:3,fret:5},{string:2,fret:2},{string:0,fret:3}],
-    [{string:3,fret:9},{string:1,fret:10},{string:0,fret:8}],
-    [{string:3,fret:12},{string:2,fret:10},{string:0,fret:12}],
-    [{string:3,fret:9},{string:1,fret:10},{string:0,fret:8}],
-    [{string:3,fret:5},{string:2,fret:2},{string:0,fret:3}],
-    [{string:3,fret:0},{string:1,fret:3},{string:0,fret:0}],
-    [{string:4,fret:5},{string:2,fret:5},{string:1,fret:3}],
-    [{string:4,fret:8},{string:3,fret:5},{string:1,fret:7}],
-    [{string:4,fret:13},{string:3,fret:9},{string:1,fret:10}],
-    [{string:4,fret:17},{string:2,fret:17},{string:1,fret:15}],
-    [{string:4,fret:13},{string:3,fret:9},{string:1,fret:10}],
-    [{string:4,fret:8},{string:3,fret:5},{string:1,fret:7}],
-    [{string:4,fret:5},{string:2,fret:5},{string:1,fret:3}],
-    [{string:5,fret:3},{string:4,fret:1},{string:2,fret:2}],
-    [{string:5,fret:8},{string:4,fret:5},{string:2,fret:5}],
-    [{string:5,fret:12},{string:3,fret:12},{string:2,fret:10}],
-    [{string:5,fret:15},{string:4,fret:13},{string:2,fret:14}],
-    [{string:5,fret:12},{string:3,fret:12},{string:2,fret:10}],
-    [{string:5,fret:8},{string:4,fret:5},{string:2,fret:5}],
-    [{string:5,fret:3},{string:4,fret:1},{string:2,fret:2}],
+    [{string:3,fret:0,finger:0},{string:1,fret:3,finger:2},{string:0,fret:0,finger:0}],
+    [{string:3,fret:5,finger:4},{string:2,fret:2,finger:1},{string:0,fret:3,finger:2}],
+    [{string:3,fret:9,finger:2},{string:1,fret:10,finger:3},{string:0,fret:8,finger:1}],
+    [{string:3,fret:12,finger:4},{string:2,fret:10,finger:1},{string:0,fret:12,finger:3}],
+    [{string:3,fret:9,finger:2},{string:1,fret:10,finger:3},{string:0,fret:8,finger:1}],
+    [{string:3,fret:5,finger:4},{string:2,fret:2,finger:1},{string:0,fret:3,finger:2}],
+    [{string:3,fret:0,finger:0},{string:1,fret:3,finger:2},{string:0,fret:0,finger:0}],
+    [{string:4,fret:5,finger:4},{string:2,fret:5,finger:3},{string:1,fret:3,finger:1}],
+    [{string:4,fret:8,finger:4},{string:3,fret:5,finger:1},{string:1,fret:7,finger:3}],
+    [{string:4,fret:13,finger:4},{string:3,fret:9,finger:1},{string:1,fret:10,finger:2}],
+    [{string:4,fret:17,finger:4},{string:2,fret:17,finger:3},{string:1,fret:15,finger:1}],
+    [{string:4,fret:13,finger:4},{string:3,fret:9,finger:1},{string:1,fret:10,finger:2}],
+    [{string:4,fret:8,finger:4},{string:3,fret:5,finger:1},{string:1,fret:7,finger:3}],
+    [{string:4,fret:5,finger:4},{string:2,fret:5,finger:3},{string:1,fret:3,finger:1}],
+    [{string:5,fret:3,finger:4},{string:4,fret:1,finger:1},{string:2,fret:2,finger:2}],
+    [{string:5,fret:8,finger:4},{string:4,fret:5,finger:1},{string:2,fret:5,finger:1}],
+    [{string:5,fret:12,finger:4},{string:3,fret:12,finger:3},{string:2,fret:10,finger:1}],
+    [{string:5,fret:15,finger:4},{string:4,fret:13,finger:1},{string:2,fret:14,finger:2}],
+    [{string:5,fret:12,finger:4},{string:3,fret:12,finger:3},{string:2,fret:10,finger:1}],
+    [{string:5,fret:8,finger:4},{string:4,fret:5,finger:1},{string:2,fret:5,finger:1}],
+    [{string:5,fret:3,finger:4},{string:4,fret:1,finger:1},{string:2,fret:2,finger:2}],
   ],
 };
 // Construye un objeto "voicing" con el MISMO formato que getChordVoicing (frets/strings/assigned/
@@ -6532,7 +6563,8 @@ function buildDrop2Voicing(shape,rootRaw,quality){
   });
   return{frets,strings,assigned,
     notes:assigned.map(a=>spelled[a.interval]||NTS[a.st]),
-    intervals:assigned.map(a=>a.interval)};
+    intervals:assigned.map(a=>a.interval),
+    fingers:shape.map(n=>n.finger!=null?n.finger:null)};
 }
 // Aplica la secuencia de una tónica+calidad al tema (vamp de un solo acorde) cargado en Audio &
 // XML — mismo patrón de bloques de `barsPerPos` compases que applyExploreTriadSequence, pero
