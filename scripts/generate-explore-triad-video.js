@@ -341,28 +341,39 @@ async function main() {
     const spread = t0Candidates[nS - 1] - t0Candidates[0];
     log(`arranque real (t0) de ${nS} muestras estables · dispersión=${spread.toFixed(1)}ms (¿pequeña? si no, algo va mal)`);
 
-    // 2ª pasada en intervalos: applyExploreTriadSequence ya hornea el intervalo en el mástil vía
-    // generateNeckSVG, pero renderSVGStatic IGNORA esa etiqueta horneada y la recalcula en vivo a
-    // partir de "Mástil:" (getNoteDisplay/globalNoteDisplay) — por eso el mástil se quedaba
-    // siempre en nombres de nota, aunque la fila de "Notas del acorde" (que no depende de ese
-    // selector) sí alternaba bien. Aquí se cambia ESE selector a mitad de la grabación, en el
-    // instante exacto en que empieza la 2ª pasada (bug reportado: "las tríadas no cambian nunca a
-    // formato intervalos"). Se descuenta lo que el muestreo de arriba ya ha consumido de reloj
-    // real (~4.5s) para no disparar el cambio tarde.
-    const lapLen = seq === 'C' ? 12 : 23; // nº de posiciones de una vuelta completa de la secuencia (A y B: ida+vuelta=23; C: 12, sin ida/vuelta)
-    const { introSec, barSec } = await page.evaluate(() => ({ introSec: getIntroSec() + getOffSec(), barSec: getBarSec() }));
-    const pass2AtSec = introSec + lapLen * barSec; // 1 compás/posición
-    const elapsedSoFarSec = (Date.now() - t0) / 1000;
-    const waitToPass2 = pass2AtSec - elapsedSoFarSec;
-    if (pass2AtSec > 0 && pass2AtSec < total && waitToPass2 > 0) {
-      await page.waitForTimeout(waitToPass2 * 1000);
-      await page.evaluate(() => {
-        const gnd = document.getElementById('globalNoteDisplay');
-        if (gnd) { gnd.value = 'intervals'; onGlobalNoteDisplayChange(); }
-      });
-      log(`cambiado a intervalos en t=${pass2AtSec.toFixed(1)}s (2ª pasada)`);
-      await page.waitForTimeout((total - pass2AtSec) * 1000);
+    // 2ª pasada en intervalos: SOLO para A/B/C (applyExploreTriadSequence hornea 2 pasadas,
+    // nombres → intervalos, y lapLen=23/12 depende de SU longitud de vuelta). DROP2 no tiene esa
+    // 2ª pasada — ahí siempre son 21 posiciones ida + 20 vuelta, pero además Alberto pidió
+    // explícitamente que el vídeo entero se quede en nombres de nota, sin pasar nunca a
+    // intervalos ("creo que es casi mejor que salgan solo notas") — así que para DROP2 este
+    // bloque entero se salta y el vídeo graba tal cual, siempre en nombres.
+    if (seq !== 'DROP2') {
+      // applyExploreTriadSequence ya hornea el intervalo en el mástil vía generateNeckSVG, pero
+      // renderSVGStatic IGNORA esa etiqueta horneada y la recalcula en vivo a partir de "Mástil:"
+      // (getNoteDisplay/globalNoteDisplay) — por eso el mástil se quedaba siempre en nombres de
+      // nota, aunque la fila de "Notas del acorde" (que no depende de ese selector) sí alternaba
+      // bien. Aquí se cambia ESE selector a mitad de la grabación, en el instante exacto en que
+      // empieza la 2ª pasada (bug reportado: "las tríadas no cambian nunca a formato intervalos").
+      // Se descuenta lo que el muestreo de arriba ya ha consumido de reloj real (~4.5s) para no
+      // disparar el cambio tarde.
+      const lapLen = seq === 'C' ? 12 : 23; // nº de posiciones de una vuelta completa (A y B: ida+vuelta=23; C: 12, sin ida/vuelta)
+      const { introSec, barSec } = await page.evaluate(() => ({ introSec: getIntroSec() + getOffSec(), barSec: getBarSec() }));
+      const pass2AtSec = introSec + lapLen * barSec; // 1 compás/posición
+      const elapsedSoFarSec = (Date.now() - t0) / 1000;
+      const waitToPass2 = pass2AtSec - elapsedSoFarSec;
+      if (pass2AtSec > 0 && pass2AtSec < total && waitToPass2 > 0) {
+        await page.waitForTimeout(waitToPass2 * 1000);
+        await page.evaluate(() => {
+          const gnd = document.getElementById('globalNoteDisplay');
+          if (gnd) { gnd.value = 'intervals'; onGlobalNoteDisplayChange(); }
+        });
+        log(`cambiado a intervalos en t=${pass2AtSec.toFixed(1)}s (2ª pasada)`);
+        await page.waitForTimeout((total - pass2AtSec) * 1000);
+      } else {
+        await page.waitForTimeout(Math.max(0, total - elapsedSoFarSec) * 1000);
+      }
     } else {
+      const elapsedSoFarSec = (Date.now() - t0) / 1000;
       await page.waitForTimeout(Math.max(0, total - elapsedSoFarSec) * 1000);
     }
     await page.evaluate(() => { if (typeof pauseIt === 'function') pauseIt(); });
