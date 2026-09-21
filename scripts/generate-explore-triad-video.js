@@ -37,7 +37,7 @@ const { acquireRenderLock } = require('./lib/batch-sessions');
 
 // Nombre de fichero final: <Acorde>_TodasTriadas_<Etiqueta>_<bpm>bpm.mp4 (p.ej.
 // Gm_TodasTriadas_Horizontal_90bpm.mp4) — convención pedida por Alberto para esta tanda de vídeos.
-const SEQ_LABEL = { A: 'Horizontal', B: 'Vertical', C: 'Azar' };
+const SEQ_LABEL = { A: 'Horizontal', B: 'Vertical', C: 'Azar', DROP2: 'AbiertaDrop2' };
 
 function parseArgs(argv) {
   const out = {};
@@ -121,7 +121,7 @@ async function main() {
   const outDir = path.resolve(args.out || './video-out');
   const extraSec = args.extra !== undefined ? parseFloat(args.extra) : 2;
   const seq = String(args.seq || 'A').toUpperCase();
-  if (seq !== 'A' && seq !== 'B' && seq !== 'C') { console.error('--seq debe ser A, B o C'); process.exit(1); }
+  if (!['A', 'B', 'C', 'DROP2'].includes(seq)) { console.error('--seq debe ser A, B, C o DROP2'); process.exit(1); }
   const width = args.width ? parseInt(args.width, 10) : 1600;
   const height = args.height ? parseInt(args.height, 10) : 900;
   const defaultVisConfigPath = path.resolve(repoRoot, 'scripts/lib/explore-triad-vis-config.json');
@@ -227,9 +227,23 @@ async function main() {
     }, null, { timeout: 20000 });
 
     log(`generando secuencia ${seq}…`);
-    const genResult = await page.evaluate((s) => (
-      s === 'A' ? generateExploreTriadA() : s === 'B' ? generateExploreTriadB() : generateExploreTriadC()
-    ), seq);
+    const genResult = await page.evaluate((s) => {
+      if (s === 'A') return generateExploreTriadA();
+      if (s === 'B') return generateExploreTriadB();
+      if (s === 'C') return generateExploreTriadC();
+      return null; // DROP2 se genera aparte, abajo (necesita la tónica/calidad reales del vamp)
+    }, seq);
+    if (seq === 'DROP2') {
+      const drop2Result = await page.evaluate((chordStr) => {
+        const cm = (chordStr || 'C').match(/^([A-G][b#]?)(.*)$/);
+        const rootRaw = cm ? cm[1] : 'C';
+        const qualityText = cm ? cm[2].trim() : '';
+        const quality = /^m(?!aj)/.test(qualityText) ? 'm' : '';
+        return generateExploreDrop2Triad(rootRaw, quality, 2);
+      }, meta.chord);
+      if (!drop2Result) { throw new Error('generateExploreDrop2Triad no devolvió nada — revisa que la tónica/calidad del vamp tenga posiciones transcritas en DROP2_TRIAD_SHAPES.'); }
+      log(`Drop2: ${drop2Result.applied} compases generados` + (drop2Result.bumpedTo ? ` (mástil ampliado a ${drop2Result.bumpedTo})` : ''));
+    }
 
     // Con 1 compás por posición, los 2 compases de anticipación fantasma por defecto (pensados
     // para figuras que aguantan varios compases) se comían la mitad del compás en transición

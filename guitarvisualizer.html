@@ -40,6 +40,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn.green{background:#27500A;color:white;border-color:#27500A;}
 .btn.green:hover{opacity:.88;}
 .mi-toolbar{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+/* Nota "cayendo" al aparecer en el mástil interactivo (pedido de Alberto: gracia sutil y rápida,
+   sin que lleve tiempo notarlo) — cae desde arriba, se pasa un poco al aterrizar (como si se
+   enganchara) y asienta con un par de rebotes minúsculos. Solo se aplica al <g> interno de la
+   nota que ACABA de revelarse (ver miAnimateKeys/miNeckSVG), nunca al círculo de click que lo
+   envuelve, para no desplazar la zona clicable durante la animación.
+   transform-box:fill-box hace que el translateY se mida desde el propio círculo (su bounding box),
+   no desde el origen del <svg> — si no, cada nota "caería" desde un sitio distinto según su cy. */
+@keyframes mi-note-fall{
+  0%{transform:translateY(-46px);opacity:0;}
+  55%{transform:translateY(6px);opacity:1;}
+  72%{transform:translateY(-3px);}
+  86%{transform:translateY(1.5px);}
+  100%{transform:translateY(0);}
+}
+.mi-note-fall{animation:mi-note-fall .38s cubic-bezier(.34,1.15,.64,1) both;transform-box:fill-box;transform-origin:50% 50%;}
+/* Vibración mínima de la cuerda al "engancharse" la nota — arranca con un pequeño retraso (.22s)
+   para que coincida con el instante en que mi-note-fall aterriza (su pico de rebote, ~55% de
+   .38s). Se aplica directamente a la <line> de esa cuerda, no a toda la fila de trastes. */
+@keyframes mi-string-wobble{
+  0%{transform:translateY(0);}
+  20%{transform:translateY(-2.4px);}
+  40%{transform:translateY(1.8px);}
+  60%{transform:translateY(-1px);}
+  80%{transform:translateY(0.4px);}
+  100%{transform:translateY(0);}
+}
+.mi-string-wobble{animation:mi-string-wobble .3s ease-out .22s both;transform-box:fill-box;}
+@media (prefers-reduced-motion:reduce){.mi-note-fall,.mi-string-wobble{animation:none;}}
 .mi-toolbar-group{display:flex;gap:8px;align-items:center;background:rgba(38,38,38,.9);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 10px;box-shadow:0 4px 14px rgba(0,0,0,.35);backdrop-filter:blur(4px);}
 .mi-toolbar-label{color:#fff;font:600 13px Arial;min-width:66px;text-align:center;}
 .mi-btn{padding:8px 14px;font-size:13px;font-weight:600;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:#262626;color:#eee;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap;}
@@ -6448,6 +6476,120 @@ async function generateExploreTriadC(){
     '\nModo cambiado a Tríadas. Revísalas en el editor y pulsa Visualizador.');
 }
 
+// ── TRÍADA ABIERTA (Drop 2) EN EL MÁSTIL ────────────────────────────────────────────────────────
+// Mismo espíritu que "Explora una tríada" (arriba) pero para la tríada ABIERTA de 4 cuerdas (no la
+// cerrada de 3) — root en graves, 5ª o 3ª repartida entre las otras 3 cuerdas según la posición,
+// deslizándose por todo el mástil alternando cuál de las 2 cuerdas centrales del grupo de 4 lleva
+// la voz interior. Las posiciones NO se calculan aquí (a diferencia de getChordVoicing/
+// TRIAD_STRING_GROUPS): vienen transcritas literalmente de "The UnCAGED System" (Alex Rockwell) —
+// pedido explícito de Alberto, que ya tiene la digitación validada en el libro y no quiere que la
+// app "invente" una alternativa. DROP2_TRIAD_SHAPES guarda, por tónica+calidad, la lista ordenada
+// de posiciones tal cual aparecen en el PDF (3 grupos de 4 cuerdas — 6-5-4-3, 5-4-3-2, 4-3-2-1 —,
+// cada uno ya en ida y vuelta: 4 formas únicas subiendo el mástil + las mismas 3 repetidas bajando
+// = 7 posiciones por grupo, 21 en total). string: 0=6ª(Mi grave) … 5=1ª(mi agudo), igual que
+// TRIAD_STRING_GROUPS. De momento solo está transcrita Do mayor (ver conversación) — se irán
+// añadiendo el resto de tónicas/calidades del mismo PDF sin tocar el motor de reproducción.
+const DROP2_TRIAD_SHAPES={
+  'C|major':[
+    [{string:3,fret:0},{string:1,fret:3},{string:0,fret:0}],
+    [{string:3,fret:5},{string:2,fret:2},{string:0,fret:3}],
+    [{string:3,fret:9},{string:1,fret:10},{string:0,fret:8}],
+    [{string:3,fret:12},{string:2,fret:10},{string:0,fret:12}],
+    [{string:3,fret:9},{string:1,fret:10},{string:0,fret:8}],
+    [{string:3,fret:5},{string:2,fret:2},{string:0,fret:3}],
+    [{string:3,fret:0},{string:1,fret:3},{string:0,fret:0}],
+    [{string:4,fret:5},{string:2,fret:5},{string:1,fret:3}],
+    [{string:4,fret:8},{string:3,fret:5},{string:1,fret:7}],
+    [{string:4,fret:13},{string:3,fret:9},{string:1,fret:10}],
+    [{string:4,fret:17},{string:2,fret:17},{string:1,fret:15}],
+    [{string:4,fret:13},{string:3,fret:9},{string:1,fret:10}],
+    [{string:4,fret:8},{string:3,fret:5},{string:1,fret:7}],
+    [{string:4,fret:5},{string:2,fret:5},{string:1,fret:3}],
+    [{string:5,fret:3},{string:4,fret:1},{string:2,fret:2}],
+    [{string:5,fret:8},{string:4,fret:5},{string:2,fret:5}],
+    [{string:5,fret:12},{string:3,fret:12},{string:2,fret:10}],
+    [{string:5,fret:15},{string:4,fret:13},{string:2,fret:14}],
+    [{string:5,fret:12},{string:3,fret:12},{string:2,fret:10}],
+    [{string:5,fret:8},{string:4,fret:5},{string:2,fret:5}],
+    [{string:5,fret:3},{string:4,fret:1},{string:2,fret:2}],
+  ],
+};
+// Construye un objeto "voicing" con el MISMO formato que getChordVoicing (frets/strings/assigned/
+// notes/intervals) a partir de una forma transcrita — reutiliza generateNeckSVG sin cambiarlo.
+// Solo calcula ETIQUETAS (nombre de nota, si es la tónica) a partir de las notas reales que ya
+// vienen en la forma — nunca decide qué traste/cuerda usar, eso es siempre el dato transcrito.
+function buildDrop2Voicing(shape,rootRaw,quality){
+  const rootSt=noteToSt(rootRaw);
+  const ivDefs=resolveChordDefs(quality);
+  const spelled={};ivDefs.forEach(iv=>{spelled[iv.n]=spellNote(rootRaw,iv.n,iv.st);});
+  const ivByPc={};ivDefs.forEach(iv=>{ivByPc[((rootSt+iv.st)%12+12)%12]=iv.n;});
+  const strings=shape.map(n=>n.string),frets=shape.map(n=>n.fret);
+  const assigned=shape.map(n=>{
+    const st=getNoteStAtFret(n.string,n.fret);
+    const iv=ivByPc[st]||'?';
+    return{st,interval:iv};
+  });
+  return{frets,strings,assigned,
+    notes:assigned.map(a=>spelled[a.interval]||NTS[a.st]),
+    intervals:assigned.map(a=>a.interval)};
+}
+// Aplica la secuencia de una tónica+calidad al tema (vamp de un solo acorde) cargado en Audio &
+// XML — mismo patrón de bloques de `barsPerPos` compases que applyExploreTriadSequence, pero
+// leyendo las formas de DROP2_TRIAD_SHAPES en vez de calcularlas. Ida y vuelta de la secuencia
+// COMPLETA (21 posiciones ida + 20 vuelta, sin repetir la de giro) — cada grupo de 4 cuerdas ya
+// trae su propio ida/vuelta interno (ver comentario de arriba), esto añade el del ejercicio entero.
+async function generateExploreDrop2Triad(rootRaw,quality,barsPerPos){
+  barsPerPos=barsPerPos||2;
+  const key=rootRaw+'|'+(quality||'major');
+  const baseSeq=DROP2_TRIAD_SHAPES[key];
+  if(!baseSeq){alert('Todavía no hay posiciones de tríada abierta transcritas para '+key+'.');return null;}
+  const seq=baseSeq.concat(baseSeq.slice(0,-1).reverse());
+  if(!cycles.length){alert('Carga primero un tema (XML con acordes) — un vamp de un solo acorde tipo "Explora una tríada".');return null;}
+  for(let ci=0;ci<cycles.length;ci++){if(cycles[ci].mode==='ref'){makeCycleCustom(ci);}}
+  const all=getAllBars();
+  if(!all.length){alert('Carga primero un tema (XML con acordes).');return null;}
+  const barLoc=[];
+  {let g=0;for(let ci=0;ci<cycles.length;ci++){const eb=getEffectiveBars(ci);for(let li=0;li<eb.length;li++){if(g<all.length){barLoc[g]={ci,local:li};g++;}}}}
+  const flat=[];
+  all.forEach((b,bi)=>{const ci=barLoc[bi]?.ci??0;getBarSegments(b).forEach(s=>flat.push({bi,chord:s.chord,beat:s.beat||1,ci}));});
+
+  let sharedFretEnd=13;
+  seq.forEach(shape=>{const mx=Math.max(...shape.map(n=>n.fret));if(mx>sharedFretEnd)sharedFretEnd=mx;});
+  const bumpedTo=bumpMaxFretsShownIfNeeded(sharedFretEnd);
+  let applied=0;
+  const usedSlotsByBar={};
+  for(let idx=0;idx<flat.length;idx++){
+    const f=flat[idx];
+    const shape=seq[Math.floor(f.bi/barsPerPos)%seq.length];
+    const voicing=buildDrop2Voicing(shape,rootRaw,quality);
+    const svg=generateNeckSVG(voicing,f.chord,0,sharedFretEnd,'Tríada abierta (Drop 2)',true);
+    if(!svg)continue;
+    const parsed=svgStringToParsed(svg);
+    let thumb=null;try{thumb=await svgToThumb(svg,320,116);}catch(e){}
+    const loc=barLoc[f.bi];if(!loc)continue;
+    const target=getTargetBars(loc.ci);
+    if(target&&target[loc.local]){
+      const slotIdx=Math.round((f.beat||1)-1);
+      target[loc.local].imgs[slotIdx]={type:'svg',data:svg,name:f.chord+' tríada abierta (Drop 2)',thumb,svgParsed:parsed};
+      (usedSlotsByBar[f.bi]=usedSlotsByBar[f.bi]||new Set()).add(slotIdx);
+      applied++;
+    }
+  }
+  all.forEach((b,bi)=>{
+    const loc=barLoc[bi];if(!loc)return;
+    const target=getTargetBars(loc.ci);
+    if(!target||!target[loc.local])return;
+    const used=usedSlotsByBar[bi]||new Set();
+    for(let s=0;s<4;s++){if(!used.has(s))target[loc.local].imgs[s]=null;}
+  });
+  renderEditor();renderBank();checkReady();
+  if(typeof setExerciseType==='function'){
+    const sel=document.getElementById('exerciseType');if(sel)sel.value='triads';
+    setExerciseType('triads');
+  }
+  return{applied,bumpedTo};
+}
+
 // Apply auto-generated minimal-movement triads to every bar/segment of the loaded exercise.
 async function autoGenerateTriads(){
   if(!cycles.length){alert('Carga primero un tema (XML con acordes).');return;}
@@ -12520,6 +12662,7 @@ function seekClick(e){if(!audioEl||!audioEl.duration)return;const p=e.offsetX/e.
 let miFretCount=13; // trastes visibles (miFretStart..miFretCount), ajustable con los botones +/- — pedido de Alberto: por defecto 13 trastes desde el traste 1 (con fretStart=0, la cuerda al aire se ve además, como casilla previa)
 let miFretStart=0; // traste de partida (0 = incluye la cuerda al aire) — pedido de Alberto: "elegir el traste de partida... por si quiero hacer gráficos de una zona concreta". Por defecto en 0: fretStart=1 NO muestra el traste 1 con su etiqueta (limitación conocida del layout, ver comentario en miNeckSVG), así que para que salga el 1 hace falta partir de 0 (que además muestra la cuerda al aire).
 let miRevealed=new Set(); // "cuerda:traste" de las notas reveladas ahora mismo
+let miAnimateKeys=new Set(); // "cuerda:traste" que deben dibujarse con la animación de "caída" en el PRÓXIMO miRender() — se rellena justo antes de llamar a miRender() (ver miToggle/miCellClick) y se vacía justo después de usarla (ver miRender), así que solo afecta al render inmediatamente siguiente al click, nunca a redibujados posteriores (resize, deshacer, etc.)
 let miTonic=''; // '' = sin tonalidad (por defecto). Si hay una, decide el color (tónica=rojo, resto=cian) y el punto de partida de la franja de escala
 let miShowGhosts=false; // "ver en todo el mástil": marca tenue el resto de casillas con la misma nota
 let miIvTagsMode='up'; // 'up' (por defecto: solo ascendente, desde la tónica) | 'both' (+ descendente, desde el final) | 'off' (nada) — pedido de Alberto: 3 estados en un solo botón
@@ -12766,12 +12909,15 @@ function miNeckSVG(){
   const activePcs=new Set();
   miRevealed.forEach(key=>{const[s0,f0]=key.split(':').map(Number);activePcs.add(getNoteStAtFret(s0,f0));});
   const labelFor=pc=>miLabelFor(pc,tonicPc);
+  // Cuerdas que llevan alguna nota recién aparecida esta vez (ver miAnimateKeys) — esas <line>
+  // llevan la clase de vibración; el resto se dibuja igual que siempre.
+  const animateStrings=new Set([...miAnimateKeys].map(k=>Number(k.split(':')[0])));
   let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;max-width:100%;display:block;">`;
   // La cejilla (línea gruesa) solo tiene sentido si de verdad se ve el traste 0 (cuerda al aire);
   // si se empieza más adelante, el borde izquierdo es solo un traste más, línea fina como el resto.
   if(fretMin===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretMin+(fretMin===0?1:0);f<=fretMax;f++){const x=fretX(f);s+=`<line x1="${x}" y1="${topPad}" x2="${x}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>`;}
-  for(let si=0;si<6;si++){const y=strY(si);s+=`<line x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${(0.45-si*0.04).toFixed(2)})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
+  for(let si=0;si<6;si++){const y=strY(si);const wob=animateStrings.has(si)?' class="mi-string-wobble"':'';s+=`<line${wob} x1="${leftPad}" y1="${y}" x2="${W-rightPad}" y2="${y}" stroke="rgba(255,255,255,${(0.45-si*0.04).toFixed(2)})" stroke-width="${(3-si*0.44).toFixed(2)}"/>`;}
   [3,5,7,9,12,15,17,19,21].forEach(f=>{
     if(f>fretMin&&f<=fretMax){
       const x=fretX(f)-fretW/2;
@@ -12809,6 +12955,13 @@ function miNeckSVG(){
       // generamos, ver scripts/lib/default-triad-vis-config.json y renderSVGStatic): relleno
       // semitransparente rojo/cian + borde blanco suave, NO el rojo/cian sólido de otras vistas.
       const fill=(tonicPc!=null&&pc===tonicPc)?'rgba(229,57,53,.45)':'rgba(38,198,218,.5)';
+      // Si esta nota acaba de aparecer (miAnimateKeys, ver miToggle/miCellClick), el círculo+texto
+      // van en su propio <g class="mi-note-fall"> — el círculo de click de arriba queda FUERA, así
+      // la zona clicable no se mueve mientras "cae". Nunca al redibujar por otro motivo (resize,
+      // deshacer...): miAnimateKeys se vacía justo después de generar este SVG (ver miRender).
+      const fallOpen=miAnimateKeys.has(key)?'<g class="mi-note-fall">':'';
+      const fallClose=miAnimateKeys.has(key)?'</g>':'';
+      s+=fallOpen;
       s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="rgba(255,255,255,.25)" stroke-width="1" pointer-events="none"/>`;
       if(miSounding.has(key))s+=`<circle cx="${x}" cy="${y}" r="${r+5}" fill="none" stroke="#ffd640" stroke-width="3" pointer-events="none"/>`;
       // Si se está mostrando el NOMBRE de la nota (no el intervalo) y es una de las 5 notas
@@ -12817,6 +12970,7 @@ function miNeckSVG(){
       const enhOk=MI_ENH_PAIRS[pc]&&!(miLabelMode==='intervals'&&tonicPc!=null);
       const textEvt=enhOk?`cursor="pointer" onclick="miCycleEnh(${pc},event)"`:`pointer-events="none"`;
       s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="white" font-size="${Math.round(r*0.7)}" font-weight="bold" font-family="Arial" ${textEvt}>${labelFor(pc)}</text>`;
+      s+=fallClose;
     }else if(miShowGhosts&&activePcs.has(pc)){
       // Fantasma de la tónica: mismo trazo discontinuo, pero en rojo — para que destaque igual
       // que la tónica "de verdad" (revelada) se destaca en rojo, y no se confunda con el resto
@@ -13072,6 +13226,7 @@ function miRender(){
   }
   miFitNeckToToolbar();
   host.innerHTML=miNeckSVG();
+  miAnimateKeys=new Set(); // ya consumida por el miNeckSVG() de arriba — un redibujado posterior no debe repetir la animación
   miFitNeckToToolbar();
   const lbl=document.getElementById('miFretCountLbl');if(lbl)lbl.textContent='hasta '+miFretCount;
   const lblStart=document.getElementById('miFretStartLbl');if(lblStart)lblStart.textContent='desde '+(miFretStart===0?'al aire':miFretStart);
@@ -13099,6 +13254,7 @@ function miRender(){
 function miToggle(s,f){
   const key=s+':'+f;
   const wasOn=miRevealed.has(key);
+  miAnimateKeys=wasOn?new Set():new Set([key]); // solo anima al APARECER, no al borrar
   if(wasOn)miRevealed.delete(key);else{miRevealed.add(key);miPlayTone(miFreqFor(s,f));} // solo suena al REVELAR, no al ocultar
   miHistory.push({key,wasOn});
   miRender();
@@ -13113,6 +13269,7 @@ function miCellClick(s,f){
     const key=s+':'+f;
     if(!miRevealed.has(key)){
       miFlash.add(key);
+      miAnimateKeys=new Set([key]);
       miRender();
       clearTimeout(miFlashTimers[key]);
       miFlashTimers[key]=setTimeout(()=>{miFlash.delete(key);delete miFlashTimers[key];miRender();},900);
