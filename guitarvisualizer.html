@@ -1119,52 +1119,124 @@ body.presentation #channelWatermark{display:flex;}
   <div id="spMsgs" style="margin-top:10px;font-size:12px;line-height:1.6;"></div>
 </div>
 
-<div class="panel" id="tab-help" style="display:none;">
+<div class="panel" id="tab-help" style="display:none;padding:20px;overflow-y:auto;">
+  <div class="card" style="margin-bottom:16px;">
+    <h3><i class="ti ti-map-2"></i> Cómo está organizada la app</h3>
+    <p>Flujo típico: cargas material en <b>Contenido</b> (posiciones en el Editor/Librería, XML+audio en Audio &amp; XML) → generas un ejercicio en alguna pestaña de <b>Generar ejercicio</b> → lo revisas/grabas en <b>Visualizador</b>. <b>Mástil interactivo</b> es aparte: una herramienta en vivo, no un generador.</p>
+    <p>Cada pestaña de <b>Generar ejercicio</b> trae su <b>propia ayuda</b> arriba del todo del panel (Qué genera / Cómo se reproduce / Opciones que le afectan) — esta pestaña no la repite. Cubre lo que no tiene sitio ahí: Contenido, Ritmos (sin ayuda propia todavía), Configuración, atajos y la generación de vídeo por <b>scripts</b> (al final).</p>
+  </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
     <div class="card">
       <h3><i class="ti ti-layout-list"></i> Editor</h3>
-      <p><b>Ciclo maestro</b> — patrón base que heredan los demás ciclos.</p>
-      <p><b>Igual al ciclo N</b> — repite el maestro. "Personalizar" lo hace independiente.</p>
-      <p><b>Slots (1-4)</b> — arrastra SVGs a cada tiempo del compás. Con varios slots se anima la transición.</p>
-      <p><b>Vista:</b> Auto (alterna), Notas, Intervalos, Inversiones (+ mensaje automático).</p>
-      <p><b>Fondo</b> — entrada de librería que aparece como mapa gris de fondo en el mástil.</p>
-      <p><b>Mensaje</b> — texto entre la escala y el mástil, con duración en compases.</p>
+      <p><b>Ciclo maestro</b> — patrón base que heredan los demás ciclos. "Igual al ciclo N" lo repite; "Personalizar" lo hace independiente.</p>
+      <p><b>Slots (1-4)</b> — arrastra SVGs del banco/librería a cada tiempo del compás. Con varios slots se anima la transición.</p>
+      <p><b>Fondo automático</b> — dibuja de fondo, sincronizado con lo que suena: la figura actual completa, una escala fija, o la tríada por todo el mástil. Se guarda con la sesión.</p>
+      <p><b>Adaptar…</b> — replica el ejercicio cargado en otras cuerdas o tonalidad sin rehacerlo a mano.</p>
+      <p><b>Guardar/Cargar ejercicio</b> — exporta e importa la sesión completa (posiciones, ciclos, audio recordado, BPM, tonalidad) en JSON; es el archivo que consumen los scripts de generación por lotes.</p>
+      <p>La generación automática de <b>tríadas</b> vive en su propia pestaña, dentro de Generar ejercicio.</p>
     </div>
     <div class="card">
       <h3><i class="ti ti-book"></i> Librería</h3>
       <p>Organiza posiciones en <b>carpetas</b>. Cada entrada tiene hasta 4 slots — ideal para guardar las 4 inversiones juntas.</p>
-      <p>Entradas ordenadas <b>alfabéticamente</b>. Pasa el ratón para ver el botón × de eliminar.</p>
+      <p>Entradas ordenadas <b>alfabéticamente</b>. Pasa el ratón para ver el botón × de eliminar. <b>Organizar</b> las reordena solo por tónica y tipo de acorde.</p>
       <p>Arrastra entradas al <b>slot de destino</b> en el editor.</p>
-      <p><b>Exportar/Importar</b> — backup de toda la librería en JSON.</p>
+      <p><b>Exportar/Importar librería</b> — backup completo en JSON.</p>
     </div>
     <div class="card">
       <h3><i class="ti ti-music"></i> Audio &amp; XML</h3>
-      <p>Ajusta <b>Compases por ciclo</b> ANTES de importar el XML (blues=12, jazz=8 o 16…).</p>
-      <p>Exporta desde BiaB: <b>File → Save as → MusicXML</b>. La app detecta acordes, BPM, tonalidad e intro.</p>
-      <p>El <b>audio MP3/WAV</b> es el master clock. Ajusta BPM e intro si hay desincronización.</p>
+      <p>Ajusta <b>Compases por ciclo</b> ANTES de importar el XML (blues=12, jazz=8 o 16…), o usa "Tema completo" para piezas que no se repiten en bucle corto.</p>
+      <p>Exporta desde BiaB: <b>File → Save as → MusicXML</b>. La app detecta acordes, BPM, tonalidad e intro; si trae cambios de tempo por compás, los sigue automáticamente (tempo progresivo).</p>
+      <p>El <b>audio MP3/WAV/M4A</b> es el master clock. Ajusta BPM, compases de intro y desfase fino (ms) si hay desincronización.</p>
       <p>Los acordes se pueden <b>editar directamente</b> en el editor si BiaB los exporta mal.</p>
+      <p><b>Ejercicio manual</b> — crea compases sin XML/audio, para diapositivas o ejercicios sin backing.</p>
+    </div>
+    <div class="card">
+      <h3><i class="ti ti-wand"></i> Generar ejercicio</h3>
+      <p>Ocho formas de generar un ejercicio a partir del contenido cargado. Cada una tiene su ayuda detallada dentro de su propia pestaña:</p>
+      <p><b>Ritmos</b> — vídeo de tempo sin acordes, o pantalla informativa para un tema real (ver card aparte, más abajo).</p>
+      <p><b>Tríadas</b> — 3 notas por acorde: voice leading, eje fijo, zona fija, misma figura o barrido de posiciones.</p>
+      <p><b>Arpegios</b> — una posición de arpegio por acorde, con zoom y crossfade.</p>
+      <p><b>Secuencias</b> — nota a nota sobre un fondo fijo de escala/posición.</p>
+      <p><b>Chord tones</b> — caja de escala fija + tónica y guías (3ª/7ª) iluminadas por acorde.</p>
+      <p><b>Estructuras en escala</b> — progresión diatónica completa sobre una posición CAGED fija.</p>
+      <p><b>Historia de escala</b> — build-up narrado de una caja CAGED en pasos, con texto de apoyo.</p>
+      <p><b>Escalas</b> — asigna escala y posición a cada tramo de compases del ciclo.</p>
+    </div>
+    <div class="card">
+      <h3><i class="ti ti-drum"></i> Ritmos</h3>
+      <p><b>Ritmo (solo batería)</b> — ejercicio sin acordes: carga el audio del ritmo, pon el BPM a mano y el resto (nº de compases) se calcula solo, corregible. Con tempo progresivo (XML + al menos un acorde de referencia), BPM/compases/duración se leen del XML.</p>
+      <p>Estilo, subestilo, tiempos por compás, preset de color e idioma del vídeo son metadatos de presentación — no afectan a la sincronización.</p>
+      <p><b>Exportar config.json (lote)</b> — para <code>scripts/render-rhythm-video.js</code>: colócalo junto a los .m4a del mismo estilo a distintos tempos (el BPM de cada vídeo se lee del nombre de archivo).</p>
+      <p><b>Ritmos Reales</b> — para un tema real sin acordes que sincronizar: pantalla informativa (título/autor/BPM/tonalidad/estilo) sobre un fondo animado aleatorio (partículas/ondas/formas).</p>
+      <p><b>Generar vídeo</b> de Ritmos Reales graba la pestaña actual en directo (getDisplayMedia) — pide compartir la pestaña y no toques nada hasta que acabe. Para generarlo sin pantalla, usa <code>scripts/render-real-rhythm-video.js</code> (ver Scripts).</p>
     </div>
     <div class="card">
       <h3><i class="ti ti-player-play"></i> Visualizador</h3>
-      <p><b>Espacio</b> = Play/Pausa. Clic en la barra de progreso para saltar.</p>
-      <p><b>Vista:</b> Carrusel (acorde grande), Compases (actual + siguiente), Minimalista (solo acorde).</p>
-      <p><b>Voz 1/2</b> — resalta un intervalo (R, 3, 5, b7…) con anillo de color.</p>
-      <p><b>Notas fantasma</b> — anticipan la siguiente posición 1 tiempo antes del cambio.</p>
-      <p><b>Mapa de fondo</b> — todas las posiciones de una entrada de librería en gris.</p>
+      <p><b>Espacio</b> = Play/Pausa. Clic en la barra de progreso para saltar. <b>Modo presentación</b> (icono de maximizar) limpia la UI para grabar — Esc para salir.</p>
+      <p><b>Modo:</b> Carrusel (acorde grande), Compases (actual + siguiente), Minimalista (solo acorde).</p>
+      <p><b>Mástil:</b> Auto/Notas/Intervalos/Inversiones — cómo se etiquetan las notas sobre el diapasón durante la reproducción.</p>
+      <p><b>Notas del acorde</b> — tira de chips (notas/intervalos) junto al nombre del acorde, independiente del etiquetado del mástil.</p>
+      <p><b>Voz 1 / Voz 2</b> — resalta uno o dos intervalos (R, 3, 5, b7, 7, 9) con un anillo de color propio.</p>
+      <p><b>Elementos</b> — panel de visibilidad en directo (mismos toggles que Configuración), viendo el efecto al momento.</p>
+      <p><b>Modo diapositivas</b> (icono de presentación) — navega paso a paso con ← →, en vez de reproducir a tiempo.</p>
+    </div>
+    <div class="card">
+      <h3><i class="ti ti-hand-click"></i> Mástil interactivo</h3>
+      <p>Mástil en blanco para explicar en directo: clic en un traste revela su nota, otro clic la oculta. Pensado para grabar la pantalla mientras interactúas — trae su propia ayuda contextual dentro de la pestaña (ver todo el mástil, franja de escala, medir intervalos con Shift+click).</p>
     </div>
     <div class="card">
       <h3><i class="ti ti-settings"></i> Configuración</h3>
-      <p><b>Visibilidad</b> — activa/desactiva cada elemento del visualizador.</p>
-      <p><b>Colores de función</b> — I tónica, II supertónica, III mediante, IV subdominante, V dominante, VI superdominante, VII sensible.</p>
-      <p><b>Escalas por defecto</b> — hint automático según función del acorde. Se sobreescribe por compás.</p>
-      <p><b>Colores de voces</b> — color del anillo de Voz 1 y Voz 2.</p>
+      <p><b>Resumen del ejercicio</b> — solo lectura: qué hay realmente cargado y reproduciéndose ahora, no lo que digan los selectores.</p>
+      <p><b>Tipo de ejercicio</b> — cómo se anima la transición entre posiciones (Tríadas, Arpegios/Escalas, Secuencias, Ritmo, Ritmos Reales, Historia de escala). Cada tipo despliega sus propios tiempos de fantasma/desvanecido — esto es lo que las otras pestañas llaman "Transición · Tríadas" / "Transición · Arpegios".</p>
+      <p><b>Elementos del visualizador</b> — activa/desactiva cada elemento en pantalla; se guarda solo.</p>
+      <p><b>Colores por función armónica</b> — I tónica, II supertónica, III mediante, IV subdominante, V dominante, VI superdominante, VII sensible.</p>
+      <p><b>Seguir voz</b> — color del anillo de Voz 1/2 del Visualizador.</p>
+      <p><b>Escalas/arpegios por defecto</b> — hint automático según función del acorde cuando el compás no trae texto propio.</p>
     </div>
     <div class="card">
-      <h3><i class="ti ti-keyboard"></i> Atajos y notas</h3>
-      <p><b>Espacio</b> — Play / Pausa</p>
+      <h3><i class="ti ti-keyboard"></i> Atajos</h3>
+      <p><b>Espacio</b> — Play / Pausa (fuera de un campo de texto)</p>
+      <p><b>← / →</b> — paso anterior/siguiente en modo diapositivas</p>
+      <p><b>Esc</b> — sale del modo diapositivas o de presentación</p>
       <p><b>Drag &amp; drop</b> — arrastra SVGs al banco, del banco/librería al editor</p>
-      <p><b>Guardar sesión</b> — guarda posiciones, ciclos, BPM, tonalidad</p>
-      <p><b>Versión 1.5</b></p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h3><i class="ti ti-terminal-2"></i> Generación de vídeo por scripts (pídemelo directamente)</h3>
+    <p style="margin-bottom:10px;">Para lotes de vídeo ya <b>no hace falta usar el navegador</b>: pídeme que lance el script correspondiente y yo me encargo (Chrome headless + Playwright graban por detrás, ffmpeg mezcla el audio real). Lo único que sueles tener que darme es el XML/audio del tema, o una carpeta con varios audios del mismo estilo. La vieja "Generación por lotes" de la app (servidor local + carpeta) está retirada — este es ahora el único camino para lotes.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <p style="font-weight:600;margin-bottom:4px;">Por ejercicio (XML + audio del tema)</p>
+        <p><code>generate-triad-videos.js</code> — las combinaciones grupo de cuerdas × inversión de Tríadas ("misma figura"), una por vídeo.</p>
+        <p><code>generate-explore-triad-video.js</code> — "Explora una tríada en el mástil" (secuencia A o B), con un audio de un solo acorde tipo vamp.</p>
+        <p><code>generate-pentatonic-chord-videos.js</code> — los 5 vídeos de "Pentatónica del acorde por proximidad", uno por forma CAGED de partida.</p>
+        <p><code>generate-scale-arpeggio-videos.js</code> — "Estructuras en escala": modo diapositivas (solo <code>--bpm</code>) o modo tema (con <code>--xml</code>), por escala/tónica.</p>
+        <p><code>generate-scale-triad-explore-videos.js</code> — "Tríadas dentro de una posición de escala", por escala/tónica y posición CAGED.</p>
+        <p><code>generate-videos-from-sessions.js</code> — un vídeo por cada sesión .json ya exportada con "Guardar ejercicio", todas con el mismo audio.</p>
+      </div>
+      <div>
+        <p style="font-weight:600;margin-bottom:4px;">Ritmos (carpeta de audios, sin pantalla)</p>
+        <p><code>render-rhythm-video.js</code> — módulo Ritmo: un vídeo por audio de una carpeta (mismo groove a distintos tempos); usa el <code>config.json</code> exportado desde la pestaña Ritmos.</p>
+        <p><code>render-real-rhythm-video.js</code> — Ritmos Reales sin pantalla ni permiso de captura; usa el <code>config.json</code> de esa misma card (título/autor/BPM/tonalidad/estilo/fondo).</p>
+        <p style="font-weight:600;margin:10px 0 4px;">Comprobación (después de generar)</p>
+        <p><code>verify-sync.js</code> — para lotes de Tríadas/Arpegios: detecta vídeos donde el cambio de escena no cae cerca de donde debería según el audio.</p>
+        <p><code>verify-rhythm-sync.js</code> — lo mismo pero específico del módulo Ritmo (pulso del Tiempo 1 y 2).</p>
+        <p><code>check-tempo-xml.js</code> — revisa un XML de BiaB ANTES de generar: detecta saltos de BPM raros en el tempo progresivo.</p>
+      </div>
+      <div>
+        <p style="font-weight:600;margin-bottom:4px;">Miniaturas (Python, requiere <code>pip3 install pillow</code>)</p>
+        <p><code>generate-bpm-thumbnails.py</code> — una miniatura por tempo, estampando el BPM sobre una plantilla; con <code>--audio-dir</code> lee el rango de BPM de los .m4a reales del lote.</p>
+        <p><code>generate-triad-thumbnails.py</code> — una miniatura por vídeo "TodasTríadas", estampando el nombre del acorde sobre la plantilla de su tipo (Mayor/Menor) y modo.</p>
+      </div>
+      <div>
+        <p style="font-weight:600;margin-bottom:4px;">YouTube (canal propio, requiere autorizar una vez)</p>
+        <p><code>upload-youtube.js</code> — sube un vídeo ya generado (título, descripción con capítulos por BPM, tags, miniatura). Sube "unlisted" salvo que se pida público o una fecha de publicación.</p>
+        <p><code>catalog-youtube-video.js</code> — actualiza metadata de un vídeo YA subido (p.ej. subido con título provisional).</p>
+        <p><code>apply-rhythm-metadata.js</code> — cataloga un LOTE de vídeos de Ritmo subidos en blanco, a partir de un vídeo de referencia ya catalogado a mano (empareja por BPM en el título).</p>
+        <p><code>generate-youtube-chapters.js</code> — genera la lista de capítulos "M:SS BPM" para pegar en la descripción de un vídeo de tempo progresivo.</p>
+        <p><code>youtube-whoami.js</code> — comprueba a qué canal apunta un token ANTES de subir nada, para no subir al canal equivocado.</p>
+      </div>
     </div>
   </div>
 </div>
