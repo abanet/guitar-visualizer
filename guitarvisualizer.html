@@ -29,6 +29,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .tab{padding:12px 18px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--text2);transition:all .15s;display:flex;align-items:center;gap:5px;}
 .tab.active{color:var(--text);border-bottom-color:var(--text);}
 .tab:hover:not(.active){color:var(--text);background:var(--bg);}
+.tab-group{position:relative;}
+.tab-group>.tab .ti-chevron-down{font-size:11px;margin-left:1px;transition:transform .15s;}
+.tab-group.open>.tab .ti-chevron-down{transform:rotate(180deg);}
+.tab-group.group-active>.tab{color:var(--text);border-bottom-color:var(--text);}
+.tab-dropdown{position:absolute;top:100%;left:0;background:white;border:1px solid var(--border);border-top:none;border-radius:0 0 var(--rad2) var(--rad2);box-shadow:0 10px 24px rgba(0,0,0,.12);display:none;flex-direction:column;min-width:230px;z-index:40;padding:6px;}
+.tab-group.open .tab-dropdown{display:flex;}
+.tab-dropdown .tab{padding:9px 12px;border-radius:var(--rad);border-bottom:none;}
+.tab-dropdown .tab.active{background:var(--bg2);}
 .panel{display:none;overflow-y:auto;}
 #tab-editor,#tab-library,#tab-audio,#tab-settings,#tab-help{padding:20px;}
 #tab-player{padding:0;}
@@ -544,22 +552,36 @@ body.presentation #channelWatermark{display:flex;}
 <div id="channelWatermark"><span>@banetmasa</span></div>
 <div class="app" data-tab="editor">
   <div class="tabs">
-    <div class="tab active" onclick="showTab('editor')"><i class="ti ti-layout-list"></i> Editor</div>
-    <div class="tab" onclick="showTab('library')"><i class="ti ti-book"></i> Librería</div>
-    <div class="tab" onclick="showTab('audio')"><i class="ti ti-music"></i> Audio &amp; XML</div>
-    <div class="tab" title="Vídeos de ritmo: metrónomo sincronizado o ritmos reales (audio real + título/autor/BPM y fondo animado)." onclick="showTab('ritmos')"><i class="ti ti-drum"></i> Ritmos</div>
+    <div class="tab-group">
+      <div class="tab" onclick="toggleTabGroup(this)"><i class="ti ti-folder"></i> Contenido <i class="ti ti-chevron-down"></i></div>
+      <div class="tab-dropdown">
+        <div class="tab active" onclick="showTab('editor')"><i class="ti ti-layout-list"></i> Editor</div>
+        <div class="tab" onclick="showTab('library')"><i class="ti ti-book"></i> Librería</div>
+        <div class="tab" onclick="showTab('audio')"><i class="ti ti-music"></i> Audio &amp; XML</div>
+      </div>
+    </div>
+    <div class="tab-group">
+      <div class="tab" onclick="toggleTabGroup(this)"><i class="ti ti-wand"></i> Generar ejercicio <i class="ti ti-chevron-down"></i></div>
+      <div class="tab-dropdown">
+        <div class="tab" title="Vídeos de ritmo: metrónomo sincronizado o ritmos reales (audio real + título/autor/BPM y fondo animado)." onclick="showTab('ritmos')"><i class="ti ti-drum"></i> Ritmos</div>
+        <div class="tab" title="Genera tríadas (3 notas) por acorde: voice leading automático o figura fija (ruta de tríadas: mástil completo, sin zoom)." onclick="showTab('triads')"><i class="ti ti-triangle"></i> Tríadas</div>
+        <div class="tab" title="Genera posiciones de arpegio, una por acorde (ruta de arpegios: zoom, preview, crossfade)." onclick="showTab('generate')"><i class="ti ti-wand"></i> Arpegios</div>
+        <div class="tab" title="Secuencia nota a nota sobre un fondo de escala (ruta propia, nota a nota)." onclick="showTab('sequence')"><i class="ti ti-arrow-bar-to-right"></i> Secuencias</div>
+        <div class="tab" title="Chord tones: caja de escala de fondo + notas del acorde iluminadas en cada acorde." onclick="showTab('targets')"><i class="ti ti-target"></i> Chord tones</div>
+        <div class="tab" title="Progresión diatónica completa de una escala (tríadas o tétradas) sobre una posición CAGED, sin dibujar ninguna forma de arpegio: el arpegio es siempre un subconjunto de las notas de la escala." onclick="showTab('arpscale')"><i class="ti ti-guitar-pick"></i> Estructuras en escala</div>
+        <div class="tab" title="Build-up narrado: revela una caja pentatónica CAGED en pasos (tríada por grupos de cuerdas → +7ª → +4ª → caja completa), sincronizado a un backing track, con texto de apoyo." onclick="showTab('scalestory')"><i class="ti ti-stack-2"></i> Historia de escala</div>
+        <div class="tab" title="Asigna una escala y su posición a cada rango de compases del ciclo." onclick="showTab('scales')"><i class="ti ti-timeline"></i> Escalas</div>
+      </div>
+    </div>
     <div class="tab" onclick="showTab('player')"><i class="ti ti-player-play"></i> Visualizador</div>
-    <div class="tab" title="Genera el vídeo de la visualización automáticamente (mástil + audio), sin necesidad de grabar la pantalla a mano." onclick="showTab('video')"><i class="ti ti-video"></i> Vídeo</div>
-    <div class="tab" onclick="showTab('settings')"><i class="ti ti-settings"></i> Configuración</div>
-    <div class="tab" title="Genera tríadas (3 notas) por acorde: voice leading automático o figura fija (ruta de tríadas: mástil completo, sin zoom)." onclick="showTab('triads')"><i class="ti ti-triangle"></i> Tríadas</div>
-    <div class="tab" title="Genera posiciones de arpegio, una por acorde (ruta de arpegios: zoom, preview, crossfade)." onclick="showTab('generate')"><i class="ti ti-wand"></i> Arpegios</div>
-    <div class="tab" title="Secuencia nota a nota sobre un fondo de escala (ruta propia, nota a nota)." onclick="showTab('sequence')"><i class="ti ti-arrow-bar-to-right"></i> Secuencias</div>
-    <div class="tab" title="Chord tones: caja de escala de fondo + notas del acorde iluminadas en cada acorde." onclick="showTab('targets')"><i class="ti ti-target"></i> Chord tones</div>
-    <div class="tab" title="Progresión diatónica completa de una escala (tríadas o tétradas) sobre una posición CAGED, sin dibujar ninguna forma de arpegio: el arpegio es siempre un subconjunto de las notas de la escala." onclick="showTab('arpscale')"><i class="ti ti-guitar-pick"></i> Estructuras en escala</div>
-    <div class="tab" title="Build-up narrado: revela una caja pentatónica CAGED en pasos (tríada por grupos de cuerdas → +7ª → +4ª → caja completa), sincronizado a un backing track, con texto de apoyo." onclick="showTab('scalestory')"><i class="ti ti-stack-2"></i> Historia de escala</div>
-    <div class="tab" title="Asigna una escala y su posición a cada rango de compases del ciclo." onclick="showTab('scales')"><i class="ti ti-timeline"></i> Escalas</div>
     <div class="tab" title="Mástil en blanco para explicar en directo: click en un traste para revelar su nota. Pensado para grabar la pantalla mientras interactúas con él." onclick="showTab('mastilInteractivo')"><i class="ti ti-hand-click"></i> Mástil interactivo</div>
-    <div class="tab" onclick="showTab('help')"><i class="ti ti-help"></i> Ayuda</div>
+    <div class="tab-group">
+      <div class="tab" onclick="toggleTabGroup(this)"><i class="ti ti-settings"></i> Sistema <i class="ti ti-chevron-down"></i></div>
+      <div class="tab-dropdown">
+        <div class="tab" onclick="showTab('settings')"><i class="ti ti-settings"></i> Configuración</div>
+        <div class="tab" onclick="showTab('help')"><i class="ti ti-help"></i> Ayuda</div>
+      </div>
+    </div>
     <span id="exBadge" style="margin-left:auto;align-self:center;font-size:11px;font-weight:600;color:var(--text2);background:rgba(0,0,0,.06);border:1px solid var(--border);border-radius:999px;padding:3px 10px;white-space:nowrap;" title="Tipo de ejercicio que se está reproduciendo realmente (se deduce del contenido del frame activo, no del selector)"></span>
     <span id="appVersionBadge" style="align-self:center;font-size:11px;color:var(--text3);padding:0 8px;" title="Versión de Guitar Visualizer"></span>
   </div>
@@ -826,8 +848,16 @@ body.presentation #channelWatermark{display:flex;}
         <button class="btn sm" onclick="exportRealRhythmConfigFile()"><i class="ti ti-download"></i> Exportar config.json</button>
         <span style="font-size:12px;color:var(--text3);">Para <code>scripts/render-real-rhythm-video.js --dir</code>: mete este archivo junto al audio del tema en una carpeta — título/autor/BPM/tonalidad/estilo se leen de ahí, sin tener que repetirlos a mano.</span>
       </div>
-      <div class="field-row" style="margin-top:14px;">
-        <button class="btn accent" onclick="rrGenerate()"><i class="ti ti-video"></i> Generar vídeo</button>
+      <div class="field-row" style="margin-top:14px;gap:10px;">
+        <button class="btn accent" id="videoGenBtn" onclick="rrGenerate()"><i class="ti ti-video"></i> Generar vídeo</button>
+        <button class="btn" id="videoCancelBtn" onclick="cancelVideoGen()" style="display:none;"><i class="ti ti-x"></i> Cancelar</button>
+        <span class="tag" id="videoGenStatus">Sin generar</span>
+      </div>
+      <div id="videoResultBox" style="display:none;margin-top:14px;">
+        <video id="videoResultPreview" controls style="width:100%;max-width:600px;border-radius:var(--rad2);background:#000;display:block;"></video>
+        <div style="margin-top:8px;">
+          <a class="btn green" id="videoDownloadLink" download="visualizacion.webm"><i class="ti ti-download"></i> Descargar vídeo (.webm)</a>
+        </div>
       </div>
     </div>
   </div>
@@ -966,68 +996,6 @@ body.presentation #channelWatermark{display:flex;}
     <!-- Inline visibility panel (same toggles as Settings, editable while watching) -->
     <div id="visPanel" style="display:none;background:#f6f7f9;border-top:1px solid var(--border);padding:12px 16px;max-height:38vh;overflow:auto;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="visTogglesInline"></div>
-    </div>
-  </div>
-
-  <!-- VIDEO GENERATION -->
-  <div class="panel" id="tab-video" style="display:none;">
-    <div class="card" style="max-width:640px;">
-      <h3><i class="ti ti-video"></i> Generar vídeo</h3>
-      <p>Graba automáticamente la visualización (mástil + audio) tal como se ve al darle a Play, sin necesidad de usar un programa externo de captura de pantalla. Al pulsar "Generar vídeo" el navegador te pedirá compartir <strong>esta pestaña</strong> (acepta la que dice "Chrome Tab" / la pestaña actual) — no toques nada hasta que termine.</p>
-      <p style="font-size:12px;color:var(--text3);">Requiere Chrome o Edge (usa la API de captura de pestaña del navegador). El resultado se descarga en formato <code>.webm</code>.</p>
-      <div class="field-row" style="margin-bottom:10px;">
-        <label>Segundos extra al final:</label>
-        <input type="number" id="videoExtraSec" value="2" min="0" max="30" step="1" style="width:70px;">
-        <span style="font-size:12px;color:var(--text3);">Se añaden a la duración del audio. En ese tramo final la pantalla hace un fundido a negro con el logo del canal centrado (deja al menos 1-2s para que se vea completo).</span>
-      </div>
-      <div class="field-row" style="gap:10px;">
-        <button class="btn primary" id="videoGenBtn" onclick="generateVideo()"><i class="ti ti-player-record"></i> Generar vídeo</button>
-        <button class="btn" id="videoCancelBtn" onclick="cancelVideoGen()" style="display:none;"><i class="ti ti-x"></i> Cancelar</button>
-        <span class="tag" id="videoGenStatus">Sin generar</span>
-      </div>
-      <div id="videoResultBox" style="display:none;margin-top:14px;">
-        <video id="videoResultPreview" controls style="width:100%;max-width:600px;border-radius:var(--rad2);background:#000;display:block;"></video>
-        <div style="margin-top:8px;">
-          <a class="btn green" id="videoDownloadLink" download="visualizacion.webm"><i class="ti ti-download"></i> Descargar vídeo (.webm)</a>
-        </div>
-      </div>
-    </div>
-
-    <div class="card" style="max-width:640px;">
-      <h3><i class="ti ti-download"></i> Configuración visual para el lote</h3>
-      <p>Ajusta Elementos, colores, modo de acorde/notas, voces seguidas y trastes mostrados como quieras que salgan en los vídeos, y expórtalo. El lote de abajo usa este archivo para que todos los vídeos compartan la misma configuración.</p>
-      <div class="field-row">
-        <button class="btn" onclick="exportVisConfigFile()"><i class="ti ti-download"></i> Exportar configuración de Elementos</button>
-        <span style="font-size:12px;color:var(--text3);">Descarga <code>vis-config.json</code> con lo que tengas activado ahora.</span>
-      </div>
-    </div>
-
-    <div class="card" style="max-width:640px;">
-      <h3><i class="ti ti-stack"></i> Generación por lotes</h3>
-      <p>Genera un vídeo por cada sesión <code>.json</code> exportada ("Guardar ejercicio") de una carpeta, todos con el mismo audio — ej. las 12 combinaciones de tríadas (4 grupos de cuerdas × 3 inversiones). Corre en Chrome invisible en segundo plano, varios a la vez, sin bloquear tu pantalla. Igual que en el vídeo individual, cada uno termina con un fundido a negro y el logo del canal durante los "segundos extra".</p>
-      <p style="font-size:12px;color:var(--text3);">
-        <i class="ti ti-info-circle"></i> Necesita un servidor local corriendo (una sola vez, se queda en marcha):
-        <code>node scripts/server.js</code>
-        <span id="batchServerStatus" class="tag" style="margin-left:6px;">comprobando…</span>
-      </p>
-      <p style="font-size:12px;color:var(--text3);">Una sola carpeta con todo dentro: el audio, las sesiones <code>.json</code> y (opcional) <code>vis-config.json</code> — como ya tienes en tu carpeta de proyecto.</p>
-      <div class="field-row" style="gap:10px;margin-bottom:8px;">
-        <button class="btn" onclick="document.getElementById('batchFolderPicker').click()"><i class="ti ti-folder"></i> Elegir carpeta…</button>
-        <input type="file" id="batchFolderPicker" webkitdirectory multiple class="hidden" onchange="onBatchFolderPicked(this)">
-        <span id="batchFolderSummary" style="font-size:12px;color:var(--text3);">Ninguna carpeta elegida.</span>
-      </div>
-      <div class="field-row" style="flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-        <label>Segundos extra: <input type="number" id="batchExtra" value="2" min="0" max="30" style="width:60px;"></label>
-        <label>En paralelo: <input type="number" id="batchConcurrency" value="1" min="1" max="8" style="width:60px;" title="En esta máquina (4 núcleos), cada vídeo usa casi un núcleo entero grabando. Súbelo solo si quieres ir más rápido a costa de riesgo de saltos en la animación."></label>
-      </div>
-      <div class="field-row" style="gap:10px;">
-        <button class="btn primary" id="batchGenBtn" onclick="startBatchGenerate()" disabled><i class="ti ti-player-record"></i> Generar vídeos</button>
-        <button class="btn" id="batchCancelBtn" onclick="cancelBatchGenerate()" style="display:none;"><i class="ti ti-x"></i> Detener</button>
-      </div>
-      <div id="batchProgress" style="margin-top:12px;display:none;">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:6px;" id="batchSummary"></div>
-        <div id="batchJobList" style="display:flex;flex-direction:column;gap:4px;font-size:12px;"></div>
-      </div>
     </div>
   </div>
 
@@ -9468,12 +9436,14 @@ function setBtns(p){const ic=p?'ti-player-pause':'ti-player-play',lb=p?'Pausa':'
 function setSpeed(v){speed=parseFloat(v);if(audioEl)audioEl.playbackRate=speed;}
 
 // ════════════════════════════════════════════════════════════════════════════
-// GENERAR VÍDEO — graba automáticamente la visualización + audio, sin necesidad
-// de un programa externo de captura de pantalla. Comparte esta pestaña vía
-// getDisplayMedia (vídeo) + el audio real del <audio> vía Web Audio API, y lo
-// mezcla en directo con MediaRecorder. Duración = audio.duration + cola extra.
+// GRABAR VÍDEO (captura de pestaña) — usado solo por "Ritmos Reales" → Generar vídeo
+// (rrGenerate()); el resto de ejercicios se generan por lotes con los scripts de
+// scripts/*.js (Playwright headless), que no pasan por aquí. Comparte esta pestaña vía
+// getDisplayMedia (vídeo) + el audio real del <audio> vía Web Audio API, y lo mezcla en
+// directo con MediaRecorder. Duración = audio.duration + cola extra fija.
 // ════════════════════════════════════════════════════════════════════════════
 let videoGenState=null, videoGenAudioCtx=null;
+const VIDEO_GEN_EXTRA_SEC=2; // cola final fija (fundido a negro + logo)
 
 function videoGenSetStatus(msg,cls){
   const s=document.getElementById('videoGenStatus');
@@ -9490,8 +9460,7 @@ async function generateVideo(){
     return;
   }
 
-  const extraSec=Math.max(0,parseFloat(document.getElementById('videoExtraSec').value)||0);
-  const totalDuration=audioEl.duration+extraSec;
+  const totalDuration=audioEl.duration+VIDEO_GEN_EXTRA_SEC;
 
   let dispStream;
   try{
@@ -9531,10 +9500,10 @@ async function generateVideo(){
   rec.onstop=()=>{
     const blob=new Blob(chunks,{type:mimeType||'video/webm'});
     const url=URL.createObjectURL(blob);
-    document.getElementById('videoResultPreview').src=url;
+    const prev=document.getElementById('videoResultPreview');if(prev)prev.src=url;
     const dl=document.getElementById('videoDownloadLink');
-    dl.href=url; dl.download='visualizacion-v'+APP_VERSION+'-'+Date.now()+'.webm';
-    document.getElementById('videoResultBox').style.display='block';
+    if(dl){dl.href=url; dl.download='visualizacion-v'+APP_VERSION+'-'+Date.now()+'.webm';}
+    const box=document.getElementById('videoResultBox');if(box)box.style.display='block';
   };
 
   const wasPresentation=document.body.classList.contains('presentation');
@@ -9545,7 +9514,7 @@ async function generateVideo(){
   const btn=document.getElementById('videoGenBtn'),cancelBtn=document.getElementById('videoCancelBtn');
   if(btn)btn.disabled=true;
   if(cancelBtn)cancelBtn.style.display='';
-  document.getElementById('videoResultBox').style.display='none';
+  const box0=document.getElementById('videoResultBox');if(box0)box0.style.display='none';
   videoGenSetStatus('Grabando… 0:00 / '+fmt(totalDuration));
 
   videoGenState={dispStream,rec,timer:null,statusTimer:null,wasPresentation};
@@ -9579,29 +9548,6 @@ function videoGenFinish(completed){
 
 function cancelVideoGen(){videoGenFinish(false);}
 
-// Descarga TODA la configuración visual relevante para el vídeo, para pasársela al script de
-// generación por lotes (--vis-config): los toggles de "Elementos" (localStorage 'gv_vis'), los
-// colores de función/voces (localStorage 'gv_colors'), y los selectores del Visualizador que NO
-// se guardan en ningún sitio (modo de acorde, modo de notas, voces seguidas) — se resetean a su
-// valor por defecto en cada carga de página, así que hay que capturarlos aparte.
-function exportVisConfigFile(){
-  let vis={},colors={};
-  try{vis=JSON.parse(localStorage.getItem('gv_vis')||'{}');}catch(e){}
-  try{colors=JSON.parse(localStorage.getItem('gv_colors')||'{}');}catch(e){}
-  const cfg={
-    vis,colors,
-    chordDisplayMode:document.getElementById('chordDisplayMode')?.value||'carousel',
-    noteMode:document.getElementById('noteMode')?.value||'both',
-    followVoice:document.getElementById('followVoice')?.value||'none',
-    followVoice2:document.getElementById('followVoice2')?.value||'none',
-    maxFretsShown:typeof getMaxFretsShown==='function'?getMaxFretsShown():null,
-    previewMaxFrets:typeof getPreviewMaxFrets==='function'?getPreviewMaxFrets():null,
-  };
-  const blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vis-config.json';
-  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
-}
-
 // Config compartida para un LOTE de vídeos de Ritmo (scripts/render-rhythm-video.js): estilo,
 // compás, intro y offset de sync son iguales para todos los .m4a de la carpeta (el mismo groove
 // exportado de BiaB a distintos tempos) — el BPM y el nº de compases NO van aquí porque el
@@ -9613,7 +9559,7 @@ function exportRhythmConfigFile(){
     beats:parseInt(document.getElementById('tvCfgBeats')?.value)||4,
     introBars:parseInt(document.getElementById('introCount')?.value)||0,
     offsetMs:parseFloat(document.getElementById('offsetMs')?.value)||0,
-    extraSec:parseFloat(document.getElementById('videoExtraSec')?.value)||2,
+    extraSec:2,
     colorPreset:document.getElementById('tvCfgColorPreset')?.value||'rock',
     lang:document.getElementById('tvCfgLang')?.value||'es',
   };
@@ -9621,131 +9567,6 @@ function exportRhythmConfigFile(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='config.json';
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href);
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// GENERACIÓN POR LOTES — habla con el servidor local (scripts/server.js) que hace el trabajo
-// real (Playwright + ffmpeg, fuera del navegador). La app solo manda los parámetros y sondea
-// el progreso; no puede lanzar procesos por sí misma (sandbox del navegador).
-// ════════════════════════════════════════════════════════════════════════════
-const BATCH_SERVER='http://localhost:8787';
-let batchPollTimer=null;
-let batchPicked={audioFile:null,sessionFiles:[],visConfigObj:null,folderName:''};
-
-const BATCH_AUDIO_EXT=/\.(m4a|m4b|mp3|wav|aiff?|caf)$/i;
-
-async function onBatchFolderPicked(input){
-  const files=Array.from(input.files||[]);
-  const summary=document.getElementById('batchFolderSummary');
-  const picked={audioFile:null,sessionFiles:[],visConfigObj:null,folderName:''};
-  if(files.length&&files[0].webkitRelativePath)picked.folderName=files[0].webkitRelativePath.split('/')[0];
-
-  for(const f of files){
-    if(BATCH_AUDIO_EXT.test(f.name)&&!picked.audioFile){picked.audioFile=f;continue;}
-    if(/\.json$/i.test(f.name)){
-      let data=null;
-      try{data=JSON.parse(await f.text());}catch(e){continue;}
-      if(data&&Array.isArray(data.cycles)&&Array.isArray(data.masterBars)){picked.sessionFiles.push(f);}
-      else if(data&&(data.vis||data.colors||data.chordDisplayMode)){picked.visConfigObj=data;}
-    }
-  }
-  batchPicked=picked;
-
-  const parts=[];
-  parts.push(picked.sessionFiles.length+' sesión'+(picked.sessionFiles.length===1?'':'es'));
-  parts.push(picked.audioFile?('audio: '+picked.audioFile.name):'sin audio ✗');
-  parts.push(picked.visConfigObj?'config visual: sí':'config visual: no (se usarán valores por defecto)');
-  if(summary)summary.textContent=(picked.folderName?picked.folderName+' — ':'')+parts.join(' · ');
-
-  const genBtn=document.getElementById('batchGenBtn');
-  if(genBtn)genBtn.disabled=!(picked.audioFile&&picked.sessionFiles.length);
-}
-
-async function batchCheckServer(){
-  const tag=document.getElementById('batchServerStatus');if(!tag)return;
-  try{
-    const r=await fetch(BATCH_SERVER+'/api/ping');
-    if(r.ok){tag.textContent='servidor activo';tag.className='tag ok';}
-    else throw new Error('bad status');
-  }catch(e){
-    tag.textContent='servidor no disponible — ejecuta "node scripts/server.js"';tag.className='tag warn';
-  }
-}
-
-function batchJobRow(j){
-  const iconByStatus={pending:'ti-clock',running:'ti-loader-2',done:'ti-circle-check',error:'ti-circle-x',cancelled:'ti-player-stop'};
-  const colorByStatus={pending:'var(--text3)',running:'var(--accent)',done:'#2e7d32',error:'#c62828',cancelled:'var(--text3)'};
-  const icon=iconByStatus[j.status]||'ti-clock',color=colorByStatus[j.status]||'var(--text3)';
-  const detail=j.status==='error'?(j.error||''):(j.message||'');
-  const dl=j.status==='done'?`<a href="${BATCH_SERVER}/api/download?tag=${encodeURIComponent(j.tag)}" class="btn sm green" style="flex-shrink:0;"><i class="ti ti-download"></i></a>`:'';
-  return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--bg2);border-radius:var(--rad);">
-    <i class="ti ${icon}" style="color:${color};width:16px;"></i>
-    <span style="font-weight:600;min-width:170px;">${j.tag}</span>
-    <span style="color:${color};min-width:80px;">${j.status}</span>
-    <span style="color:var(--text3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${detail}</span>
-    ${dl}
-  </div>`;
-}
-
-function batchRenderState(state){
-  const box=document.getElementById('batchProgress');if(!box)return;
-  if(state.idle){box.style.display='none';return;}
-  box.style.display='block';
-  const jobs=state.jobs||[];
-  const done=jobs.filter(j=>j.status==='done').length;
-  const errored=jobs.filter(j=>j.status==='error').length;
-  const summary=document.getElementById('batchSummary');
-  if(summary){
-    let txt=state.running?'Generando…':(state.fatalError?'Error: '+state.fatalError:'Terminado');
-    txt+=` — ${done}/${jobs.length} vídeos`+(errored?`, ${errored} con error`:'');
-    if(state.audioDuration)txt+=` · audio ${state.audioDuration.toFixed(1)}s`;
-    summary.textContent=txt;
-  }
-  const list=document.getElementById('batchJobList');
-  if(list)list.innerHTML=jobs.map(batchJobRow).join('');
-  const genBtn=document.getElementById('batchGenBtn'),cancelBtn=document.getElementById('batchCancelBtn');
-  if(genBtn)genBtn.disabled=!!state.running;
-  if(cancelBtn)cancelBtn.style.display=state.running?'':'none';
-}
-
-function batchStopPolling(){if(batchPollTimer){clearInterval(batchPollTimer);batchPollTimer=null;}}
-
-async function batchPollOnce(){
-  try{
-    const r=await fetch(BATCH_SERVER+'/api/status');
-    const state=await r.json();
-    batchRenderState(state);
-    if(!state.running)batchStopPolling();
-  }catch(e){batchStopPolling();}
-}
-
-async function startBatchGenerate(){
-  if(!batchPicked.audioFile||!batchPicked.sessionFiles.length){alert('Elige primero una carpeta con audio y sesiones.');return;}
-  const fd=new FormData();
-  fd.append('audio',batchPicked.audioFile,batchPicked.audioFile.name);
-  batchPicked.sessionFiles.forEach(f=>fd.append('session',f,f.name));
-  if(batchPicked.visConfigObj)fd.append('visConfig',JSON.stringify(batchPicked.visConfigObj));
-  fd.append('folderName',batchPicked.folderName||'lote');
-  fd.append('extra',String(parseFloat(document.getElementById('batchExtra').value)||2));
-  fd.append('concurrency',String(parseInt(document.getElementById('batchConcurrency').value,10)||1));
-  try{
-    const r=await fetch(BATCH_SERVER+'/api/generate',{method:'POST',body:fd});
-    const data=await r.json();
-    if(!r.ok){alert('No se pudo lanzar el lote: '+(data.error||r.status));return;}
-  }catch(e){
-    alert('No se pudo contactar con el servidor local. ¿Está corriendo "node scripts/server.js"?');
-    return;
-  }
-  batchStopPolling();
-  batchPollTimer=setInterval(batchPollOnce,2000);
-  batchPollOnce();
-}
-
-async function cancelBatchGenerate(){
-  try{await fetch(BATCH_SERVER+'/api/cancel',{method:'POST'});}catch(e){}
-}
-
-batchCheckServer();
-setInterval(batchCheckServer,8000);
 
 const ANIM_MS=480; // animation duration ms
 const ANIM_SEC=ANIM_MS/1000; // anticipation window for animation (seconds)
@@ -14163,7 +13984,7 @@ function miInitEditableFields(){
 
 function showTab(name){
   try{
-    const panels=['editor','library','audio','player','video','settings','help','generate','sequence','targets','scales','triads','ritmos','arpscale','scalestory','mastilInteractivo'];
+    const panels=['editor','library','audio','player','settings','help','generate','sequence','targets','scales','triads','ritmos','arpscale','scalestory','mastilInteractivo'];
     panels.forEach(t=>{
       const p=document.getElementById('tab-'+t);
       if(!p)return;
@@ -14185,6 +14006,13 @@ function showTab(name){
       const m=(t.getAttribute('onclick')||'').match(/showTab\('(\w+)'\)/);
       t.classList.toggle('active', !!m&&m[1]===name);
     });
+    // El botón de cada grupo (Contenido, Generar ejercicio, Sistema) se resalta igual cuando
+    // la pestaña activa es uno de sus hijos, aunque el desplegable esté cerrado.
+    document.querySelectorAll('.tab-group').forEach(g=>{
+      g.classList.toggle('group-active', !!g.querySelector('.tab-dropdown .tab.active'));
+    });
+    // Elegir cualquier pestaña (de un desplegable o suelta) cierra los desplegables abiertos.
+    document.querySelectorAll('.tab-group.open').forEach(g=>g.classList.remove('open'));
     if(name==='player'&&cycles.length>0)renderStrip(curBar);
     if(name==='library')renderLibraryFull();
     if(name==='settings'){
@@ -14202,6 +14030,20 @@ function showTab(name){
     {const _p2=getCurrentParsedForBadge();if(_p2)updateExerciseBadge(_p2);}
   }catch(e){console.error('showTab error:',e);}
 }
+
+// Desplegables del menú (Contenido, Generar ejercicio, Sistema): un solo grupo abierto a la vez,
+// y un click fuera de .tabs los cierra todos. Elegir una pestaña dentro también los cierra (ver
+// showTab arriba).
+function toggleTabGroup(btn){
+  const group=btn.closest('.tab-group');
+  if(!group)return;
+  const wasOpen=group.classList.contains('open');
+  document.querySelectorAll('.tab-group.open').forEach(g=>g.classList.remove('open'));
+  if(!wasOpen)group.classList.add('open');
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.tab-group'))document.querySelectorAll('.tab-group.open').forEach(g=>g.classList.remove('open'));
+});
 
 document.addEventListener('keydown',e=>{
   if(e.key===' '&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='SELECT'){e.preventDefault();togglePlay();}
@@ -15670,7 +15512,7 @@ function rrStopFn(){
 })();
 
 /* ---- Botón "Generar vídeo" de la propia card: activa el tipo si hace falta y reutiliza el
-   pipeline genérico de la pestaña Vídeo (generateVideo()), sin obligar a cambiar de pestaña. ---- */
+   pipeline genérico de grabación por captura de pestaña (generateVideo()). ---- */
 window.rrGenerate=function(){
   if(getExerciseType()!=='realrhythm')setExerciseType('realrhythm');
   const title=(document.getElementById('rrTitle')?.value||'').trim();
