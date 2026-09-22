@@ -1972,6 +1972,24 @@ body.presentation #channelWatermark{display:flex;}
           <button class="mi-btn" onclick="miClear()" title="Ocultar todas las notas reveladas"><i class="ti ti-eraser"></i> Limpiar</button>
         </div>
         <div class="mi-toolbar-group">
+          <button class="mi-btn" id="miLabelModeBtn" onclick="miToggleLabelMode()" title="Alterna entre nombre de nota e intervalo respecto a la tónica"><i class="ti ti-music"></i> <span id="miLabelModeLbl">Notas</span></button>
+          <button class="mi-btn" id="miLegendBtn" onclick="miToggleLegend()" title="Muestra/oculta la tabla de nombres de intervalo según su distancia"><i class="ti ti-info-circle"></i></button>
+          <button class="mi-btn active" id="miIvTagsBtn" onclick="miToggleIvTags()" title="3 estados: solo ascendente (desde la tónica) → + descendente (desde el final, sentido contrario) → oculto"><i class="ti ti-arrows-vertical"></i> <span>Ver intervalos</span></button>
+        </div>
+        <div class="mi-toolbar-group">
+          <button class="mi-btn" id="miClickModeBtn" onclick="miToggleClickMode()" title="Pintar: el click revela/oculta notas y suena. Sonar: el click solo reproduce la nota (aparece un instante si no estaba pintada), sin cambiar lo dibujado"><i class="ti ti-pointer"></i> <span id="miClickModeLbl">Pintar</span></button>
+          <select id="miPlayMode" class="mi-play-select" title="Cómo suenan las notas dibujadas al pulsar Sonar">
+            <option value="chord">Acorde (todas a la vez)</option>
+            <option value="scale" id="miPlayModeScaleOpt">Secuenciar (cuerda 6 → 1, izq → dcha)</option>
+          </select>
+          <button class="mi-btn" id="miPlayDirBtn" onclick="miTogglePlayDir()" title="Sentido: cuerda 6→1 (click para invertir)"><i class="ti ti-arrow-up" id="miPlayDirIcon"></i></button>
+          <button class="mi-btn" onclick="miPlayAll()" title="Reproduce las notas dibujadas en el mástil, según el modo elegido a la izquierda"><i class="ti ti-volume"></i> Sonar</button>
+        </div>
+        <div class="mi-toolbar-group">
+          <button class="mi-btn" id="miShiftLeftBtn" onclick="miShift(-1)" title="Desplaza todas las notas reveladas un traste hacia la izquierda (hacia la cejuela)"><i class="ti ti-arrow-left"></i></button>
+          <button class="mi-btn" id="miShiftRightBtn" onclick="miShift(1)" title="Desplaza todas las notas reveladas un traste hacia la derecha (hacia la caja)"><i class="ti ti-arrow-right"></i></button>
+        </div>
+        <div class="mi-toolbar-group">
           <button class="mi-btn" id="miAnnoModeBtn" onclick="miToggleAnnoMode()" title="Activa el dibujo en directo: mientras esté encendido, los clicks dibujan en vez de revelar notas"><i class="ti ti-pencil"></i> Anotar</button>
           <span id="miAnnoControls" style="display:none;align-items:center;gap:6px;">
             <select id="miAnnoTool" title="Herramienta de anotación">
@@ -1990,24 +2008,6 @@ body.presentation #channelWatermark{display:flex;}
             <button class="mi-btn" onclick="miAnnoUndo()" title="Deshacer la última anotación"><i class="ti ti-arrow-back-up"></i></button>
             <button class="mi-btn" onclick="miAnnoClearAll()" title="Borrar todas las anotaciones"><i class="ti ti-eraser"></i></button>
           </span>
-        </div>
-        <div class="mi-toolbar-group">
-          <button class="mi-btn" id="miLabelModeBtn" onclick="miToggleLabelMode()" title="Alterna entre nombre de nota e intervalo respecto a la tónica"><i class="ti ti-music"></i> <span id="miLabelModeLbl">Notas</span></button>
-          <button class="mi-btn" id="miLegendBtn" onclick="miToggleLegend()" title="Muestra/oculta la tabla de nombres de intervalo según su distancia"><i class="ti ti-info-circle"></i></button>
-          <button class="mi-btn active" id="miIvTagsBtn" onclick="miToggleIvTags()" title="3 estados: solo ascendente (desde la tónica) → + descendente (desde el final, sentido contrario) → oculto"><i class="ti ti-arrows-vertical"></i> <span>Ver intervalos</span></button>
-        </div>
-        <div class="mi-toolbar-group">
-          <button class="mi-btn" id="miClickModeBtn" onclick="miToggleClickMode()" title="Pintar: el click revela/oculta notas y suena. Sonar: el click solo reproduce la nota (aparece un instante si no estaba pintada), sin cambiar lo dibujado"><i class="ti ti-pointer"></i> <span id="miClickModeLbl">Pintar</span></button>
-          <select id="miPlayMode" class="mi-play-select" title="Cómo suenan las notas dibujadas al pulsar Sonar">
-            <option value="chord">Acorde (todas a la vez)</option>
-            <option value="scale" id="miPlayModeScaleOpt">Secuenciar (cuerda 6 → 1, izq → dcha)</option>
-          </select>
-          <button class="mi-btn" id="miPlayDirBtn" onclick="miTogglePlayDir()" title="Sentido: cuerda 6→1 (click para invertir)"><i class="ti ti-arrow-up" id="miPlayDirIcon"></i></button>
-          <button class="mi-btn" onclick="miPlayAll()" title="Reproduce las notas dibujadas en el mástil, según el modo elegido a la izquierda"><i class="ti ti-volume"></i> Sonar</button>
-        </div>
-        <div class="mi-toolbar-group">
-          <button class="mi-btn" id="miShiftLeftBtn" onclick="miShift(-1)" title="Desplaza todas las notas reveladas un traste hacia la izquierda (hacia la cejuela)"><i class="ti ti-arrow-left"></i></button>
-          <button class="mi-btn" id="miShiftRightBtn" onclick="miShift(1)" title="Desplaza todas las notas reveladas un traste hacia la derecha (hacia la caja)"><i class="ti ti-arrow-right"></i></button>
         </div>
       </div>
       <!-- Tabla de nombres de intervalo, desplegable (pedido de Alberto: "de forma clara y
@@ -14142,21 +14142,74 @@ function miAnnoPointerMove(e){
 
 function miAnnoPointerUp(e){
   if(!miAnnoMode||!miAnnoDrawing)return;
-  const el=miAnnoDrawing.el;
+  const d=miAnnoDrawing,el=d.el;
   miAnnoDrawing=null;
   // "Se desvanece solo": para resaltar algo un momento sin que se quede dibujado — ideal para
   // señalar con el trazo libre mientras se explica, sin tener que acordarse de Deshacer/Borrar
-  // después de cada uno. ~2s en total (800ms visible + 1200ms de fundido), pedido de Alberto.
-  if(document.getElementById('miAnnoFade')?.checked)miAnnoFadeAndRemove(el,800,1200);
-  else miAnnoHistory.push(el);
+  // después de cada uno. ~2s en total (800ms visible + 1200ms de fundido/retracción), pedido de
+  // Alberto.
+  if(document.getElementById('miAnnoFade')?.checked){
+    if(d.tool==='free'||d.tool==='arrow'){
+      miAnnoRetractAndRemove(el,d.points,800,1200,pts=>el.setAttribute('points',pts.map(p=>p.join(',')).join(' ')));
+    }else if(d.tool==='line'){
+      const pts=[[d.x0,d.y0],[parseFloat(el.getAttribute('x2')),parseFloat(el.getAttribute('y2'))]];
+      miAnnoRetractAndRemove(el,pts,800,1200,p=>{el.setAttribute('x1',p[0][0]);el.setAttribute('y1',p[0][1]);el.setAttribute('x2',p[1][0]);el.setAttribute('y2',p[1][1]);});
+    }else{ // ellipse: no tiene un "primer punto" con sentido, se desvanece entero
+      miAnnoFadeAndRemove(el,800,1200);
+    }
+  }else miAnnoHistory.push(el);
 }
 
-// Desvanece un elemento de anotación y lo retira del DOM al terminar el fundido. No entra en
-// miAnnoHistory: no tiene sentido Deshacer algo que ya se está borrando solo.
+// Desvanece un elemento de anotación (opacidad) y lo retira del DOM. No entra en miAnnoHistory:
+// no tiene sentido Deshacer algo que ya se está borrando solo.
 function miAnnoFadeAndRemove(el,holdMs,fadeMs){
   el.style.transition=`opacity ${fadeMs}ms ease`;
   setTimeout(()=>{el.style.opacity='0';},holdMs);
   setTimeout(()=>el.remove(),holdMs+fadeMs);
+}
+
+// Retrae un trazo (línea/flecha/trazo libre) desde el extremo que se dibujó PRIMERO hacia el
+// último — pedido de Alberto: "como si la flecha se retrajera" — en vez de desvanecerse entero
+// de golpe. Recorta puntos del principio a medida que avanza el tiempo, interpolando el nuevo
+// punto de arranque sobre el segmento en curso para que el recorte se vea suave (no a saltos
+// entre los puntos capturados durante el arrastre). `points` son las coordenadas ORIGINALES
+// (orden de dibujo); `applyPoints(nuevosPuntos)` vuelca el resultado sobre el elemento SVG real
+// (distinto para <polyline> que para <line>, de ahí el callback en vez de tocar el DOM aquí).
+function miAnnoRetractAndRemove(el,points,holdMs,fadeMs,applyPoints){
+  const segLen=[];let total=0;
+  for(let i=1;i<points.length;i++){
+    const l=Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
+    segLen.push(l);total+=l;
+  }
+  if(!total){setTimeout(()=>el.remove(),holdMs+fadeMs);return;}
+  const t0=performance.now();
+  function frame(){
+    const elapsed=performance.now()-t0-holdMs;
+    if(elapsed<0){requestAnimationFrame(frame);return;}
+    const p=Math.min(1,elapsed/fadeMs);
+    if(p>=1){el.remove();return;}
+    // Progreso lineal (p) usado tal cual para la opacidad, pero a la QUINTA potencia para el
+    // recorte — con los dos a la vez se nota "de máquina" (todo cambia a ritmo constante y a la
+    // par); desacoplados, el trazo se ve casi entero un buen rato, se difumina de forma pareja y
+    // de pronto se retrae muy rápido al final, como si lo tirasen hacia atrás — pedido de
+    // Alberto: "cierta aceleración, jugar con el alpha" (y luego "un poco más de aceleración").
+    const eased=p*p*p*p*p;
+    el.style.opacity=String(1-p*0.85);
+    let trim=total*eased,acc=0;
+    for(let i=1;i<points.length;i++){
+      const l=segLen[i-1];
+      if(acc+l>=trim){
+        const f=l?(trim-acc)/l:0;
+        const cut=[points[i-1][0]+(points[i][0]-points[i-1][0])*f,points[i-1][1]+(points[i][1]-points[i-1][1])*f];
+        applyPoints([cut,...points.slice(i)]);
+        requestAnimationFrame(frame);
+        return;
+      }
+      acc+=l;
+    }
+    el.remove();
+  }
+  requestAnimationFrame(frame);
 }
 
 // Punto de luz momentáneo — para señalar sin dejar marca ninguna, ni siquiera los ~2s de "Se
