@@ -17,9 +17,6 @@
  *   --vis-config <path>   JSON con la configuración visual a aplicar (opcional)
  *   --concurrency <n>     Vídeos en paralelo (por defecto: 1 — más sube el riesgo de saltos en la animación en máquinas de pocos núcleos)
  *   --width/--height      Tamaño del viewport grabado (por defecto: 1600x900)
- *
- * Nota: para lanzarlo con un clic desde la propia app (en vez de terminal), usa
- * scripts/server.js — expone este mismo runBatch() por HTTP para el botón "Generar vídeos".
  */
 const path = require('path');
 const fs = require('fs');
@@ -63,8 +60,7 @@ async function main() {
     if (!fs.existsSync(p)) { console.error('No existe: ' + p); process.exitCode = 1; return; }
   }
 
-  // Refleja en la terminal cada cambio de estado/mensaje mientras corre (mismo mecanismo que usa
-  // scripts/server.js para el polling del botón "Generar vídeos" de la app).
+  // Refleja en la terminal cada cambio de estado/mensaje mientras corre.
   const lastPrinted = {};
   const onUpdate = (state) => {
     state.jobs.forEach((j) => {

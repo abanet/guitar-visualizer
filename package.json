@@ -20,7 +20,6 @@
   "homepage": "https://github.com/abanet/guitar-visualizer#readme",
   "private": "true",
   "devDependencies": {
-    "busboy": "^1.6.0",
     "playwright": "^1.62.1"
   },
   "dependencies": {

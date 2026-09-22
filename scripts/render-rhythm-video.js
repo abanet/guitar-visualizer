@@ -410,11 +410,7 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
   const page = await context.newPage();
   page.on('pageerror', (e) => log('pageerror: ' + e.message));
   page.on('console', (m) => {
-    // Ruido esperado: la app pinga scripts/server.js (servidor opcional del botón "Generar
-    // vídeos por lotes" de la UI) cada 8s; no lo levantamos aquí y el fallo ya se maneja solo
-    // (try/catch, ver batchCheckServer) — sin filtrarlo, un vídeo de 10 min deja ~75 líneas de
-    // basura por trabajo y tapa cualquier error real.
-    if (m.type() === 'error' && !/ERR_CONNECTION_REFUSED/.test(m.text())) log('console.error: ' + m.text());
+    if (m.type() === 'error') log('console.error: ' + m.text());
   });
 
   // Ver el comentario largo en scripts/lib/batch-sessions.js sobre por qué el timestamp de
