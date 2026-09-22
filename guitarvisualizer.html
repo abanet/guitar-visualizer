@@ -1934,7 +1934,25 @@ body.presentation #channelWatermark{display:flex;}
       <div id="miNeckWrap" style="position:absolute;left:0;right:0;top:150px;bottom:84px;z-index:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;padding:0 30px;">
         <div id="miScaleStrip" style="z-index:2;font:600 15px Arial;letter-spacing:.02em;min-height:46px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;user-select:none;-webkit-user-select:none;"></div>
         <div id="miMeasureInfo" style="z-index:2;color:#ffd640;font:700 15px Arial;text-align:center;min-height:20px;margin-bottom:6px;"></div>
-        <div id="miNeckHost" style="display:flex;justify-content:center;user-select:none;-webkit-user-select:none;"></div>
+        <div id="miNeckStack" style="position:relative;">
+          <div id="miNeckHost" style="display:flex;justify-content:center;user-select:none;-webkit-user-select:none;"></div>
+          <!-- Capa de anotación en directo (líneas/flechas/círculos/trazo libre/texto/láser) —
+               HERMANA de #miNeckHost, nunca dentro: miRender() reemplaza el innerHTML de
+               #miNeckHost entero en cada click, así que cualquier dibujo que viviera ahí se
+               perdería. Mismo viewBox 1001x300 fijo que miNeckSVG() (ver NECK_W/NECK_H), así que
+               queda alineada en píxel sin cálculos extra — pero solo mientras el mástil real
+               ocupe el ancho completo de #miNeckHost sin recorte por altura (recuadro 16:9
+               normal); si el mástil se comprime mucho en altura y queda centrado con márgenes
+               laterales, la capa puede desalinearse un poco en horizontal (caso raro, no se
+               resuelve en esta fase). pointer-events:none por defecto: con "Anotar" desactivado
+               los clicks siguen llegando intactos a las notas de abajo. -->
+          <svg id="miAnnoLayer" viewBox="0 0 1001 300" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;">
+            <!-- Cada flecha crea su propio <marker> aquí dentro con SU color (ver miAnnoPointerUp)
+                 — un único marker compartido cambiaría de color retroactivamente en flechas ya
+                 dibujadas con otro color, porque marker-end se re-evalúa en vivo. -->
+            <defs id="miAnnoDefs"></defs>
+          </svg>
+        </div>
       </div>
       <div class="mi-toolbar" style="position:absolute;left:0;right:0;bottom:16px;margin:0;justify-content:center;z-index:7;">
         <div class="mi-toolbar-group">
@@ -1970,6 +1988,26 @@ body.presentation #channelWatermark{display:flex;}
         <div class="mi-toolbar-group">
           <button class="mi-btn" id="miShiftLeftBtn" onclick="miShift(-1)" title="Desplaza todas las notas reveladas un traste hacia la izquierda (hacia la cejuela)"><i class="ti ti-arrow-left"></i></button>
           <button class="mi-btn" id="miShiftRightBtn" onclick="miShift(1)" title="Desplaza todas las notas reveladas un traste hacia la derecha (hacia la caja)"><i class="ti ti-arrow-right"></i></button>
+        </div>
+        <div class="mi-toolbar-group">
+          <button class="mi-btn" id="miAnnoModeBtn" onclick="miToggleAnnoMode()" title="Activa el dibujo en directo: mientras esté encendido, los clicks dibujan en vez de revelar notas"><i class="ti ti-pencil"></i> Anotar</button>
+          <span id="miAnnoControls" style="display:none;align-items:center;gap:6px;">
+            <select id="miAnnoTool" title="Herramienta de anotación">
+              <option value="arrow">Flecha</option>
+              <option value="line">Línea</option>
+              <option value="ellipse">Círculo</option>
+              <option value="free">Trazo libre</option>
+              <option value="text">Texto</option>
+              <option value="laser">Puntero láser</option>
+            </select>
+            <input type="color" id="miAnnoColor" value="#FFE033" title="Color de la anotación" style="width:28px;height:28px;padding:1px;border-radius:4px;border:1px solid rgba(255,255,255,.3);cursor:pointer;">
+            <input type="range" id="miAnnoWidth" min="1" max="12" value="4" title="Grosor de trazo" style="width:70px;">
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#eee;cursor:pointer;" title="Para resaltar algo un momento sin que se quede dibujado: desaparece solo a los ~2s, no hace falta Deshacer.">
+              <input type="checkbox" id="miAnnoFade" checked style="cursor:pointer;"> Se desvanece solo
+            </label>
+            <button class="mi-btn" onclick="miAnnoUndo()" title="Deshacer la última anotación"><i class="ti ti-arrow-back-up"></i></button>
+            <button class="mi-btn" onclick="miAnnoClearAll()" title="Borrar todas las anotaciones"><i class="ti ti-eraser"></i></button>
+          </span>
         </div>
       </div>
       <!-- Tabla de nombres de intervalo, desplegable (pedido de Alberto: "de forma clara y
@@ -13183,6 +13221,13 @@ let miRevealed=new Set(); // "cuerda:traste" de las notas reveladas ahora mismo
 // dedo, no hay que "deshacerlo" a mano.
 let miFingers={};
 let miContextMenuBound=false; // true tras enganchar el listener de click derecho una vez (ver miRender) — nunca se vuelve a enganchar en redibujados posteriores
+// ── Anotación en directo sobre #miAnnoLayer (ver miAnnoPointerDown/Move/Up) — estado propio,
+// independiente de miRevealed/miHistory (las notas): "Deshacer"/"Limpiar" de aquí nunca tocan
+// las notas pintadas, y viceversa. Solo vive en memoria: no se guarda entre recargas.
+let miAnnoMode=false;
+let miAnnoHistory=[]; // elementos <line>/<ellipse>/<polyline>/<g> (texto) creados, para Deshacer
+let miAnnoDrawing=null; // {tool, el, x0, y0, points?} — la anotación en curso mientras se arrastra
+let miAnnoMarkerSeq=0; // id incremental para los <marker> de flecha (uno por color/flecha, ver nota en el HTML)
 let miHoverCell=null; // "cuerda:traste" bajo el ratón ahora mismo (ver miRender) — null si el ratón no está sobre ninguna casilla. Lo usan las teclas 0-4 para saber a qué nota ponerle el dedo sin tener que clicar.
 let miAnimateKeys=new Set(); // "cuerda:traste" que deben dibujarse con la animación de "caída" en el PRÓXIMO miRender() — se rellena justo antes de llamar a miRender() (ver miToggle/miCellClick) y se vacía justo después de usarla (ver miRender), así que solo afecta al render inmediatamente siguiente al click, nunca a redibujados posteriores (resize, deshacer, etc.)
 let miAnimEnabled=true; // botón "Con caída" de la barra — apaga/enciende la animación de caída (notas Y fantasmas), pedido de Alberto para poder desactivarla si estorba
@@ -14004,6 +14049,223 @@ function miChangeFretStart(delta){
   miRender();
 }
 function miClear(){miRevealed.clear();miFingers={};miHistory=[];Object.values(miFlashTimers).forEach(clearTimeout);miFlashTimers={};miFlash.clear();Object.values(miSoundingTimers).forEach(clearTimeout);miSoundingTimers={};miSounding.clear();miMeasureSel=[];miRender();}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ANOTACIÓN EN DIRECTO — capa #miAnnoLayer, hermana de #miNeckHost (ver comentario en el HTML).
+// Con "Anotar" apagado, pointer-events:none: el click atraviesa la capa y llega a las notas
+// exactamente como sin esta función. Con "Anotar" encendido, la capa captura el puntero y las
+// notas dejan de recibir clicks mientras tanto (no hace falta tocar miCellClick/miClickMode).
+// ════════════════════════════════════════════════════════════════════════════
+function miToggleAnnoMode(){
+  miAnnoMode=!miAnnoMode;
+  const layer=document.getElementById('miAnnoLayer'),btn=document.getElementById('miAnnoModeBtn'),ctr=document.getElementById('miAnnoControls');
+  if(layer)layer.style.pointerEvents=miAnnoMode?'auto':'none';
+  if(btn)btn.classList.toggle('active',miAnnoMode);
+  if(ctr)ctr.style.display=miAnnoMode?'inline-flex':'none';
+}
+
+// Convierte coordenadas de cliente (e.clientX/Y) a coordenadas del viewBox de #miAnnoLayer —
+// técnica estándar vía la matriz de transformación de pantalla del propio SVG, válida
+// independientemente de cómo CSS haya escalado/recortado el elemento en pantalla.
+function miAnnoSvgPoint(e){
+  const svg=document.getElementById('miAnnoLayer');
+  const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
+  const m=svg.getScreenCTM();if(!m)return{x:0,y:0};
+  const p=pt.matrixTransform(m.inverse());
+  return{x:p.x,y:p.y};
+}
+
+function miAnnoPointerDown(e){
+  if(!miAnnoMode)return;
+  e.preventDefault();
+  const{x,y}=miAnnoSvgPoint(e);
+  const svg=document.getElementById('miAnnoLayer');
+  const tool=document.getElementById('miAnnoTool').value;
+  const color=document.getElementById('miAnnoColor').value;
+  const width=document.getElementById('miAnnoWidth').value;
+  const ns='http://www.w3.org/2000/svg';
+  if(tool==='laser'){miAnnoLaserAt(x,y,color);return;}
+  if(tool==='text'){miAnnoPlaceText(x,y,color);return;}
+  let el;
+  if(tool==='free'||tool==='arrow'){
+    // La flecha sigue el trazo REAL del ratón (igual que el trazo libre), no una línea recta de
+    // origen a destino — pedido de Alberto: "cogiendo el arco del movimiento del ratón". La
+    // punta se orienta sola según el último tramo (orient="auto-start-reverse" en el marker),
+    // así que un gesto curvo termina con la flecha apuntando en la dirección en que salió el
+    // ratón, no en la dirección origen→destino en línea recta.
+    el=document.createElementNS(ns,'polyline');
+    el.setAttribute('points',`${x},${y}`);
+    el.setAttribute('fill','none');el.setAttribute('stroke',color);el.setAttribute('stroke-width',width);
+    el.setAttribute('stroke-linecap','round');el.setAttribute('stroke-linejoin','round');
+    if(tool==='arrow'){
+      const mid='miAnnoMk'+(miAnnoMarkerSeq++);
+      const marker=document.createElementNS(ns,'marker');
+      marker.setAttribute('id',mid);marker.setAttribute('viewBox','0 0 10 10');
+      marker.setAttribute('refX','8');marker.setAttribute('refY','5');
+      marker.setAttribute('markerWidth','7');marker.setAttribute('markerHeight','7');marker.setAttribute('orient','auto-start-reverse');
+      const path=document.createElementNS(ns,'path');path.setAttribute('d','M0,0 L10,5 L0,10 z');path.setAttribute('fill',color);
+      marker.appendChild(path);
+      document.getElementById('miAnnoDefs').appendChild(marker);
+      el.setAttribute('marker-end',`url(#${mid})`);
+    }
+    svg.appendChild(el);
+    miAnnoDrawing={tool,el,points:[[x,y]]};
+  }else if(tool==='ellipse'){
+    el=document.createElementNS(ns,'ellipse');
+    el.setAttribute('fill','none');el.setAttribute('stroke',color);el.setAttribute('stroke-width',width);
+    svg.appendChild(el);
+    miAnnoDrawing={tool,el,x0:x,y0:y};
+  }else{ // line
+    el=document.createElementNS(ns,'line');
+    el.setAttribute('x1',x);el.setAttribute('y1',y);el.setAttribute('x2',x);el.setAttribute('y2',y);
+    el.setAttribute('stroke',color);el.setAttribute('stroke-width',width);el.setAttribute('stroke-linecap','round');
+    svg.appendChild(el);
+    miAnnoDrawing={tool,el,x0:x,y0:y};
+  }
+}
+
+function miAnnoPointerMove(e){
+  if(!miAnnoMode||!miAnnoDrawing)return;
+  e.preventDefault();
+  const{x,y}=miAnnoSvgPoint(e);
+  const d=miAnnoDrawing;
+  if(d.tool==='free'||d.tool==='arrow'){
+    d.points.push([x,y]);
+    d.el.setAttribute('points',d.points.map(p=>p.join(',')).join(' '));
+  }else if(d.tool==='ellipse'){
+    d.el.setAttribute('cx',(d.x0+x)/2);d.el.setAttribute('cy',(d.y0+y)/2);
+    d.el.setAttribute('rx',Math.abs(x-d.x0)/2);d.el.setAttribute('ry',Math.abs(y-d.y0)/2);
+  }else{ // line
+    d.el.setAttribute('x2',x);d.el.setAttribute('y2',y);
+  }
+}
+
+function miAnnoPointerUp(e){
+  if(!miAnnoMode||!miAnnoDrawing)return;
+  const d=miAnnoDrawing,el=d.el;
+  miAnnoDrawing=null;
+  // "Se desvanece solo": para resaltar algo un momento sin que se quede dibujado — ideal para
+  // señalar con el trazo libre mientras se explica, sin tener que acordarse de Deshacer/Borrar
+  // después de cada uno. ~2s en total (800ms visible + 1200ms de fundido/retracción), pedido de
+  // Alberto.
+  if(document.getElementById('miAnnoFade')?.checked){
+    if(d.tool==='free'||d.tool==='arrow'){
+      miAnnoRetractAndRemove(el,d.points,800,1200,pts=>el.setAttribute('points',pts.map(p=>p.join(',')).join(' ')));
+    }else if(d.tool==='line'){
+      const pts=[[d.x0,d.y0],[parseFloat(el.getAttribute('x2')),parseFloat(el.getAttribute('y2'))]];
+      miAnnoRetractAndRemove(el,pts,800,1200,p=>{el.setAttribute('x1',p[0][0]);el.setAttribute('y1',p[0][1]);el.setAttribute('x2',p[1][0]);el.setAttribute('y2',p[1][1]);});
+    }else{ // ellipse: no tiene un "primer punto" con sentido, se desvanece entero
+      miAnnoFadeAndRemove(el,800,1200);
+    }
+  }else miAnnoHistory.push(el);
+}
+
+// Desvanece un elemento de anotación (opacidad) y lo retira del DOM. No entra en miAnnoHistory:
+// no tiene sentido Deshacer algo que ya se está borrando solo.
+function miAnnoFadeAndRemove(el,holdMs,fadeMs){
+  el.style.transition=`opacity ${fadeMs}ms ease`;
+  setTimeout(()=>{el.style.opacity='0';},holdMs);
+  setTimeout(()=>el.remove(),holdMs+fadeMs);
+}
+
+// Retrae un trazo (línea/flecha/trazo libre) desde el extremo que se dibujó PRIMERO hacia el
+// último — pedido de Alberto: "como si la flecha se retrajera" — en vez de desvanecerse entero
+// de golpe. Recorta puntos del principio a medida que avanza el tiempo, interpolando el nuevo
+// punto de arranque sobre el segmento en curso para que el recorte se vea suave (no a saltos
+// entre los puntos capturados durante el arrastre). `points` son las coordenadas ORIGINALES
+// (orden de dibujo); `applyPoints(nuevosPuntos)` vuelca el resultado sobre el elemento SVG real
+// (distinto para <polyline> que para <line>, de ahí el callback en vez de tocar el DOM aquí).
+function miAnnoRetractAndRemove(el,points,holdMs,fadeMs,applyPoints){
+  const segLen=[];let total=0;
+  for(let i=1;i<points.length;i++){
+    const l=Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
+    segLen.push(l);total+=l;
+  }
+  if(!total){setTimeout(()=>el.remove(),holdMs+fadeMs);return;}
+  const t0=performance.now();
+  function frame(){
+    const elapsed=performance.now()-t0-holdMs;
+    if(elapsed<0){requestAnimationFrame(frame);return;}
+    const p=Math.min(1,elapsed/fadeMs);
+    if(p>=1){el.remove();return;}
+    // Progreso lineal (p) usado tal cual para la opacidad, pero a la QUINTA potencia para el
+    // recorte — con los dos a la vez se nota "de máquina" (todo cambia a ritmo constante y a la
+    // par); desacoplados, el trazo se ve casi entero un buen rato, se difumina de forma pareja y
+    // de pronto se retrae muy rápido al final, como si lo tirasen hacia atrás — pedido de
+    // Alberto: "cierta aceleración, jugar con el alpha" (y luego "un poco más de aceleración").
+    const eased=p*p*p*p*p;
+    el.style.opacity=String(1-p*0.85);
+    let trim=total*eased,acc=0;
+    for(let i=1;i<points.length;i++){
+      const l=segLen[i-1];
+      if(acc+l>=trim){
+        const f=l?(trim-acc)/l:0;
+        const cut=[points[i-1][0]+(points[i][0]-points[i-1][0])*f,points[i-1][1]+(points[i][1]-points[i-1][1])*f];
+        applyPoints([cut,...points.slice(i)]);
+        requestAnimationFrame(frame);
+        return;
+      }
+      acc+=l;
+    }
+    el.remove();
+  }
+  requestAnimationFrame(frame);
+}
+
+// Punto de luz momentáneo — para señalar sin dejar marca ninguna, ni siquiera los ~2s de "Se
+// desvanece solo". Siempre efímero, no depende del checkbox (el checkbox es para trazos que sí
+// quieres que se vean un momento; el láser es solo un toque).
+function miAnnoLaserAt(x,y,color){
+  const svg=document.getElementById('miAnnoLayer'),ns='http://www.w3.org/2000/svg';
+  const c=document.createElementNS(ns,'circle');
+  c.setAttribute('cx',x);c.setAttribute('cy',y);c.setAttribute('r','14');c.setAttribute('fill',color);
+  c.style.opacity='0.85';c.style.transition='r .5s ease';
+  svg.appendChild(c);
+  requestAnimationFrame(()=>c.setAttribute('r','26'));
+  miAnnoFadeAndRemove(c,0,500);
+}
+
+// Rótulo de texto editable en el punto indicado — reutiliza foreignObject+contenteditable, mismo
+// espíritu que #miTitle/#miDesc (miInitEditableFields). Pensado solo para lo que se ve en
+// pantalla al grabar; no se serializa a SVG estático (no hace falta para este uso).
+function miAnnoPlaceText(x,y,color){
+  const svg=document.getElementById('miAnnoLayer'),ns='http://www.w3.org/2000/svg';
+  const fo=document.createElementNS(ns,'foreignObject');
+  fo.setAttribute('x',x);fo.setAttribute('y',y-16);fo.setAttribute('width','260');fo.setAttribute('height','60');
+  const div=document.createElement('div');
+  div.setAttribute('contenteditable','true');
+  div.style.cssText=`color:${color};font:700 20px Arial;line-height:1.25;outline:none;white-space:pre-wrap;`;
+  // stopPropagation: mismo bug ya conocido de #miTitle/#miDesc (ver miInitEditableFields) — sin
+  // esto, el atajo global de la barra espaciadora dispara togglePlay() a media escritura y nos
+  // saca de la pestaña.
+  div.addEventListener('keydown',e=>e.stopPropagation());
+  fo.appendChild(div);
+  svg.appendChild(fo);
+  miAnnoHistory.push(fo);
+  div.focus();
+}
+
+function miAnnoUndo(){
+  const el=miAnnoHistory.pop();
+  if(el)el.remove();
+}
+function miAnnoClearAll(){
+  const svg=document.getElementById('miAnnoLayer');
+  miAnnoHistory.forEach(el=>el.remove());
+  miAnnoHistory=[];
+  const defs=document.getElementById('miAnnoDefs');if(defs)defs.innerHTML='';
+}
+
+let miAnnoLayerBound=false;
+function miInitAnnoLayer(){
+  if(miAnnoLayerBound)return;
+  miAnnoLayerBound=true;
+  const svg=document.getElementById('miAnnoLayer');if(!svg)return;
+  svg.addEventListener('pointerdown',miAnnoPointerDown);
+  svg.addEventListener('pointermove',miAnnoPointerMove);
+  svg.addEventListener('pointerup',miAnnoPointerUp);
+  svg.addEventListener('pointerleave',miAnnoPointerUp);
+}
 function miToggleGhosts(){
   const turningOn=!miShowGhosts;
   miShowGhosts=!miShowGhosts;
@@ -14126,7 +14388,7 @@ function showTab(name){
     if(name==='sequence')initSequenceTab();
     if(name==='scales')try{spRenderPanel();}catch(e2){console.error(e2);}
     if(name==='arpscale')try{asInit();}catch(e3){console.error(e3);}
-    if(name==='mastilInteractivo')try{miRender();miInitEditableFields();}catch(e4){console.error(e4);}
+    if(name==='mastilInteractivo')try{miRender();miInitEditableFields();miInitAnnoLayer();}catch(e4){console.error(e4);}
     {const _p2=getCurrentParsedForBadge();if(_p2)updateExerciseBadge(_p2);}
   }catch(e){console.error('showTab error:',e);}
 }
