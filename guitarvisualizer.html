@@ -1952,6 +1952,7 @@ body.presentation #channelWatermark{display:flex;}
           <button class="mi-btn active" id="miAnimBtn" onclick="miToggleAnim()" title="Las notas nuevas (y los fantasmas de 'Ver en todo el mástil') caen y se enganchan al aparecer. Desactívalo para que aparezcan al instante."><i class="ti ti-arrow-down"></i> Con caída</button>
           <button class="mi-btn" onclick="miUndo()" title="Deshacer el último click"><i class="ti ti-arrow-back-up"></i> Deshacer</button>
           <button class="mi-btn" onclick="miClear()" title="Ocultar todas las notas reveladas"><i class="ti ti-eraser"></i> Limpiar</button>
+          <button class="mi-btn" onclick="miSaveToLibrary()" title="Guarda las notas reveladas como una posición de la Librería, transportable a cualquier tonalidad (necesita Tonalidad puesta y al menos una nota en la tónica)"><i class="ti ti-bookmark"></i> Guardar como posición</button>
         </div>
         <div class="mi-toolbar-group">
           <button class="mi-btn" id="miLabelModeBtn" onclick="miToggleLabelMode()" title="Alterna entre nombre de nota e intervalo respecto a la tónica"><i class="ti ti-music"></i> <span id="miLabelModeLbl">Notas</span></button>
@@ -2148,6 +2149,7 @@ let rafId=null, tStart=0, tOffset=0, speed=1, topLayer='A';
 let currentChordData=null, vlCurrentNotes=null, vlAnimId=null;
 let dragSrcBankId=null, dragSrcLib=null;
 let pendingSaveSlots=null;
+let pendingSaveTemplate=null; // ver Librería → entry.template, rellenado solo desde miSaveToLibrary()
 
 const NTS=['C','Db','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
 const ALIAS={'C#':'Db','D#':'Eb','G#':'Ab','A#':'Bb','Gb':'F#','Cb':'B'};
@@ -2857,10 +2859,15 @@ function renderLibraryFull(){
       const thumbEl=slots[0]?(slots[0].thumb?`<img src="${slots[0].thumb}">`:''):'';
       const item=document.createElement('div');item.className='lib-full-entry';
       const slotsHTML=slots.filter(s=>s).map(s=>`<div class="lib-full-entry-slot">${s.thumb?`<img src="${s.thumb}">`:'<div style="background:#e8f4ff;height:100%;display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--accent);">SVG</div>'}</div>`).join('');
+      const transposeHTML=entry.template?`<select class="lib-template-root" data-eid="${entry.id}" title="Transportar esta posición a otra tónica" style="margin-left:auto;font-size:11px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);">
+          ${NTS.map(n=>`<option value="${n}" ${n===entry.template.capturedRoot?'selected':''}>${n}</option>`).join('')}
+        </select>
+        <button class="btn sm" style="margin-left:2px;" title="Transportar a la tónica elegida" onclick="applyTemplateRoot('${entry.id}')"><i class="ti ti-transform"></i></button>`:'';
       item.innerHTML=`<div class="lib-full-entry-thumb ${slots[0]?.type==='svg'?'svg-t':''}">${thumbEl}</div>
         <span class="lib-full-entry-name">${entry.name}</span>
         <div class="lib-full-entry-slots">${slotsHTML}</div>
-        <select class="lib-move-select" data-eid="${entry.id}" title="Mover a carpeta" style="margin-left:auto;font-size:11px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);max-width:130px;"></select>
+        ${transposeHTML}
+        <select class="lib-move-select" data-eid="${entry.id}" title="Mover a carpeta" style="margin-left:${entry.template?'8px':'auto'};font-size:11px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);max-width:130px;"></select>
         <button class="btn sm danger" style="margin-left:4px;" onclick="deleteLibEntry('${entry.id}')"><i class="ti ti-trash"></i></button>`;
       itemsDiv.appendChild(item);
       // populate move selector
@@ -2877,6 +2884,26 @@ function renderLibraryFull(){
     return div;
   }
   getRootFolders().forEach(folder=>tree.appendChild(buildFolderDiv(folder,0)));
+}
+
+// Rehornea slots[0] de una entrada con plantilla (entry.template) en la tónica elegida en su
+// selector "Transportar a…" — ver instantiateShapeTemplate(). No toca slots[1..3] (las plantillas
+// de esta fase siempre se guardan con un único slot).
+function applyTemplateRoot(entryId){
+  const entry=library.find(e=>e.id===entryId);
+  if(!entry||!entry.template)return;
+  const sel=document.querySelector(`.lib-template-root[data-eid="${entryId}"]`);
+  const root=sel?sel.value:entry.template.capturedRoot;
+  const voicing=instantiateShapeTemplate(entry.template,root,0,15);
+  if(!voicing){alert('No se pudo transportar esta posición a '+root+'.');return;}
+  const svgStr=generateNeckSVG(voicing,root,0,15);
+  if(!svgStr)return;
+  const svgParsed=svgStringToParsed(svgStr);
+  const oldThumb=entry.slots?.[0]?.thumb;
+  const thumb=URL.createObjectURL(new Blob([svgStr],{type:'image/svg+xml'}));
+  entry.slots=[{type:'svg',data:svgStr,name:entry.name,thumb,svgParsed}];
+  if(oldThumb)try{URL.revokeObjectURL(oldThumb);}catch(e){}
+  saveLibToStorage();renderLibraryFull();renderLibInline();
 }
 
 function openNewFolderModal(parentId){
@@ -2927,8 +2954,9 @@ function getOrCreateFolder(folderName){
   return newFolder.id;
 }
 
-function openLibModal(slots){
+function openLibModal(slots,template=null){
   pendingSaveSlots=slots;
+  pendingSaveTemplate=template;
   document.getElementById('libEntryNameInput').value='';
   // populate folder dropdown (hierarchical)
   const sel=document.getElementById('libFolderSelect');
@@ -2955,7 +2983,10 @@ function confirmSaveToLib(){
     if(detected)folderName=`${detected.root} — ${detected.chord}`;
     folderId=getOrCreateFolder(folderName);
   }
-  library.push({id:rid(),name,folder:folderId,slots:(pendingSaveSlots||[]).slice(0,4)});
+  const entry={id:rid(),name,folder:folderId,slots:(pendingSaveSlots||[]).slice(0,4)};
+  if(pendingSaveTemplate)entry.template=pendingSaveTemplate;
+  library.push(entry);
+  pendingSaveTemplate=null;
   saveLibToStorage();renderLibraryFull();renderLibInline();renderEditor();closeModal('saveLibModal');
 }
 
@@ -5872,6 +5903,39 @@ function getChordVoicing(chord,stringGroup,inversion){
   return{frets:best,strings:stringGroup,assigned,
     notes:assigned.map(a=>spelled[a.interval]||NTS[a.st]),
     intervals:assigned.map(a=>a.interval)};
+}
+
+// Instancia una plantilla de posición (ver Librería → entry.template) en una tonalidad concreta.
+// Generaliza ASH_CAGED_SHAPES (un único 'off' por forma) a un fretOffset POR NOTA respecto a una
+// nota-ancla (la tónica de traste más bajo capturada) — así sirve igual para cajas CAGED limpias
+// que para formas irregulares (caminos, formas capturadas a mano en Mástil interactivo).
+// Devuelve el mismo shape {frets,strings,notes,intervals} que getChordVoicing, para poder
+// reutilizar generateNeckSVG() tal cual. null si no encuentra un traste de ancla válido.
+function instantiateShapeTemplate(template,rootNoteName,fretStart=0,fretEnd=15){
+  if(!template||!template.notes||!template.notes.length)return null;
+  const targetPc=noteToSt(rootNoteName);
+  if(targetPc<0)return null;
+  const minOffset=Math.min(...template.notes.map(n=>n.fretOffset));
+  const maxOffset=Math.max(...template.notes.map(n=>n.fretOffset));
+  let anchorFret=-1;
+  // Primero intenta un ancla que deje la forma entera dentro de la ventana pedida; si no cabe
+  // (ventana muy estrecha), cae a cualquier traste válido 0-20 aunque se salga de la ventana.
+  for(let pass=0;pass<2&&anchorFret<0;pass++){
+    for(let f=0;f<=20;f++){
+      if(f+minOffset<0)continue;
+      if(pass===0&&(f+minOffset<fretStart||f+maxOffset>fretEnd))continue;
+      if(getNoteStAtFret(template.anchorString,f)===targetPc){anchorFret=f;break;}
+    }
+  }
+  if(anchorFret<0)return null;
+  const frets=[],strings=[],notes=[],intervals=[];
+  template.notes.forEach(n=>{
+    const fret=anchorFret+n.fretOffset;
+    const pc=(targetPc+n.semi)%12;
+    frets.push(fret);strings.push(n.string);
+    notes.push(NTS[pc]);intervals.push(String(n.semi));
+  });
+  return{frets,strings,notes,intervals};
 }
 
 function generateNeckSVG(voicing,chord,fretStart=0,fretEnd=15,msg=null,showEcho=false){
@@ -14004,6 +14068,45 @@ function miChangeFretStart(delta){
   miRender();
 }
 function miClear(){miRevealed.clear();miFingers={};miHistory=[];Object.values(miFlashTimers).forEach(clearTimeout);miFlashTimers={};miFlash.clear();Object.values(miSoundingTimers).forEach(clearTimeout);miSoundingTimers={};miSounding.clear();miMeasureSel=[];miRender();}
+
+// Construye una plantilla de posición (ver Librería → entry.template) a partir de lo pintado
+// ahora mismo en el mástil: cada nota lleva su traste y semitono relativos a la tónica (miTonic),
+// igual que ASH_CAGED_SHAPES pero por nota — ver instantiateShapeTemplate() para cómo se
+// transporta a otra tonalidad. null (con alert) si falta la tónica o ninguna nota pintada es ella.
+function miBuildTemplate(){
+  if(!miTonic){alert('Pon una Tonalidad antes de guardar esta posición (la necesita para saber cuál es la tónica).');return null;}
+  const tonicPc=noteToSt(miTonic);
+  const raw=[...miRevealed].map(key=>{
+    const[s,f]=key.split(':').map(Number);
+    const pc=getNoteStAtFret(s,f);
+    return{string:s,fret:f,semi:((pc-tonicPc)%12+12)%12,finger:miFingers[key]};
+  });
+  if(!raw.length){alert('Revela al menos una nota antes de guardar esta posición.');return null;}
+  const roots=raw.filter(n=>n.semi===0);
+  if(!roots.length){alert('Marca al menos una nota que sea la tónica ('+miTonic+') para poder guardar esta posición como plantilla transportable.');return null;}
+  const anchor=roots.reduce((a,b)=>b.fret<a.fret?b:a);
+  const notes=raw.map(n=>({string:n.string,fretOffset:n.fret-anchor.fret,semi:n.semi,isRoot:n.semi===0,finger:n.finger}));
+  const strings=[...new Set(notes.map(n=>n.string))].sort((a,b)=>a-b);
+  const offsets=notes.map(n=>n.fretOffset);
+  return{scope:'custom',quality:'',shapeLabel:'',movable:true,
+    strings,fretSpan:Math.max(...offsets)-Math.min(...offsets),
+    anchorString:anchor.string,notes,capturedRoot:miTonic};
+}
+
+function miSaveToLibrary(){
+  const template=miBuildTemplate();
+  if(!template)return;
+  const voicing=instantiateShapeTemplate(template,miTonic,miFretStart,miFretStart+miFretCount);
+  if(!voicing){alert('No se pudo generar la posición inicial. Prueba a revisar las notas reveladas.');return;}
+  const svgStr=generateNeckSVG(voicing,miTonic,miFretStart,miFretStart+miFretCount);
+  if(!svgStr){alert('No se pudo generar el SVG de esta posición.');return;}
+  const svgParsed=svgStringToParsed(svgStr);
+  const blob=new Blob([svgStr],{type:'image/svg+xml'});
+  const thumb=URL.createObjectURL(blob);
+  const slot={type:'svg',data:svgStr,name:'',thumb,svgParsed};
+  openLibModal([slot],template);
+}
+
 function miToggleGhosts(){
   const turningOn=!miShowGhosts;
   miShowGhosts=!miShowGhosts;
