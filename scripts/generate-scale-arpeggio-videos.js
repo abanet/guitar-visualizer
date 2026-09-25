@@ -49,7 +49,12 @@
  *   --root <nota>           Tónica, p.ej. C, F#, Bb (con --scale, alternativa a --config)
  *   --scale <clave>         Escala (clave interna, p.ej. major, dorian, harmonic_minor — ver
  *                           SEQ_SCALE_FORMULAS en guitarvisualizer.html)
- *   --quality <sevenths|triads|pentatonic>  Qué resaltar de cada acorde (por defecto: sevenths).
+ *   --quality <sevenths|triads|pentatonic|shapes-triads|shapes-sevenths>  Qué resaltar de cada acorde
+ *                           (por defecto: sevenths). "shapes-*" = formas de acorde GUARDADAS (paso 2b de
+ *                           la pestaña, vienen incluidas en la app; solo escala mayor): en vez de todas las
+ *                           notas del acorde, la forma concreta de cada uno. Los acordes con varias formas
+ *                           las alternan por apariciones (modo tema) o una por compás (diapositivas). El
+ *                           nombre del vídeo lleva "_FormasAcorde" para no pisar el de arpegios.
  *                           "pentatonic" resalta la pentatónica de cada acorde (mayor si el
  *                           acorde es mayor, menor en cualquier otro caso) en vez de sus chord
  *                           tones. En modo tema el ACORDE en sí sale del XML tal cual siempre —
@@ -182,8 +187,11 @@ async function validatePositions({ appUrl, cfg, positions, positionsLib }) {
         const missingSubset = [];
         asState.chords.forEach(c => {
           const info = asChordInfo(c.chord);
-          const svg = asBuildArpeggioSVG(notes, info, c.chord, fretMin, fretMax);
-          if (!svg) missingSubset.push(c.chord);
+          // Modo formas: cuenta como "sin fotograma" un acorde sin forma guardada o cuya forma no
+          // cabe entera en esta posición/octava (nota por debajo del traste 0).
+          const keys = asShapesMode() ? asShapeKeysForEntry(c) : undefined;
+          const svg = (asShapesMode() && !keys) ? null : asBuildArpeggioSVG(notes, info, c.chord, fretMin, fretMax, keys || undefined);
+          if (!svg) missingSubset.push(c.chord + (c.variant ? ' (forma ' + (c.variant + 1) + ')' : ''));
         });
         return {
           posLabel, ok: true,
@@ -515,7 +523,8 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
   // Notas"/"Intervalos" según la opción usada).
   const noteDisplayLabels = { notes: 'Notas', intervals: 'Intervalos', auto: 'Auto', inversions: 'Inversiones' };
   const noteDisplayTag = noteDisplayLabels[(visConfig && visConfig.noteDisplay) || 'auto'] || 'Auto';
-  const outPath = path.join(outDir, `${baseName}_${noteDisplayTag}_${tag}.mp4`);
+  const shapesTag = /^shapes-/.test(cfg.quality) ? '_FormasAcorde' : '';
+  const outPath = path.join(outDir, `${baseName}${shapesTag}_${noteDisplayTag}_${tag}.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
   // Recorte EXACTO por timestamp de fotograma (filtro trim+setpts), no por keyframe: "-ss" ANTES
   // de "-i" busca al keyframe más cercano y puede desviarse del punto real hasta un GOP entero —
