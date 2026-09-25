@@ -522,7 +522,9 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
   // Intervalos del mismo ejercicio no se pisan entre sí (pedido: "que el nombre lleve la palabra
   // Notas"/"Intervalos" según la opción usada).
   const noteDisplayLabels = { notes: 'Notas', intervals: 'Intervalos', auto: 'Auto', inversions: 'Inversiones' };
-  const noteDisplayTag = noteDisplayLabels[(visConfig && visConfig.noteDisplay) || 'auto'] || 'Auto';
+  // Sin --visconfig el valor efectivo es Notas, no 'auto': asSendToEditor fuerza "Mástil: Notas"
+  // en este ejercicio (antes el nombre decía _Auto_ aunque el vídeo saliera siempre en notas).
+  const noteDisplayTag = noteDisplayLabels[(visConfig && visConfig.noteDisplay) || 'notes'] || 'Notas';
   const shapesTag = /^shapes-/.test(cfg.quality) ? '_FormasAcorde' : '';
   const outPath = path.join(outDir, `${baseName}${shapesTag}_${noteDisplayTag}_${tag}.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);

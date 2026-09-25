@@ -12091,7 +12091,10 @@ async function asSendToEditor(){
       // forma 1…) — así en un tema que repite la progresión salen todas, sin decidirlo a mano.
       let entry=null,cacheKey=chord;
       if(asShapesMode()){
-        const forms=asState.chords.filter(c=>c.chord===chord&&c.hasShape);
+        // Por clase de nota, no por grafía: BiaB escribe p.ej. "Fdim" donde la escala de F# mayor
+        // genera "E#dim" — con === ese acorde se quedaba sin forma (y sin fotograma).
+        const chordKey=ch=>{const m=(ch||'').match(/^([A-G][b#]?)(.*)$/);return m?noteToSt(m[1])+'|'+m[2]:ch;};
+        const forms=asState.chords.filter(c=>chordKey(c.chord)===chordKey(chord)&&c.hasShape);
         const n=shapeOcc[chord]||0;shapeOcc[chord]=n+1;
         entry=forms.length?forms[n%forms.length]:null;
         cacheKey=chord+'|'+(entry?entry.variant:'-');
