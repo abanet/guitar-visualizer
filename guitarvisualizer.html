@@ -6484,8 +6484,35 @@ function buildExploreTriadSeqB(chord){
     }
     seq.push([gi,matchInv]);usedByGroup[gi].add(matchInv);
   }
-  return seq.concat(seq.slice(0,11).reverse());
+  // La regla de arriba casa por NOTA (st), no por traste: getChordVoicing elige su propia octava
+  // para cada posición, así que un deslizamiento podía caer 12 trastes más arriba/abajo (p.ej.
+  // Cdim: la posición de giro en trastes 1-3 con todo lo demás en 11-15 — "va a los primeros
+  // trastes y vuelve a saltar al final", reportado por Alberto). Se encadena cada TRAMO de
+  // deslizamientos (separados por los 2 saltos dentro del mismo grupo, que ya son saltos a
+  // propósito) por trastes reales, y luego se desplaza el tramo entero una octava si hace falta
+  // para caber en EXPLORE_TRIAD_MAX_FRET. Tercer elemento de cada paso = desplazamiento en trastes.
+  const vAt=(gi,inv,off)=>getChordVoicing(chord,TRIAD_STRING_GROUPS[gi],inv).frets.map(f=>f+off);
+  const segs=[];
+  seq.forEach((st,k)=>{if(k===0||st[0]===seq[k-1][0])segs.push([]);segs[segs.length-1].push(k);});
+  const offs=new Array(seq.length).fill(0);
+  segs.forEach(seg=>{
+    for(let j=1;j<seg.length;j++){
+      const k=seg[j],[gi,inv]=seq[k],[pgi,pinv]=seq[k-1];
+      const prevFrets=vAt(pgi,pinv,offs[k-1]),curFrets=vAt(gi,inv,0);
+      const prevStrings=TRIAD_STRING_GROUPS[pgi],curStrings=TRIAD_STRING_GROUPS[gi];
+      const s=curStrings.find(x=>prevStrings.includes(x));
+      offs[k]=prevFrets[prevStrings.indexOf(s)]-curFrets[curStrings.indexOf(s)];
+    }
+    const all=seg.flatMap(k=>vAt(seq[k][0],seq[k][1],offs[k]));
+    const lo=Math.min(...all),hi=Math.max(...all);
+    const shifts=[0,-12,12,-24,24].filter(d=>lo+d>=0);
+    const shift=shifts.find(d=>hi+d<=EXPLORE_TRIAD_MAX_FRET)??shifts.reduce((a,b)=>hi+b<hi+a?b:a);
+    seg.forEach(k=>{offs[k]+=shift;});
+  });
+  const withOffs=seq.map(([gi,inv],k)=>[gi,inv,offs[k]]);
+  return withOffs.concat(withOffs.slice(0,11).reverse());
 }
+const EXPLORE_TRIAD_MAX_FRET=13;
 // C ("al azar"): las mismas 12 posiciones, orden fijo sin patrón — sin ida/vuelta, cada compás es
 // un salto arbitrario (a diferencia de A/B, que conectan posiciones vecinas a propósito). Al ser
 // las 12 combinaciones (gi,inv) siempre jugables por construcción, no hace falta verificar a mano
@@ -6527,8 +6554,8 @@ async function applyExploreTriadSequence(seq,barsPerPos,label,loop){
   for(let k=0;k<totalBlocks;k++){
     const idx=loop?(k%lapLen):Math.min(k,2*lapLen-1); // loop: da la vuelta sin congelarse nunca
     const lapNum=loop?Math.floor(k/lapLen):(idx<lapLen?0:1);
-    const[gi,inv]=seq[idx%lapLen];
-    plan.push({gi,inv,mode:lapNum===0?'name':'interval'});
+    const[gi,inv,off=0]=seq[idx%lapLen]; // off: desplazamiento en trastes (solo B, ver buildExploreTriadSeqB)
+    plan.push({gi,inv,off,mode:lapNum===0?'name':'interval'});
   }
 
   const INV_NAMES=['Fund.','1ª inv','2ª inv'];
@@ -6537,10 +6564,11 @@ async function applyExploreTriadSequence(seq,barsPerPos,label,loop){
   for(let idx=0;idx<flat.length;idx++){
     const f=flat[idx];
     const block=Math.min(Math.floor(f.bi/barsPerPos),plan.length-1);
-    const{gi,inv,mode}=plan[block];
+    const{gi,inv,off,mode}=plan[block];
     const group=TRIAD_STRING_GROUPS[gi]||TRIAD_STRING_GROUPS[0];
     const chord=f.chord;
-    const voicing=getChordVoicing(chord,group,inv);
+    const baseVoicing=getChordVoicing(chord,group,inv);
+    const voicing=(baseVoicing&&off)?{...baseVoicing,frets:baseVoicing.frets.map(fr=>fr+off)}:baseVoicing;
     items.push({f,gi,inv,mode,chord,voicing});
     if(voicing&&voicing.frets&&voicing.frets.length){
       const mx=Math.max(...voicing.frets);if(mx>sharedFretEnd)sharedFretEnd=mx;
