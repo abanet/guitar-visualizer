@@ -4808,6 +4808,7 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
   const colorOf=(n)=>own?(isRoot(n)?'rgba(229,57,53,.45)':'rgba(38,198,218,.5)'):(n.fill||'#26C6DA');
   const ndMode=getNoteDisplay(currentChordData?.cycleIdx);
   const labelOf=(note)=>noteDisplayLabel(note,ndMode,nextChord||'');
+  const asBackFill=(bgAuto&&bgAuto.mode==='scale'&&svgCanvas.querySelector('.as-backing'))?stageBgColor(svgCanvas):null;
   // (Re)create the next-position ghost elements only when the target position changed.
   let els=window._arpGhostEls;
   if(!els || window._arpGhostChord!==nextChord || !overlay.firstChild){
@@ -4820,6 +4821,11 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
       // y el voladizo de la cuerda al aire debe coincidir con el del mástil (svgCanvas).
       const cx=note.cx,cy=note.cy;
       const g=document.createElementNS(NS,'g');
+      // "Arpegios dentro de escala": disco opaco que va tapando el fantasma de escala
+      // (bgMapCanvas) a medida que la nota entrante gana color — ver asScaleBacking en
+      // renderSVGStatic.
+      const backing=asBackFill?mkAsBacking(cx,cy,r,asBackFill):null;
+      if(backing){backing.setAttribute('opacity','0');g.appendChild(backing);}
       const c=document.createElementNS(NS,'circle');
       c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r',r);
       g.appendChild(c);
@@ -4836,7 +4842,7 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
       const finalFill=colorOf(note); // ya incluye alfa (.45/.5 en estilo propio)
       const finalStroke=own?'rgba(255,255,255,0.25)':(note.stroke||note.fill||'#26C6DA');
       const finalStrokeW=own?1:(note.strokeWidth?+note.strokeWidth:2);
-      els.push({g,c,t,col:finalFill,strokeCol:finalStroke,strokeW:finalStrokeW});
+      els.push({g,c,t,backing,col:finalFill,strokeCol:finalStroke,strokeW:finalStrokeW});
     });
     window._arpGhostEls=els;window._arpGhostChord=nextChord;
     window._arpGhostBornAt=(typeof performance!=='undefined'?performance.now():Date.now()); // para el fundido de entrada
@@ -4870,6 +4876,7 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
     const presenceA=0.12*g1;                 // relleno "fantasma" MÍNIMO (casi hueco); 0 en g1=0
     const fillA=(lerp(presenceA,fa,cm)*bornFade).toFixed(3);
     o.c.setAttribute('fill',`rgba(${cr},${cg},${cb},${fillA})`);
+    if(o.backing)o.backing.setAttribute('opacity',(cm*bornFade).toFixed(3));
     // STROKE: gris → borde real (color+alfa+grosor) con cm.
     const [sr,sg,sb,sa]=parseRGBA(o.strokeCol);
     const kr=Math.round(lerp(GHOST_GRAY[0],sr,cm)),kg=Math.round(lerp(GHOST_GRAY[1],sg,cm)),kb=Math.round(lerp(GHOST_GRAY[2],sb,cm));
@@ -5336,6 +5343,13 @@ function renderSVGStatic(parsed){
   // "estilo propio" les aplique (a diferencia de Chord tones, donde la iluminación ES el punto).
   const isTNparsed=parsed.tnFrame===true && parsed.spFrame!==true;
   const ownStyle=getVisConfig().forceOwnNoteStyle===true && (!isTNparsed||parsed.asFrame===true);
+  // "Arpegios dentro de escala": el fantasma de la escala (bgMapCanvas, debajo) se pinta en TODAS
+  // las celdas de la forma — ver asScaleAlways en buildAutoBg. Las notas activas son
+  // semitransparentes, así que sin nada más el fantasma se transparentaba a través de ellas. Un
+  // disco opaco del color del escenario detrás de cada nota activa lo tapa del todo; como vive
+  // DENTRO del grupo .vl-note, se desvanece con él en el crossfade y el fantasma va apareciendo a
+  // medida que la nota activa se va (pedido de Alberto).
+  const asScaleBacking=(parsed.asScaleGen===true&&bgAuto&&bgAuto.mode==='scale')?stageBgColor(canvas):null;
   if(drawNotes){
   drawList.forEach((note,i)=>{
     const rr=useUnified?stdR:note.r;
@@ -5359,6 +5373,7 @@ function renderSVGStatic(parsed){
       circle.setAttribute('fill',note.fill);circle.setAttribute('stroke',note.stroke||note.fill);circle.setAttribute('stroke-width',note.strokeWidth||'2');circle.setAttribute('data-fill',note.fill);
       if(note.stroke){circle.setAttribute('data-ownstroke',note.stroke);if(note.strokeWidth)circle.setAttribute('data-ownstrokew',note.strokeWidth);}
     }
+    if(asScaleBacking)g.appendChild(mkAsBacking(note.cx,note.cy,rr,asScaleBacking));
     g.appendChild(circle);
     // Anillo de tónica de ESCALA (prueba, feedback de Alberto 2026-09-06): separado del relleno
     // rojo (que marca la tónica del ACORDE activo, cambia con cada acorde) — un anillo dorado
@@ -11655,12 +11670,53 @@ function asBoxToggleOpen(){
 // fantasma de la siguiente posición, crossfade) en vez de la ruta "targetNotes" (tríadas
 // sin zoom) que usan Chord tones/Escalas por tramos. Devuelve null si el acorde no se
 // pudo interpretar o no comparte ninguna nota con esta posición (nada que dibujar).
-function asBuildArpeggioSVG(notes,chordInfo,chordName,fretMin,fretMax){
+// toneNotes (opcional): digitado concreto del arpegio en vez de filtrar la posición — ver
+// asDimShapeNotes (tríadas disminuidas).
+function asBuildArpeggioSVG(notes,chordInfo,chordName,fretMin,fretMax,toneNotes=null){
   if(!chordInfo)return null;
-  const tones=notes.filter(n=>chordInfo.map[((n.st%12)+12)%12]!==undefined)
+  const tones=(toneNotes||notes.filter(n=>chordInfo.map[((n.st%12)+12)%12]!==undefined))
     .map(n=>({...n,isRoot:((n.st%12)+12)%12===chordInfo.rootPc}));
   if(!tones.length)return null;
   return arpBuildZoneSVG(tones,chordName,'',[],fretMin,fretMax,true,notes);
+}
+
+// Tríada DISMINUIDA: filtrar la posición de la escala por R-b3-b5 no da un arpegio tocable (bug
+// reportado: "los arpegios disminuidos no los sacas bien"). En su lugar se usan las 5 formas
+// CAGED del arpegio disminuido que pasó Alberto (dibujadas en F#dim, [cuerda 0=6ª grave, traste]),
+// transportadas a la tónica del acorde, y se elige la que MÁS notas comparte con la posición
+// (desempate: menos trastes fuera del rango de la posición). Puede caer alguna nota fuera de la
+// zona de fantasmas — aceptado ("si hay que poner una nota que no esté en la zona de fantasmas no
+// pasa nada"); asSendToEditor ensancha la ventana de trastes para que quepa.
+const AS_DIM_SHAPES_FS={
+  E:[[0,2],[0,5],[1,3],[2,4],[3,2],[4,1],[5,2],[5,5]],
+  D:[[0,5],[1,3],[2,4],[2,7],[3,5],[4,7],[5,5],[5,8]],
+  C:[[0,8],[1,9],[2,7],[3,5],[4,7],[4,10],[5,8]],
+  A:[[0,8],[1,9],[1,12],[2,10],[3,11],[4,10],[5,8]],
+  G:[[0,14],[1,12],[2,10],[3,11],[3,14],[4,13],[5,14]],
+};
+function asIsDimTriad(chordInfo){
+  if(!chordInfo)return false;
+  const ivs=Object.keys(chordInfo.map).map(pc=>((+pc-chordInfo.rootPc)%12+12)%12).sort((a,b)=>a-b);
+  return ivs.join(',')==='0,3,6';
+}
+function asDimShapeNotes(chord,notes){
+  if(asState.quality==='pentatonic')return null;
+  const info=tnChordToneMap(chord);
+  if(!asIsDimTriad(info)||!notes.length)return null;
+  const cells=new Set(notes.map(n=>n.string+':'+n.fret));
+  const pMin=Math.min(...notes.map(n=>n.fret)),pMax=Math.max(...notes.map(n=>n.fret));
+  const d=((info.rootPc-6)%12+12)%12;
+  let best=null;
+  Object.values(AS_DIM_SHAPES_FS).forEach(shape=>{
+    [d-12,d,d+12].forEach(off=>{
+      const fr=shape.map(([st,f])=>[st,f+off]);
+      if(fr.some(([,f])=>f<0||f>22))return;
+      const overlap=fr.filter(([st,f])=>cells.has(st+':'+f)).length;
+      const outside=fr.reduce((a,[,f])=>a+Math.max(0,pMin-f,f-pMax),0);
+      if(!best||overlap>best.overlap||(overlap===best.overlap&&outside<best.outside))best={fr,overlap,outside};
+    });
+  });
+  return best?best.fr.map(([st,f])=>spMkNote(asState.root,st,f)):null;
 }
 
 // ── 4 · Usar el ejercicio ────────────────────────────────────────────────────
@@ -11689,7 +11745,16 @@ async function asSendToEditor(){
   // los intervalos correctos dinámicamente vía note.semi, siguiendo el selector "Mástil:" del
   // visualizador como cualquier otro arpegio. El selector "Etiqueta" de este paso 3 solo
   // afecta a esa previsualización.
-  const frets=notes.map(n=>n.fret);
+  // Digitados de tríadas disminuidas (ver asDimShapeNotes), precalculados para ensanchar la
+  // ventana de trastes si alguno se sale de la posición.
+  const dimShapes={};
+  {
+    const chordList=cycles.length
+      ?getAllBars().flatMap(b=>getBarSegments(b).map(sg=>(sg.chord||'').trim()))
+      :asState.chords.map(c=>c.chord);
+    chordList.forEach(ch=>{if(ch&&!(ch in dimShapes))dimShapes[ch]=asDimShapeNotes(ch,notes);});
+  }
+  const frets=notes.map(n=>n.fret).concat(...Object.values(dimShapes).filter(Boolean).map(ns=>ns.map(n=>n.fret)));
   const fretMin=Math.max(0,Math.min(...frets)-1);
   // +1: deja un traste vacío de verdad a la derecha de la nota más aguda (feedback de Alberto:
   // con +2 sobraban dos trastes vacíos, demasiado hueco muerto en el mástil).
@@ -11746,7 +11811,7 @@ async function asSendToEditor(){
         continue;
       }
       if(!(chord in cache)){
-        const svg=asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax);
+        const svg=asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax,dimShapes[chord]||null);
         if(!svg){if(!unknown.includes(chord))unknown.push(chord);cache[chord]=null;}
         else{
           const parsed=svgStringToParsed(svg);
@@ -11791,7 +11856,7 @@ async function asSendToEditor(){
     let applied=0;
     all.forEach((b,bi)=>{
       const chord=(b.chord||'').trim();if(!chord)return;
-      const svg=asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax);
+      const svg=asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax,dimShapes[chord]||null);
       if(!svg)return;
       const loc=barLoc[bi];if(!loc)return;
       const target=getTargetBars(loc.ci);
@@ -13055,6 +13120,7 @@ function buildAutoBg(bar,activeSlot){
   // escala, sin posBox) se mantiene el escaneo de toda la ventana, como siempre.
   const posBoxArr=activeSlot?.svgParsed?.posBox||null;
   const posBox=posBoxArr?new Set(posBoxArr):null;
+  const asScaleAlways=bgAuto.mode==='scale'&&activeSlot?.svgParsed?.asScaleGen===true&&!!posBox;
   el.innerHTML='';
   let painted=0;
   for(let s=0;s<6;s++){
@@ -13079,10 +13145,18 @@ function buildAutoBg(bar,activeSlot){
       // más arriba, en el bloque de cambio de compás) se corrigió por el otro lado: dibujando la
       // nota activa nueva ANTES de reconstruir este mapa, así activeCells ya refleja lo que
       // REALMENTE se ve en pantalla en vez de una foto adelantada del destino.
-      if(activeCells.has(`${s},${f}`)||(bgAuto.mode!=='triadFull'&&bgAuto.mode!=='scaleTriad'&&activePcs.has(pc)))continue;
+      // EXCEPCIÓN "Arpegios dentro de escala" (frames asScaleGen con fondo 'scale'): aquí la
+      // escala es la referencia del ejercicio y su fantasma NO puede desaparecer nunca — se pinta
+      // en TODAS las celdas de la forma, debajo del mástil activo (bgMapCanvas z-index 1 <
+      // svgCanvas 2), tapado por la nota activa cuando la hay. Con la exclusión de abajo, al
+      // desvanecerse las notas del acorde saliente en el crossfade de arpegios (paintArpeggioGhosts/
+      // animateCrossfade) sus celdas se quedaban en negro hasta el siguiente buildBgMap (bug
+      // reportado: "las notas fantasma de la escala no pueden desaparecer nunca").
+      const alwaysGhost=asScaleAlways;
+      if(!alwaysGhost&&(activeCells.has(`${s},${f}`)||(bgAuto.mode!=='triadFull'&&bgAuto.mode!=='scaleTriad'&&activePcs.has(pc))))continue;
       const cx=f===0?leftPad-r-4:fretX(f)-fretW/2;
       const cy=strY(s);
-      if(activePositions.has(`${Math.round(cx/15)},${Math.round(cy/15)}`))continue;
+      if(!alwaysGhost&&activePositions.has(`${Math.round(cx/15)},${Math.round(cy/15)}`))continue;
       let label='';
       if(labelMode==='intervals')label=p.semi===0?'R':(p.ivName||SEQ_DEGREE_NAMES[p.semi]||IV_BY_SEMI[p.semi]||'');
       else label=spellNote(info.rootRaw,p.ivName||IV_BY_SEMI[p.semi]||'R',p.semi)||NTS[pc];
@@ -13114,7 +13188,7 @@ function buildAutoBg(bar,activeSlot){
         // reportado: "cuando hay una nota activa encima no se tiene que ver, tiene que quedar
         // tapada del todo"). En el resto de usos de este anillo (Arpegios en escala, donde SÍ hay
         // exclusión y nunca coincide con una nota activa) se mantiene r+4 como siempre.
-        const ringR=bgAuto.mode==='scaleTriad'?Math.max(2,r-1):r+4;
+        const ringR=(bgAuto.mode==='scaleTriad'||asScaleAlways)?Math.max(2,r-1):r+4;
         ring.setAttribute('cx',cx);ring.setAttribute('cy',cy);ring.setAttribute('r',ringR);
         ring.setAttribute('fill','none');ring.setAttribute('stroke','#FFC94A');ring.setAttribute('stroke-width','2');
         ring.setAttribute('stroke-opacity','.75');ring.setAttribute('class','tonic-ring');ring.setAttribute('pointer-events','none');
@@ -13226,6 +13300,28 @@ function buildBgMap(bar, activeSlot){
     el.appendChild(g);
   });
   el.style.display='block';
+}
+
+// Color de fondo REAL detrás del mástil (el primer ancestro con background no transparente): el
+// mástil no pinta fondo propio, así que el disco que tapa el fantasma de escala tiene que
+// coincidir con lo que haya detrás o se vería como un parche.
+function stageBgColor(el){
+  for(let n=el;n&&n.nodeType===1;n=n.parentElement){
+    const c=getComputedStyle(n).backgroundColor;
+    if(c&&c!=='transparent'&&!/^rgba\([^)]*,\s*0\)$/.test(c))return c;
+  }
+  return getComputedStyle(document.body).backgroundColor||'#000';
+}
+// Disco opaco detrás de una nota activa (ver asScaleBacking en renderSVGStatic). <ellipse>, no
+// <circle>: el motor de arpegios localiza el círculo de cada nota con g.querySelector('circle').
+// Radio r+3: el aro discontinuo del fantasma (stroke-width 2, centrado en su radio) sobresale del
+// borde de la nota activa — con r a secas asomaba como un anillo punteado alrededor de cada nota
+// (bug reportado: "siguen viéndose las notas fantasma desde el fotograma 1").
+function mkAsBacking(cx,cy,r,fill){
+  const e=document.createElementNS(NS,'ellipse');
+  e.setAttribute('cx',cx);e.setAttribute('cy',cy);e.setAttribute('rx',r+3);e.setAttribute('ry',r+3);
+  e.setAttribute('fill',fill);e.setAttribute('pointer-events','none');e.setAttribute('class','as-backing');
+  return e;
 }
 
 function clearBgMap(){
