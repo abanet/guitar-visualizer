@@ -244,7 +244,9 @@ async function main() {
         const cm = (chordStr || 'C').match(/^([A-G][b#]?)(.*)$/);
         const rootRaw = cm ? cm[1] : 'C';
         const qualityText = cm ? cm[2].trim() : '';
-        const quality = /^m(?!aj)/.test(qualityText) ? 'm' : '';
+        const quality = /^dim/i.test(qualityText) ? 'dim'
+          : /^aug/i.test(qualityText) ? 'aug'
+          : /^m(?!aj)/.test(qualityText) ? 'm' : '';
         return generateExploreDrop2Triad(rootRaw, quality, 2);
       }, meta.chord);
       if (!drop2Result) { throw new Error('generateExploreDrop2Triad no devolvió nada — revisa que la tónica/calidad del vamp tenga posiciones transcritas en DROP2_TRIAD_SHAPES.'); }
