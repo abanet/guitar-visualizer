@@ -48,6 +48,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn.green{background:#27500A;color:white;border-color:#27500A;}
 .btn.green:hover{opacity:.88;}
 .mi-toolbar{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+/* Pentagramas del mástil interactivo: arrastrables; la ✕ de los fijados solo al pasar el ratón */
+.mi-staff{position:absolute;pointer-events:auto;cursor:grab;touch-action:none;}
+.mi-staff.dragging{cursor:grabbing;}
+.mi-staff-x{display:none;position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(229,57,53,.9);color:#fff;font:700 12px/20px Arial;text-align:center;cursor:pointer;padding:0;}
+.mi-staff:hover .mi-staff-x{display:block;}
 /* Nota "cayendo" al aparecer en el mástil interactivo (pedido de Alberto: gracia sutil y rápida,
    sin que lleve tiempo notarlo) — cae desde arriba, se pasa un poco al aterrizar (como si se
    enganchara) y asienta con un par de rebotes minúsculos. Solo se aplica al <g> interno de la
@@ -1967,24 +1972,29 @@ body.presentation #channelWatermark{display:flex;}
         <div id="miMeasureInfo" style="z-index:2;color:#ffd640;font:700 15px Arial;text-align:center;min-height:20px;margin-bottom:6px;"></div>
         <div id="miNeckStack" style="position:relative;">
           <div id="miNeckHost" style="display:flex;justify-content:center;user-select:none;-webkit-user-select:none;"></div>
-          <!-- Capa de anotación en directo (líneas/flechas/círculos/trazo libre/texto/láser) —
-               HERMANA de #miNeckHost, nunca dentro: miRender() reemplaza el innerHTML de
-               #miNeckHost entero en cada click, así que cualquier dibujo que viviera ahí se
-               perdería. Mismo viewBox 1001x300 fijo que miNeckSVG() (ver NECK_W/NECK_H), así que
-               queda alineada en píxel sin cálculos extra — pero solo mientras el mástil real
-               ocupe el ancho completo de #miNeckHost sin recorte por altura (recuadro 16:9
-               normal); si el mástil se comprime mucho en altura y queda centrado con márgenes
-               laterales, la capa puede desalinearse un poco en horizontal (caso raro, no se
-               resuelve en esta fase). pointer-events:none por defecto: con "Anotar" desactivado
-               los clicks siguen llegando intactos a las notas de abajo. -->
-          <svg id="miAnnoLayer" viewBox="0 0 1001 300" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;">
-            <!-- Cada flecha crea su propio <marker> aquí dentro con SU color (ver miAnnoPointerUp)
-                 — un único marker compartido cambiaría de color retroactivamente en flechas ya
-                 dibujadas con otro color, porque marker-end se re-evalúa en vivo. -->
-            <defs id="miAnnoDefs"></defs>
-          </svg>
         </div>
       </div>
+      <!-- Pentagramas (botón "Pentagrama"): capa sobre TODO el recuadro grabable, fuera del flujo
+           — el mástil nunca cambia de tamaño por ellos. Cada pentagrama se arrastra con el ratón a
+           donde se quiera (ver miStaffPointerDown); pointer-events solo en los pentagramas, así
+           que el resto de la capa no roba clicks al mástil ni al título. -->
+      <!-- Capa de anotación en directo (líneas/flechas/círculos/trazo libre/texto/láser) — cubre
+           TODO el recuadro grabable (pedido de Alberto: antes solo funcionaba sobre el mástil, y
+           también quería anotar en la zona de arriba — título, franja, pentagramas). Hermana de
+           #miNeckWrap, nunca dentro: miRender() reemplaza el mástil entero en cada click.
+           viewBox 16:9 fijo (1100x619, ≈ la escala del viewBox 1001x300 del mástil, para que
+           grosores y textos se vean como antes) sobre un recuadro que también es 16:9: escala
+           uniforme con el recuadro, así que lo dibujado sigue en su sitio en pantalla completa.
+           z-index por encima de los pentagramas y por debajo de la barra de botones (7): con
+           "Anotar" activo, la barra sigue funcionando y no se dibuja sobre ella.
+           pointer-events:none por defecto: sin "Anotar", los clicks llegan intactos a lo de abajo. -->
+      <svg id="miAnnoLayer" viewBox="0 0 1100 619" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;">
+        <!-- Cada flecha crea su propio <marker> aquí dentro con SU color (ver miAnnoPointerUp)
+             — un único marker compartido cambiaría de color retroactivamente en flechas ya
+             dibujadas con otro color, porque marker-end se re-evalúa en vivo. -->
+        <defs id="miAnnoDefs"></defs>
+      </svg>
+      <div id="miStaffLayer" style="display:none;position:absolute;inset:0;z-index:4;pointer-events:none;user-select:none;-webkit-user-select:none;"></div>
       <div class="mi-toolbar" style="position:absolute;left:0;right:0;bottom:16px;margin:0;justify-content:center;z-index:7;">
         <div class="mi-toolbar-group">
           <button class="mi-btn" onclick="miChangeFretStart(-1)" title="Empezar antes (menos traste de partida)"><i class="ti ti-minus"></i></button>
@@ -2005,6 +2015,9 @@ body.presentation #channelWatermark{display:flex;}
         <div class="mi-toolbar-group">
           <button class="mi-btn" id="miLabelModeBtn" onclick="miToggleLabelMode()" title="Alterna entre nombre de nota e intervalo respecto a la tónica"><i class="ti ti-music"></i> <span id="miLabelModeLbl">Notas</span></button>
           <button class="mi-btn" id="miLegendBtn" onclick="miToggleLegend()" title="Muestra/oculta la tabla de nombres de intervalo según su distancia"><i class="ti ti-info-circle"></i></button>
+          <button class="mi-btn" id="miStaffBtn" onclick="miToggleStaff()" title="Muestra/oculta un pentagrama (clave de sol, octava baja como en los libros de guitarra) con las notas pintadas en el mástil"><i class="ti ti-music"></i> Pentagrama</button>
+          <button class="mi-btn" id="miStaffModeBtn" onclick="miToggleStaffMode()" style="display:none;" title="Acorde: todas las notas apiladas en una columna. Secuencia: una tras otra, de grave a agudo"><span id="miStaffModeLbl">Acorde</span></button>
+          <button class="mi-btn" id="miStaffPinBtn" onclick="miPinStaff()" style="display:none;" title="Crea una copia FIJA del pentagrama con las notas de ahora y vacía el mástil para pintar la siguiente posición. Arrastra la copia a donde quieras; la ✕ (al pasar el ratón) la quita"><i class="ti ti-pin"></i> Fijar</button>
           <button class="mi-btn active" id="miIvTagsBtn" onclick="miToggleIvTags()" title="3 estados: solo ascendente (desde la tónica) → + descendente (desde el final, sentido contrario) → oculto"><i class="ti ti-arrows-vertical"></i> <span>Ver intervalos</span></button>
         </div>
         <div class="mi-toolbar-group">
@@ -14323,12 +14336,203 @@ function miLabelFor(pc,tonicPc){
 // una y si pulso otra sale el siguiente nombre". El índice 0 de cada par coincide con lo que ya
 // devolvía NTS antes de esto, para no cambiar el aspecto por defecto de nadie.
 const MI_ENH_PAIRS={1:['Db','C#'],3:['Eb','D#'],6:['F#','Gb'],8:['Ab','G#'],10:['Bb','A#']};
-let miEnh={}; // pc -> 0|1, índice dentro de MI_ENH_PAIRS[pc] elegido por el usuario
+let miEnh={}; // pc -> 0|1, índice dentro de MI_ENH_PAIRS[pc] elegido A MANO por el usuario (click en el nombre); sin entrada = el de la tonalidad (miDefaultEnhIdx)
+// Grafía por defecto según la tonalidad elegida (pedido de Alberto 2026-09-27: con E salía Ab en vez
+// de G#): tonalidades de sostenidos → las 5 notas alteradas con #, de bemoles → con b; sin
+// tonalidad o en C, la grafía de siempre (índice 0: Db Eb F# Ab Bb). La elección a mano con click
+// manda sobre esto, y se olvida al cambiar de tonalidad (ver miTonicChanged).
+const MI_SHARP_KEYS=new Set(['G','D','A','E','B','F#','C#','D#','G#','A#']);
+const MI_FLAT_KEYS=new Set(['F','Bb','Eb','Ab','Db','Gb']);
+function miDefaultEnhIdx(pc){
+  const pair=MI_ENH_PAIRS[pc];if(!pair)return 0;
+  const ch=MI_SHARP_KEYS.has(miTonic)?'#':MI_FLAT_KEYS.has(miTonic)?'b':null;
+  return ch?Math.max(0,pair.findIndex(n=>n[1]===ch)):0;
+}
 let miMeasureSel=[]; // hasta 2 índices de posición en la franja de escala, para "medir distancia" entre dos notas cualquiera (Shift+click) — pedido de Alberto
 let miLastShowNoteTagDown=false,miLastEntryCount=0; // guardado por miScaleStripHTML para que miDrawScaleOverlays sepa si hace falta la línea de dirección de la fila de abajo
 function miNoteName(pc){
   const pair=MI_ENH_PAIRS[pc];
-  return pair?pair[miEnh[pc]||0]:NTS[pc];
+  return pair?pair[(pc in miEnh)?miEnh[pc]:miDefaultEnhIdx(pc)]:NTS[pc];
+}
+// ── PENTAGRAMA (pedido de Alberto 2026-09-27) ─────────────────────────────────────────────────
+// Las notas pintadas (miRevealed, no fantasmas ni el preview de "Sonar") en notación, como en los
+// libros de tríadas/Drop2: clave de sol con el 8 debajo (la guitarra se escribe una octava por
+// encima de lo que suena), redondas sin plica, SIN armadura (cada nota lleva su alteración) y
+// con la MISMA grafía que el mástil (miNoteName: respeta el C#/Db elegido con click). Mismos
+// colores que el mástil: tónica en rojo, resto en cian. Dos disposiciones: 'chord' (todas en una
+// columna) y 'seq' (una tras otra, de grave a agudo). Símbolos de la fuente Apple Symbols (𝄞 ♯ ♭,
+// comprobado que los trae macOS).
+let miStaffOn=false;
+let miStaffMode='chord'; // 'chord' | 'seq' — del pentagrama EN VIVO (cada fijado guarda el suyo)
+// Pentagrama en vivo: sigue a miRevealed. Posición automática (hueco libre de la izquierda, ver
+// miAutoStaffBox) hasta que se arrastra; desde entonces {fx,fy} = esquina sup. izq. como fracción
+// del recuadro grabable (sobrevive a pantalla completa/cambios de tamaño). Doble click = volver a
+// la posición automática.
+let miStaffLivePos=null;
+// Copias FIJAS (botón "Fijar", pedido de Alberto): notas congeladas en el momento de fijar —
+// grafía, colores y disposición incluidos —, arrastrables igual que el vivo y con ✕ para quitarlas.
+// {id, notes, mode, tonicPc, fx, fy, k}. Solo en memoria, como las anotaciones.
+let miStaffPins=[],miStaffPinSeq=0;
+const MI_OPEN_MIDI=[40,45,50,55,59,64]; // E2 A2 D3 G3 B3 E4
+const MI_LETTER_PC={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+const MI_LETTERS='CDEFGAB';
+function miToggleStaff(){miStaffOn=!miStaffOn;miRender();}
+function miToggleStaffMode(){miStaffMode=miStaffMode==='chord'?'seq':'chord';miRender();}
+// Nota escrita de una casilla: {step (escalón diatónico, C4=28), acc (-1/0/1), midi, pc}.
+function miStaffNote(s,f){
+  const midi=MI_OPEN_MIDI[s]+f+12; // +12: escritura de guitarra (octava por encima de lo que suena)
+  const pc=((midi%12)+12)%12,name=miNoteName(pc);
+  const L=name[0],acc=name.length>1?(name[1]==='#'?1:-1):0;
+  const oct=Math.floor((midi-acc-MI_LETTER_PC[L])/12)-1;
+  return{step:oct*7+MI_LETTERS.indexOf(L),acc,midi,pc};
+}
+// Notas del pentagrama en vivo ahora mismo, ya ordenadas (grave→agudo) y, en acorde, sin repetir
+// la misma nota tocada en dos cuerdas (en secuencia suenan las dos, se dejan).
+function miStaffLiveNotes(){
+  let notes=[...miRevealed].map(k=>{const[s,f]=k.split(':').map(Number);return miStaffNote(s,f);});
+  if(miStaffMode==='chord'){const seen=new Set();notes=notes.filter(n=>{const k=n.midi+':'+n.step;if(seen.has(k))return false;seen.add(k);return true;});}
+  return notes.sort((a,b)=>a.midi-b.midi||a.step-b.step);
+}
+function miStaffSVG(notes,mode,tonicPc){
+  notes=notes.map(n=>({...n})); // se les añaden shift/accCol al dibujar — no tocar los guardados
+  const HS=9,RX=11,RY=7.8,E4=30,F5=38; // HS = medio espacio (px); E4/F5 = líneas inferior/superior
+  const steps=notes.map(n=>n.step);
+  const lo=Math.min(E4-8,...steps),hi=Math.max(F5+2,...steps); // E4-8: sitio para la cola de la clave y su 8
+  const padTop=10,padBot=10;
+  const yOf=st=>padTop+(hi-st)*HS;
+  const H=padTop+(hi-lo)*HS+padBot;
+  const X0=6,CLEF_W=62,MAX_W=560; // MAX_W: que una secuencia larga no se haga interminable
+  const COL=Math.max(26,Math.min(54,(MAX_W-CLEF_W-40)/Math.max(1,notes.length))); // se aprietan si hay muchas
+  const W=mode==='chord'?CLEF_W+110:CLEF_W+40+Math.max(1,notes.length)*COL;
+  const lineCol='rgba(255,255,255,.75)';
+  let out=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="overflow:visible;display:block;">`;
+  for(let st=E4;st<=F5;st+=2)out+=`<line x1="${X0}" y1="${yOf(st)}" x2="${W-4}" y2="${yOf(st)}" stroke="${lineCol}" stroke-width="1.3"/>`;
+  // Clave de sol: el rizo va sobre la 2ª línea (G4); el 8 debajo = octava baja.
+  // Tamaño/posición provisionales: miFitStaffClefs() la encaja con su caja real tras pintarla
+  // (las métricas del glifo en Apple Symbols no se conocen de antemano). data-* = dónde debe ir.
+  out+=`<text class="mi-clef" x="${X0+6}" y="${yOf(E4)}" font-family="'Apple Symbols'" font-size="${HS*8}" fill="${lineCol}" data-top="${yOf(F5)-HS*1.8}" data-bot="${yOf(E4)+HS*5.3}" data-x="${X0+4}">\u{1D11E}</text>`;
+  out+=`<text x="${X0+30}" y="${yOf(E4)+HS*4.1}" font-family="Arial" font-weight="700" font-size="${HS*1.6}" fill="${lineCol}" text-anchor="middle">8</text>`;
+  const head=(x,n)=>{
+    const y=yOf(n.step),col=(tonicPc!=null&&n.pc===tonicPc)?'#E53935':'#26C6DA';
+    let g='';
+    // Líneas adicionales: por debajo (C4, A3, F3…) y por encima (A5, C6…) hasta la nota.
+    for(let st=E4-2;st>=n.step;st-=2)g+=`<line x1="${x-RX-5}" y1="${yOf(st)}" x2="${x+RX+5}" y2="${yOf(st)}" stroke="${lineCol}" stroke-width="1.3"/>`;
+    for(let st=F5+2;st<=n.step;st+=2)g+=`<line x1="${x-RX-5}" y1="${yOf(st)}" x2="${x+RX+5}" y2="${yOf(st)}" stroke="${lineCol}" stroke-width="1.3"/>`;
+    g+=`<ellipse cx="${x}" cy="${y}" rx="${RX}" ry="${RY}" fill="none" stroke="${col}" stroke-width="3.2" transform="rotate(-22 ${x} ${y})"/>`;
+    return g;
+  };
+  const accSym=a=>a>0?'♯':'♭';
+  const accText=(x,n)=>`<text x="${x}" y="${yOf(n.step)+HS*1.1}" font-family="'Apple Symbols'" font-size="${HS*3.6}" fill="${lineCol}" text-anchor="middle">${accSym(n.acc)}</text>`;
+  if(mode==='chord'){
+    const xc=X0+CLEF_W+62;
+    // 2ª dentro del acorde: la nota de arriba se desplaza a la derecha (como en la notación impresa).
+    let prevStep=null,prevShift=false;
+    notes.forEach(n=>{n.shift=(prevStep!=null&&n.step-prevStep===1&&!prevShift);prevStep=n.step;prevShift=n.shift;});
+    // Alteraciones en columnas escalonadas hacia la izquierda si chocan (menos de una 7ª entre ellas).
+    const cols=[];
+    notes.slice().reverse().forEach(n=>{if(!n.acc)return;let c=0;while(cols[c]&&cols[c].some(st=>Math.abs(st-n.step)<6))c++;(cols[c]=cols[c]||[]).push(n.step);n.accCol=c;});
+    notes.forEach(n=>{out+=head(xc+(n.shift?2*RX-1:0),n);if(n.acc)out+=accText(xc-RX-14-n.accCol*16,n);});
+  }else{
+    notes.forEach((n,i)=>{const x=X0+CLEF_W+40+i*COL;out+=head(x,n);if(n.acc)out+=accText(x-RX-12,n);});
+  }
+  return out+'</svg>';
+}
+// Encaja cada clave de sol con su caja REAL (getBBox) — escala y desplaza el glifo para que su
+// caja vaya de data-top a data-bot, empezando en data-x. OJO: getBBox de un <text> da la caja de
+// LÍNEA de la fuente, no la tinta: en Apple Symbols la tinta del 𝄞 ocupa ~el 79% superior de esa
+// caja, por eso data-bot queda muy por debajo de donde acaba el dibujo (medido a ojo en captura:
+// tinta de ~1 espacio sobre la 5ª línea a ~1 espacio bajo la 1ª, como en la notación impresa).
+function miFitStaffClefs(){
+  document.querySelectorAll('#miStaffLayer .mi-clef').forEach(t=>{
+    let bb;try{bb=t.getBBox();}catch(e){return;}
+    if(!bb||!bb.height)return;
+    const top=+t.dataset.top,bot=+t.dataset.bot,x=+t.dataset.x,k=(bot-top)/bb.height;
+    t.setAttribute('transform',`translate(${x-bb.x*k} ${top-bb.y*k}) scale(${k})`);
+  });
+}
+// Posición automática del pentagrama en vivo (en px del recuadro grabable): el hueco libre de la
+// izquierda — entre "Tonalidad:" (arriba) y el mástil (abajo), a la izquierda de la franja de
+// escala (centrada). Si no cabe entero se REDUCE (k<1) en vez de pisar la franja o el selector.
+function miAutoStaffBox(W,H){
+  const zone=document.getElementById('miRecordZone'),stack=document.getElementById('miNeckStack'),strip=document.getElementById('miScaleStrip');
+  const zr=zone.getBoundingClientRect(),stackR=stack.getBoundingClientRect();
+  let right=zr.left+zr.width*0.45;
+  // Solo las notas de la franja: sus sobrepuestos (flecha de medir, línea de intervalos
+  // descendentes — position:absolute, left:0, width:100%) harían creer que empieza en el borde.
+  if(strip)[...strip.children].forEach(el=>{if(el.style.position==='absolute')return;const r=el.getBoundingClientRect();if(r.width)right=Math.min(right,r.left-16);});
+  const availW=right-stackR.left,availH=(stackR.top-14)-(zr.top+62); // 62: por debajo de "Tonalidad:"
+  const k=Math.max(0.35,Math.min(1,availW/W,availH/H));
+  return{left:stackR.left-zr.left,top:(stackR.top-14)-zr.top-H*k,k};
+}
+function miRenderStaves(){
+  const layer=document.getElementById('miStaffLayer'),zone=document.getElementById('miRecordZone');
+  if(!layer||!zone)return;
+  layer.style.display=miStaffOn?'block':'none';
+  if(!miStaffOn){layer.innerHTML='';return;}
+  const tonicPc=miTonic?noteToSt(miTonic):null;
+  let html=`<div class="mi-staff" data-id="live" title="Arrastra para moverlo · doble click: volver a su sitio automático">${miStaffSVG(miStaffLiveNotes(),miStaffMode,tonicPc)}</div>`;
+  miStaffPins.forEach(p=>{html+=`<div class="mi-staff" data-id="${p.id}" title="Pentagrama fijado — arrastra para moverlo">${miStaffSVG(p.notes,p.mode,p.tonicPc)}<button class="mi-staff-x" onclick="miUnpinStaff('${p.id}')" title="Quitar este pentagrama">✕</button></div>`;});
+  layer.innerHTML=html;
+  miFitStaffClefs();
+  const zr=zone.getBoundingClientRect();
+  layer.querySelectorAll('.mi-staff').forEach(el=>{
+    const svg=el.querySelector('svg'),W=+svg.getAttribute('width'),H=+svg.getAttribute('height'),id=el.dataset.id;
+    let left,top,k;
+    if(id==='live'){
+      if(miStaffLivePos){left=miStaffLivePos.fx*zr.width;top=miStaffLivePos.fy*zr.height;k=1;}
+      else ({left,top,k}=miAutoStaffBox(W,H));
+    }else{const p=miStaffPins.find(q=>q.id===id);left=p.fx*zr.width;top=p.fy*zr.height;k=p.k;}
+    svg.style.width=Math.round(W*k)+'px';svg.style.height=Math.round(H*k)+'px';
+    el.style.left=Math.round(left)+'px';el.style.top=Math.round(top)+'px';
+    el.addEventListener('pointerdown',miStaffPointerDown);
+    if(id==='live')el.addEventListener('dblclick',()=>{miStaffLivePos=null;miRenderStaves();});
+  });
+}
+// Fija una copia de lo que muestra ahora el pentagrama en vivo — tamaño incluido, para que se vea
+// igual que el original. Se coloca EN FILA: a la derecha del último fijado (o del vivo si no hay
+// ninguno), a la misma altura; si ya no cabe a lo ancho, empieza fila nueva debajo (probado: en
+// cascada, cada una 24px más allá, se amontonaban unas encima de otras).
+function miPinStaff(){
+  const zone=document.getElementById('miRecordZone'),live=document.querySelector('#miStaffLayer .mi-staff[data-id="live"]');
+  if(!zone||!live)return;
+  const notes=miStaffLiveNotes();if(!notes.length)return;
+  const zr=zone.getBoundingClientRect(),r=live.getBoundingClientRect(),svg=live.querySelector('svg');
+  const k=r.width/(+svg.getAttribute('width'));
+  const lastEl=miStaffPins.length?document.querySelector(`#miStaffLayer .mi-staff[data-id="${miStaffPins[miStaffPins.length-1].id}"]`):live;
+  const lr=lastEl.getBoundingClientRect();
+  let left=lr.right-zr.left+16,top=lr.top-zr.top;
+  if(left+r.width>zr.width-10){left=r.left-zr.left;top=lr.bottom-zr.top+12;}
+  top=Math.max(0,Math.min(top,zr.height-r.height-10));
+  miStaffPins.push({id:'p'+(++miStaffPinSeq),notes,mode:miStaffMode,tonicPc:miTonic?noteToSt(miTonic):null,fx:left/zr.width,fy:top/zr.height,k});
+  // Y se vacía el mástil (igual que "Limpiar") — pedido de Alberto: tras fijar, el pentagrama en
+  // vivo debe quedar vacío para pintar la siguiente posición directamente. miClear ya redibuja.
+  miClear();
+}
+function miUnpinStaff(id){miStaffPins=miStaffPins.filter(p=>p.id!==id);miRenderStaves();}
+// Arrastre: se mueve el <div> directamente mientras dura (sin redibujar), y al soltar se guarda
+// la posición como fracción del recuadro (miStaffLivePos / pin.fx,fy). El vivo guarda k=1 al
+// soltarlo en un sitio elegido a mano: su tamaño reducido solo tiene sentido en el hueco automático.
+function miStaffPointerDown(e){
+  if(e.button!==0||e.target.closest('.mi-staff-x'))return;
+  const el=e.currentTarget,zone=document.getElementById('miRecordZone');
+  const zr=zone.getBoundingClientRect(),r=el.getBoundingClientRect();
+  const dx=e.clientX-r.left,dy=e.clientY-r.top;
+  el.setPointerCapture(e.pointerId);el.classList.add('dragging');
+  const move=ev=>{
+    const left=Math.max(0,Math.min(ev.clientX-dx-zr.left,zr.width-40)),top=Math.max(0,Math.min(ev.clientY-dy-zr.top,zr.height-40));
+    el.style.left=left+'px';el.style.top=top+'px';
+  };
+  const up=()=>{
+    el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',up);el.removeEventListener('pointercancel',up);
+    el.classList.remove('dragging');
+    const fx=parseFloat(el.style.left)/zr.width,fy=parseFloat(el.style.top)/zr.height,id=el.dataset.id;
+    const moved=Math.abs(r.left-zr.left-parseFloat(el.style.left))>2||Math.abs(r.top-zr.top-parseFloat(el.style.top))>2;
+    if(!moved)return; // click sin arrastrar (p.ej. el 1º del doble click): no fija nada
+    if(id==='live'){miStaffLivePos={fx,fy};miRenderStaves();}
+    else{const p=miStaffPins.find(q=>q.id===id);if(p){p.fx=fx;p.fy=fy;}}
+  };
+  el.addEventListener('pointermove',move);el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
+  e.preventDefault();
 }
 function miCycleEnh(pc,ev){
   // En modo "Sonar" (miClickMode==='play'), el click en el NOMBRE debe sonar como cualquier otro
@@ -14343,7 +14547,7 @@ function miCycleEnh(pc,ev){
   if(ev&&ev.shiftKey)return;
   if(ev)ev.stopPropagation(); // que no dispare también el click del círculo (revelar/ocultar/sonar)
   if(!MI_ENH_PAIRS[pc])return;
-  miEnh[pc]=(miEnh[pc]||0)===0?1:0;
+  miEnh[pc]=((pc in miEnh)?miEnh[pc]:miDefaultEnhIdx(pc))===0?1:0; // alterna respecto a lo que se VE ahora
   miRender();
 }
 // Click en una nota de la franja de escala: SIEMPRE suena (igual que antes). Con Shift, además,
@@ -14867,6 +15071,11 @@ function miRender(){
   // El botón muestra el modo ACTIVO ahora mismo (igual que Pintar/Sonar) — antes mostraba el modo
   // al que cambiarías al pulsar, al revés que el resto de botones de la barra (bug reportado).
   const lm=document.getElementById('miLabelModeLbl');if(lm)lm.textContent=miLabelMode==='intervals'?'Intervalos':'Notas';
+  miRenderStaves();
+  const sb=document.getElementById('miStaffBtn');if(sb)sb.classList.toggle('active',miStaffOn);
+  const smb=document.getElementById('miStaffModeBtn');if(smb)smb.style.display=miStaffOn?'':'none';
+  const spb=document.getElementById('miStaffPinBtn');if(spb)spb.style.display=miStaffOn?'':'none';
+  const sml=document.getElementById('miStaffModeLbl');if(sml)sml.textContent=miStaffMode==='chord'?'Acorde':'Secuencia';
 }
 function miToggle(s,f){
   const key=s+':'+f;
@@ -15283,7 +15492,7 @@ function miToggleLegend(){
   ov.style.display=show?'flex':'none';
   const b=document.getElementById('miLegendBtn');if(b)b.classList.toggle('active',show);
 }
-function miTonicChanged(){const sel=document.getElementById('miTonic');if(sel)miTonic=sel.value;miMeasureSel=[];miRender();}
+function miTonicChanged(){const sel=document.getElementById('miTonic');if(sel)miTonic=sel.value;miMeasureSel=[];miEnh={};miRender();} // miEnh={}: la nueva tonalidad vuelve a decidir la grafía
 function miToggleLabelMode(){
   miLabelMode=miLabelMode==='notes'?'intervals':'notes';
   // Sin tónica no hay respecto a qué medir el intervalo (miLabelFor ya cae a nombre de nota) —
