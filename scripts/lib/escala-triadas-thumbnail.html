@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@900&family=Barlow+Condensed:ital,wght@1,800;1,900&display=block" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; }
+  /* Acento por tipo, igual que el de cada plantilla: turquesa (arpegios) / ámbar (acordes) */
+  :root { --a1: #b9fbff; --a2: #33e0f2; --a3: #00b4d2; --glow: rgba(0,210,240,.55); --pill: #00c3dc; --pill-ink: #031418; }
+  body.acordes { --a1: #fff0b8; --a2: #f8c232; --a3: #f0a514; --glow: rgba(245,170,20,.55); --pill: #f2ad14; --pill-ink: #1a1102; }
+  html, body { width: 1672px; height: 941px; overflow: hidden; background: #000; }
+  #bg { position: absolute; inset: 0; width: 1672px; height: 941px; }
+  /* Tónica: centrada sobre "MAYOR" (x 153–374), apoyada justo encima (y 678) */
+  #tonica { position: absolute; left: 263px; bottom: calc(941px - 672px); transform: translateX(-50%);
+    font: 900 315px/0.74 Montserrat, sans-serif; letter-spacing: -6px; white-space: nowrap;
+    background: linear-gradient(180deg, #ffffff 0%, #f4f4f4 55%, #bdbdbd 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 8px 14px rgba(0,0,0,.85)); }
+  #tonica .alt { font-size: 170px; vertical-align: 100px; letter-spacing: 0; margin-left: 4px; }
+  /* Letra de la forma: detrás de "FORMA" (x 99–350, base y 870) dentro del marco (hasta x 512) */
+  #forma { position: absolute; left: 372px; bottom: calc(941px - 872px);
+    font: italic 900 172px/0.74 'Barlow Condensed', sans-serif;
+    background: linear-gradient(180deg, var(--a1) 0%, var(--a2) 45%, var(--a3) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 14px var(--glow)) drop-shadow(0 4px 6px rgba(0,0,0,.8)); }
+  /* "CERRADA": etiqueta colgada del borde inferior del marco, sin pisar "MAYOR" */
+  #cerrada { position: absolute; right: calc(1672px - 496px); top: 885px; display: none;
+    padding: 5px 14px 3px; border-radius: 10px; background: var(--pill); color: var(--pill-ink);
+    font: italic 900 34px/1 'Barlow Condensed', sans-serif; letter-spacing: 2px;
+    box-shadow: 0 0 16px var(--glow), 0 3px 8px rgba(0,0,0,.7); }
+</style></head>
+<body>
+<img id="bg">
+<div id="tonica"></div>
+<div id="forma"></div>
+<div id="cerrada">CERRADA</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  if (q.get('tipo') === 'acordes') document.body.classList.add('acordes');
+  document.getElementById('bg').src = q.get('bg');
+  const t = q.get('tonica');
+  document.getElementById('tonica').innerHTML =
+    t[0] + (t.length > 1 ? `<span class="alt">${t[1]}</span>` : '');
+  document.getElementById('forma').textContent = q.get('forma');
+  if (q.get('cerrada') === '1') document.getElementById('cerrada').style.display = 'block';
+</script>
+</body></html>
