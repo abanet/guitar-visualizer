@@ -11558,8 +11558,12 @@ function asActiveNotes(){
   const posLabel=AS_POS_LABELS[asState.posIdx];
   const custom=asGetCustomNotes(asState.root,asState.scale,posLabel);
   if(custom&&custom.length)return custom.map(k=>spMkNote(asState.root,k.string,k.fret));
-  // Modo formas (escala mayor): la caja es la de referencia desplazada, no la automática.
-  if(asShapesMode()&&asState.scale==='major')return asShapeBoxFor(asState.root,asState.posIdx).map(k=>spMkNote(asState.root,k.string,k.fret));
+  // Escala mayor: la caja es la de referencia (C mayor corregida a mano, AS_SHAPES_DEFAULT.boxes)
+  // desplazada a esta tónica, no la automática — en TODOS los modos, no solo en "formas": la
+  // automática es una ventana de 4 trastes que en las Formas G, D y A se deja las notas de
+  // estiramiento del 5º traste (bug reportado por Alberto en los arpegios de B, Forma D: faltaban
+  // E 1ª/12, B 2ª/12 y E 6ª/12, que la caja corregida de C sí trae en el traste 13).
+  if(asState.scale==='major')return asShapeBoxFor(asState.root,asState.posIdx).map(k=>spMkNote(asState.root,k.string,k.fret));
   return asState.notes;
 }
 
@@ -11644,10 +11648,10 @@ function asBoxEditorSVG(){
   const rootPc=noteToSt(asState.root);
   const pcs=new Set(f.map(s=>(rootPc+s)%12));
   const posLabel=AS_POS_LABELS[asState.posIdx];
-  // Sin corrección guardada, la caja arranca mostrando la posición CAGED automática
-  // (no vacía) — el click siguiente parte de ahí, ver asBoxToggle.
-  const custom=asGetCustomNotes(asState.root,asState.scale,posLabel);
-  const activeKeys=(custom&&custom.length)?custom:asState.notes.map(n=>({string:n.string,fret:n.fret}));
+  // Sin corrección guardada, la caja arranca mostrando la posición que ya suena (asActiveNotes: en
+  // mayor, la de referencia desplazada; si no, la CAGED automática) — el click siguiente parte de
+  // ahí, ver asBoxToggle.
+  const activeKeys=asActiveNotes().map(n=>({string:n.string,fret:n.fret}));
   const sel=new Set(activeKeys.map(k=>k.string+':'+k.fret));
   const W=NECK_W,H=NECK_H,fretMin=0,fretMax=15;
   const nFrets=fretMax-fretMin;
@@ -11694,9 +11698,9 @@ function asRenderBoxEditor(){
 function asBoxToggle(string,fret){
   const posLabel=AS_POS_LABELS[asState.posIdx];
   const existing=asGetCustomNotes(asState.root,asState.scale,posLabel);
-  // Primer click sobre esta posición: parte de la CAGED automática (copia), no de vacío —
+  // Primer click sobre esta posición: parte de la que ya suena (asActiveNotes, copia), no de vacío —
   // así un click quita/añade UNA nota sobre lo que ya suena, sin reconstruir la forma entera.
-  const arr=(existing&&existing.length)?existing.slice():asState.notes.map(n=>({string:n.string,fret:n.fret}));
+  const arr=(existing&&existing.length)?existing.slice():asActiveNotes().map(n=>({string:n.string,fret:n.fret}));
   const idx=arr.findIndex(k=>k.string===string&&k.fret===fret);
   if(idx>=0)arr.splice(idx,1);else arr.push({string,fret});
   asSetCustomNotes(asState.root,asState.scale,posLabel,arr);
