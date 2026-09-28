@@ -47,6 +47,9 @@
  *   --positions <lista>     Formas a generar, coma-separadas (por defecto E,D,C,A,G)
  *   --positions-lib <path>  JSON de formas CAGED corregidas a mano (por defecto
  *                           scripts/lib/caged-scale-positions.json)
+ *   --link                  "Enlace de tríadas": UNA tríada por acorde, la de mínimo movimiento desde
+ *                           la anterior (nombre con _Enlace)
+ *   --visconfig <path>      JSON de elementos visuales a aplicar encima (p.ej. {"intervalBadge":true})
  *   --closed-only           Generar SOLO la variante "Cerrada" de las Formas que la necesiten
  *                           (saltando la versión normal por completo) — para rellenar a
  *                           posteriori una Cerrada que faltase sin re-grabar la normal ya
@@ -138,7 +141,7 @@ async function detectMarkerFrameTime(videoPath, tmpDir) {
   }
 }
 
-async function runOne({ appUrl, root, scale, posLabel, closed, introBars, bpm, xmlPath, cycleLen, wholeTheme, audioPath, extraSec, positionsLib, width, height, outDir, tmpDir }) {
+async function runOne({ appUrl, root, scale, posLabel, closed, visConfig, link, introBars, bpm, xmlPath, cycleLen, wholeTheme, audioPath, extraSec, positionsLib, width, height, outDir, tmpDir }) {
   const log = (msg) => console.log(`[forma${posLabel}${closed ? 'Cerrada' : ''}] ${msg}`);
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({
@@ -154,6 +157,9 @@ async function runOne({ appUrl, root, scale, posLabel, closed, introBars, bpm, x
     log('cargando app…');
     await page.goto(appUrl);
     if (positionsLib) await page.evaluate((lib) => localStorage.setItem('gv_arpscale_positions', JSON.stringify(lib)), positionsLib);
+    // --visconfig: elementos visuales encima de los de la app (p.ej. {"intervalBadge":true} para el
+    // vídeo largo de una posición), igual que generate-scale-arpeggio-videos.js.
+    if (visConfig) await page.evaluate((vc) => { const cfg = { ...getVisConfig(), ...vc }; localStorage.setItem('gv_vis', JSON.stringify(cfg)); applyVisConfig(cfg); }, visConfig);
 
     if (xmlPath) {
       log('cargando XML…');
@@ -168,7 +174,7 @@ async function runOne({ appUrl, root, scale, posLabel, closed, introBars, bpm, x
     await page.waitForFunction(() => { const el = document.getElementById('audioStatus'); return el && el.classList.contains('ok'); }, null, { timeout: 20000 });
 
     log('generando posición y tríadas por acorde…');
-    genResult = await page.evaluate(async ({ root, scale, posLabel, closed, bpm, introBars, hasXml }) => {
+    genResult = await page.evaluate(async ({ root, scale, posLabel, closed, link, bpm, introBars, hasXml }) => {
       showTab('arpscale'); // asegura que #asScale tiene sus <option> (asInit) antes de fijar el valor
       const posIdx = ['E', 'D', 'C', 'A', 'G'].indexOf(posLabel);
       document.getElementById('asRoot').value = root;
@@ -179,12 +185,12 @@ async function runOne({ appUrl, root, scale, posLabel, closed, introBars, bpm, x
       // Variante "cerrada": misma forma y mismas tríadas, subidas una octava (+12 trastes) para
       // no depender de cuerdas al aire — ver el comentario grande de fretShift dentro de
       // asSendToEditorTriadExplore() en guitarvisualizer.html.
-      const r = await asSendToEditorTriadExplore(closed ? 12 : 0);
+      const r = await asSendToEditorTriadExplore(closed ? 12 : 0, link ? 'link' : 'all');
       if (!hasXml && bpm) document.getElementById('bpmInput').value = String(bpm); // modo tema: el tempo ya lo trae el XML, no lo pisamos
       document.getElementById('introCount').value = String(introBars);
       if (typeof updateIntroLbl === 'function') updateIntroLbl();
       return { ...r, totalBars: (r ? r.applied + r.skipped : 0) };
-    }, { root, scale, posLabel, closed, bpm, introBars, hasXml: !!xmlPath });
+    }, { root, scale, posLabel, closed, link, bpm, introBars, hasXml: !!xmlPath });
     if (!genResult || !genResult.applied) throw new Error('No se generó ningún compás (revisa la posición/escala).');
     log(`ok: ${genResult.applied} compás(es) generados${genResult.skipped ? `, ${genResult.skipped} sin voicing limpio` : ''}`);
 
@@ -264,7 +270,7 @@ async function runOne({ appUrl, root, scale, posLabel, closed, introBars, bpm, x
   const audioDuration = await getAudioDurationSeconds(audioPath);
   const mixDuration = Math.min(genResult.contentSec, audioDuration);
 
-  const outPath = path.join(outDir, `${root}_${scale}_Forma${posLabel}${closed ? '_Cerrada' : ''}_TriadasEnPosicion.mp4`);
+  const outPath = path.join(outDir, `${root}_${scale}_Forma${posLabel}${closed ? '_Cerrada' : ''}${link ? '_Enlace' : ''}_TriadasEnPosicion.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque, ${mixDuration.toFixed(1)}s de duración)…`);
   await execFileP('ffmpeg', [
     '-y',
@@ -388,7 +394,7 @@ async function main() {
   });
   const t0 = Date.now();
   const results = await runPool(jobs, concurrency, (job) =>
-    runOne({ appUrl, root: args.root, scale: args.scale, posLabel: job.posLabel, closed: job.closed, introBars, bpm, xmlPath, cycleLen, wholeTheme, audioPath, extraSec, positionsLib, width, height, outDir, tmpDir })
+    runOne({ appUrl, root: args.root, scale: args.scale, posLabel: job.posLabel, closed: job.closed, visConfig: args.visconfig ? JSON.parse(fs.readFileSync(path.resolve(args.visconfig), 'utf8')) : null, link: !!args.link, introBars, bpm, xmlPath, cycleLen, wholeTheme, audioPath, extraSec, positionsLib, width, height, outDir, tmpDir })
   );
 
   const ok = results.filter((r) => r.ok).length;
