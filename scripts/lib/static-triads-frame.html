@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!--
+  Fotograma de "Tríadas en 4 mástiles" (scripts/generate-static-triad-videos.js): todas las
+  posiciones de UNA tríada en los 4 grupos de 3 cuerdas, fijas. Recibe los datos en
+  window.__DATA__ (inyectado antes de cargar la página):
+    { chord, labels: 'names'|'intervals',
+      invs: [{label, notes:[{name,iv}], gaps:[...], ivNames:[...]}]  ← cabecera (3 disposiciones)
+      rows: [{label, strings:[s,s,s], shapes:[{label, notes:[{string,fret,iv,name}]}]}] }
+  Diseño acordado con Alberto (2026-09-27) tras varias maquetas: sin recuadros ni colores por
+  inversión (distraían), sin repeticiones a la octava, línea fina que une las 3 notas de cada
+  figura + etiqueta dorada, y notas con el MISMO estilo que los vídeos (forceOwnNoteStyle).
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1600px; height: 900px; background: #0d0d0d; overflow: hidden; font-family: Arial, Helvetica, sans-serif; }
+  #head { position: absolute; top: 18px; left: 0; right: 0; text-align: center; color: #8ab4ff; }
+  #chord { font: 700 56px/1 Arial; color: #8ab4ff; text-shadow: 0 0 18px rgba(120,160,255,.45); }
+  #formula { margin-top: 12px; display: inline-flex; align-items: flex-start; gap: 64px; }
+  .inv { display: flex; flex-direction: column; align-items: center; }
+  .inv-l { font: 700 14px Arial; color: #e2b34f; margin-bottom: 6px; letter-spacing: .02em; }
+  .inv-n { display: inline-flex; align-items: flex-end; gap: 8px; }
+  .fn { display: flex; flex-direction: column; align-items: center; }
+  .fn b { font: 700 24px Arial; color: #8ab4ff; }
+  .fn i { font: 700 13px Arial; color: rgba(255,255,255,.55); font-style: normal; margin-top: 2px; }
+  .gap { display: flex; flex-direction: column; align-items: center; margin-bottom: 2px; }
+  .gap span { font: 700 12px Arial; color: #e2b34f; }
+  .gap em { font: 700 11px Arial; font-style: normal; color: rgba(226,179,79,.7); margin-top: 3px; white-space: nowrap; }
+  .gap hr { width: 38px; border: 0; border-top: 2px solid rgba(226,179,79,.8); margin-top: 3px; }
+  #necks { position: absolute; left: 0; top: 0; }
+  #brand { position: absolute; right: 26px; bottom: 18px; font: 700 15px Arial; color: #fff; }
+</style></head>
+<body>
+<div id="head"><div id="chord"></div><div id="formula"></div></div>
+<svg id="necks" width="1600" height="900"></svg>
+<div id="brand">@banetmasa</div>
+<script>
+const D = window.__DATA__;
+document.getElementById('chord').textContent = D.chord;
+// Cabecera: las 3 disposiciones de grave a agudo, cada una con la distancia en tonos (encima de la
+// línea) y el nombre del intervalo (debajo).
+document.getElementById('formula').innerHTML = D.invs.map(inv =>
+  `<div class="inv"><div class="inv-l">${inv.label}</div><div class="inv-n">` +
+  inv.notes.map((n, i) => (i ? `<div class="gap"><span>${inv.gaps[i - 1]}</span><hr><em>${inv.ivNames[i - 1]}</em></div>` : '') +
+    `<div class="fn"><b>${n.name}</b><i>${n.iv}</i></div>`).join('') + '</div></div>').join('');
+
+const svg = document.getElementById('necks');
+// Mástil solo hasta donde llega la forma más aguda (mínimo 13): trastes más anchos = notas más grandes.
+const FRET_END = Math.max(13, ...D.rows.flatMap(r => r.shapes.flatMap(s => s.notes.map(n => n.fret))));
+const LEFT = 205, RIGHT = 1565, STR_GAP = 38, NECK_TOP0 = 214, ROW_H = 172;
+const fretW = (RIGHT - LEFT) / FRET_END;
+const xOf = f => f === 0 ? LEFT - 22 : LEFT + (f - 0.5) * fretW; // cuerda al aire: a la izquierda de la cejilla
+const lineCol = 'rgba(255,255,255,.35)';
+let html = '';
+D.rows.forEach((row, ri) => {
+  const top = NECK_TOP0 + ri * ROW_H;                                      // y de la cuerda más aguda del grupo
+  const yOf = s => top + (row.strings[row.strings.length - 1] - s) * STR_GAP; // s: 0=6ª … 5=1ª
+  const bot = top + 2 * STR_GAP;
+  // Cuerdas vecinas (fuera del grupo): solo una referencia tenue.
+  if (row.strings[2] + 1 <= 5) html += `<line x1="${LEFT}" y1="${top - STR_GAP * 0.55}" x2="${RIGHT}" y2="${top - STR_GAP * 0.55}" stroke="rgba(255,255,255,.08)" stroke-width="1" stroke-dasharray="4 6"/>`;
+  if (row.strings[0] - 1 >= 0) html += `<line x1="${LEFT}" y1="${bot + STR_GAP * 0.55}" x2="${RIGHT}" y2="${bot + STR_GAP * 0.55}" stroke="rgba(255,255,255,.08)" stroke-width="1" stroke-dasharray="4 6"/>`;
+  html += `<line x1="${LEFT}" y1="${top - 6}" x2="${LEFT}" y2="${bot + 6}" stroke="rgba(255,255,255,.85)" stroke-width="5"/>`; // cejilla
+  for (let f = 1; f <= FRET_END; f++) html += `<line x1="${LEFT + f * fretW}" y1="${top - 6}" x2="${LEFT + f * fretW}" y2="${bot + 6}" stroke="${lineCol}" stroke-width="1.5"/>`;
+  row.strings.forEach(s => html += `<line x1="${LEFT}" y1="${yOf(s)}" x2="${RIGHT}" y2="${yOf(s)}" stroke="rgba(255,255,255,${0.35 + (5 - s) * 0.03})" stroke-width="${3 - s * 0.35}"/>`);
+  [3, 5, 7, 9, 15].filter(f => f <= FRET_END).forEach(f => html += `<circle cx="${xOf(f)}" cy="${top + STR_GAP}" r="4.5" fill="rgba(255,255,255,.16)"/>`);
+  html += `<circle cx="${xOf(12)}" cy="${top + STR_GAP * 0.5}" r="4.5" fill="rgba(255,255,255,.16)"/><circle cx="${xOf(12)}" cy="${top + STR_GAP * 1.5}" r="4.5" fill="rgba(255,255,255,.16)"/>`;
+  [3, 5, 7, 9, 12, 15].filter(f => f <= FRET_END).forEach(f => html += `<text x="${xOf(f)}" y="${bot + 36}" text-anchor="middle" font-size="13" fill="rgba(255,255,255,.4)">${f}</text>`);
+  html += `<text x="${LEFT - 52}" y="${top + STR_GAP - 4}" text-anchor="end" font-size="15" font-weight="700" fill="rgba(255,255,255,.55)">Cuerdas</text><text x="${LEFT - 52}" y="${top + STR_GAP + 18}" text-anchor="end" font-size="22" font-weight="700" fill="rgba(255,255,255,.85)">${row.label}</text>`;
+  // Cada figura: línea fina que une sus 3 notas + etiqueta dorada encima; las notas, después (encima).
+  row.shapes.forEach(sh => {
+    const pts = sh.notes.map(n => [xOf(n.fret), yOf(n.string)]);
+    const cx = (Math.min(...pts.map(p => p[0])) + Math.max(...pts.map(p => p[0]))) / 2;
+    html += `<polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2.5" stroke-linejoin="round"/>`;
+    html += `<text x="${cx}" y="${top - 28}" text-anchor="middle" font-size="16" font-weight="700" fill="#e2b34f">${sh.label}</text>`;
+  });
+  row.shapes.forEach(sh => sh.notes.forEach(n => {
+    const x = xOf(n.fret), y = yOf(n.string);
+    // MISMO estilo de nota que los vídeos (forceOwnNoteStyle, mkVlNote en guitarvisualizer.html):
+    // relleno semitransparente + borde blanco fino, sobre un disco opaco para que no se vean las
+    // cuerdas a través.
+    const fill = n.iv === 'R' ? 'rgba(229,57,53,.45)' : 'rgba(38,198,218,.5)';
+    const lbl = D.labels === 'names' ? n.name : n.iv;
+    html += `<circle cx="${x}" cy="${y}" r="18" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="18" fill="${fill}" stroke="rgba(255,255,255,.25)" stroke-width="1"/>`;
+    html += `<text x="${x}" y="${y + 5.5}" text-anchor="middle" font-size="${lbl.length > 2 ? 13 : 15}" font-weight="700" font-family="Helvetica,Arial,sans-serif" fill="#fff">${lbl}</text>`;
+  }));
+});
+svg.innerHTML = html;
+</script>
+</body></html>
