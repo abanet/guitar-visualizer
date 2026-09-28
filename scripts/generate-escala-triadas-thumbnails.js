@@ -17,6 +17,7 @@
  *   (acordes: --videos .../acordes --template .../acordes/thumbnails/PlantillaAcordesEscala_vacia.png)
  *   [--out <dir>]  (por defecto <videos>/thumbnails)
  *   [--force]      (regenera aunque ya exista la miniatura)
+ *   [--tonic-size <px>]  (tamaño de la tónica; por defecto 315 — las plantillas de séptimas usan ~255)
  *
  * Salida: <out>/<nombre del vídeo>.jpg (JPEG, <2 MB para YouTube).
  */
@@ -60,7 +61,7 @@ const RE = /-([A-G](?:s|b)?)_(FormasAcorde_)?Notas_forma([CAGED])(_cerrada)?\.mp
     const tonica = key.replace(/s$/, '#');
     const qs = new URLSearchParams({
       bg: 'file://' + path.resolve(args.template), tonica, forma, cerrada: cerrada ? '1' : '0',
-      tipo: acordes ? 'acordes' : 'arpegios',
+      tipo: acordes ? 'acordes' : 'arpegios', ...(args['tonic-size'] ? { tsize: args['tonic-size'] } : {}),
     });
     await page.goto(`${html}?${qs}`);
     await page.evaluate(async () => { await document.fonts.ready; await document.getElementById('bg').decode(); });

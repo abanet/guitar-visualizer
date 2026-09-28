@@ -14,7 +14,7 @@
     background: linear-gradient(180deg, #ffffff 0%, #f4f4f4 55%, #bdbdbd 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
     filter: drop-shadow(0 8px 14px rgba(0,0,0,.85)); }
-  #tonica .alt { font-size: 170px; vertical-align: 100px; letter-spacing: 0; margin-left: 4px; }
+  #tonica .alt { font-size: .54em; vertical-align: .32em; letter-spacing: 0; margin-left: 4px; }
   /* Letra de la forma: detrás de "FORMA" (x 99–350, base y 870) dentro del marco (hasta x 512) */
   #forma { position: absolute; left: 372px; bottom: calc(941px - 872px);
     font: italic 900 172px/0.74 'Barlow Condensed', sans-serif;
@@ -36,6 +36,9 @@
   const q = new URLSearchParams(location.search);
   if (q.get('tipo') === 'acordes') document.body.classList.add('acordes');
   document.getElementById('bg').src = q.get('bg');
+  // Tamaño de la tónica: las plantillas de séptimas tienen el título más bajo ("DE 7ª EN LA ESCALA")
+  // y menos hueco encima de "MAYOR" → --tonic-size en el script (px de fuente; por defecto 315).
+  if (q.get('tsize')) { const el = document.getElementById('tonica'); el.style.fontSize = q.get('tsize') + 'px'; }
   const t = q.get('tonica');
   document.getElementById('tonica').innerHTML =
     t[0] + (t.length > 1 ? `<span class="alt">${t[1]}</span>` : '');
