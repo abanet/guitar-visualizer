@@ -6,3 +6,4 @@ video-out/
 scripts/lib/youtube-oauth-client.json
 scripts/.youtube-token*.json
 __pycache__/
+scripts/.tokens-caducados/

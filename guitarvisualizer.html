@@ -1861,6 +1861,7 @@ body.presentation #channelWatermark{display:flex;}
             <option value="pentatonic">Pentatónica (según acorde)</option>
             <option value="shapes-triads">Formas guardadas · Tríadas</option>
             <option value="shapes-sevenths">Formas guardadas · Tétradas</option>
+            <option value="guides">Notas guía (3ª y 7ª enlazadas)</option>
           </select></div>
         <button class="btn accent" onclick="asGenerate()"><i class="ti ti-bolt"></i> Generar posición</button>
       </div>
@@ -4689,6 +4690,25 @@ function animateArpChange(fromNotes,toNotes,durationMs,nextChordSym){
   vlAnimId=requestAnimationFrame(step);
 }
 
+// Placa pequeña con el INTERVALO de la nota, para vídeos que muestran el nombre en la nota y el intervalo aparte sin estorbar
+// (VIS_ELEMENTS.intervalBadge). Intervalo respecto al acorde que suena (o a la pentatónica, vía
+// note.semi); si no se puede calcular, no se dibuja nada.
+function appendIntervalBadge(g,note,rr,chord){
+  if(getVisConfig().intervalBadge!==true||!note)return;
+  const iv=noteDisplayLabel(note,'intervals',chord||'');
+  if(!iv||/^[A-G][b#]?$/.test(iv))return;
+  // MISMA placa que el número de dedo de los Drop2 (ver renderSVGStatic, note.finger): círculo oscuro
+  // arriba a la derecha, medio fuera de la nota — pedido de Alberto ("como lo teníamos en drop2 y que
+  // sean círculos, no elipses"). Un poco mayor para que quepan "b7"/"#5".
+  const fr2=Math.max(9,Math.round(rr*0.44));
+  const fx2=note.cx+rr*0.74,fy2=note.cy-rr*0.74;
+  const fc=document.createElementNS(NS,'circle');fc.setAttribute('cx',fx2);fc.setAttribute('cy',fy2);fc.setAttribute('r',fr2);
+  fc.setAttribute('fill','rgba(20,20,20,.75)');fc.setAttribute('stroke','rgba(255,255,255,.4)');fc.setAttribute('stroke-width','1');fc.setAttribute('pointer-events','none');
+  g.appendChild(fc);
+  const t=document.createElementNS(NS,'text');t.setAttribute('x',fx2);t.setAttribute('y',fy2);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
+  t.setAttribute('fill','#ffd640');t.setAttribute('font-size',Math.round(fr2*(iv.length>1?0.95:1.15)));t.setAttribute('font-weight','bold');t.setAttribute('font-family','Helvetica,Arial,sans-serif');t.setAttribute('pointer-events','none');
+  t.textContent=iv;g.appendChild(t);
+}
 // Helper: build a .vl-note group (common=white anchor ring; root stays red)
 function mkVlNote(note,isCommonAnchor,chordForLabel){
   const g=document.createElementNS(NS,'g');g.setAttribute('class','vl-note');
@@ -4718,6 +4738,7 @@ function mkVlNote(note,isCommonAnchor,chordForLabel){
   t.setAttribute('fill',isCommonAnchor&&!root&&!ownStyle?'#0d0d0d':'white');t.setAttribute('font-size',disp&&disp.length>2?'16':'22');
   t.setAttribute('font-weight','bold');t.setAttribute('font-family','Helvetica,Arial,sans-serif');t.setAttribute('pointer-events','none');t.textContent=disp;
   g.appendChild(t);
+  appendIntervalBadge(g,note,Number(note.r)||20,chordForLabel||currentChordData?.chord||'');
   return g;
 }
 
@@ -5433,6 +5454,7 @@ function renderSVGStatic(parsed){
     t.setAttribute('fill',note.echo?'rgba(255,213,79,.85)':(_dimTN?'rgba(255,255,255,.45)':'white'));
     const fs=displayLabel&&displayLabel.length>2?Math.round(rr*0.65):Math.round(rr*0.85);
     t.setAttribute('font-size',fs);t.setAttribute('font-weight',_dimTN?'normal':'bold');t.setAttribute('font-family','Helvetica,Arial,sans-serif');t.setAttribute('pointer-events','none');t.textContent=displayLabel;g.appendChild(t);
+    if(!_dimTN&&!note.echo)appendIntervalBadge(g,note,rr,chord);
     // Número de dedo (Tríada abierta/Drop 2, ver data-finger en generateNeckSVG/svgStringToParsed):
     // placa oscura pequeña arriba a la derecha de la nota, para leerse igual encima de una cuerda
     // blanca que de un fantasma. Nada que ver con isTNparsed/ownStyle — el dedo es del PDF, no
@@ -9451,8 +9473,12 @@ function tnPentaToneMap(chord){
   const quality=m[2].trim();
   const ivs=resolveChordDefs(quality);
   const isMinor=ivs.some(iv=>iv.n==='b3');
-  const formula=isMinor?SEQ_SCALE_FORMULAS.penta_minor:SEQ_SCALE_FORMULAS.penta_major;
-  const labels=isMinor?['R','b3','4','5','b7']:['R','2','3','5','6'];
+  // Acorde con b5 (dim, m7b5 — el vii° de la escala mayor): pentatónica menor con b5 (R b3 4 b5 b7,
+  // p.ej. B D E F A sobre Bm7b5 en C). La menor normal traería la 5 justa (F#), que no es de la
+  // escala: dentro de la caja salían solo 4 notas. Pedido/aprobado por Alberto 2026-09-27.
+  const hasB5=ivs.some(iv=>iv.n==='b5');
+  const formula=hasB5?[0,3,5,6,10]:(isMinor?SEQ_SCALE_FORMULAS.penta_minor:SEQ_SCALE_FORMULAS.penta_major);
+  const labels=hasB5?['R','b3','4','b5','b7']:(isMinor?['R','b3','4','5','b7']:['R','2','3','5','6']);
   const map={};
   formula.forEach((st,i)=>{map[(rootPc+st)%12]=labels[i];});
   return{rootPc,map};
@@ -11577,7 +11603,7 @@ function asGenerate(){
   if(!notes.length){if(st)st.textContent='No se pudo generar la posición.';return;}
   const editingOpen=asState.editingOpen;
   const shapeBase=asShapeBase(quality);
-  asState={root,scale,posIdx,quality,notes,chords:shapeBase?asBuildShapeChordEntries(root,scale,shapeBase,posIdx):arpBuildDiatonicChords(root,scale,quality),editingOpen};
+  asState={root,scale,posIdx,quality,notes,chords:shapeBase?asBuildShapeChordEntries(root,scale,shapeBase,posIdx):arpBuildDiatonicChords(root,scale,quality==='guides'?'sevenths':quality),editingOpen};
   asFillChordSelect();
   asRenderBoxEditor();
   asRenderPreview();
@@ -11603,7 +11629,16 @@ function asFillChordSelect(){
 // la pentatónica que le corresponde — mismo formato {rootPc,map} en ambos casos, ver
 // tnChordToneMap/tnPentaToneMap. Único punto de la pestaña que consulta asState.quality para
 // decidir ESTO (no para elegir el acorde en sí, que en modo tema viene tal cual del XML).
-function asChordInfo(chord){return asState.quality==='pentatonic'?tnPentaToneMap(chord):tnChordToneMap(chord);}
+// Acorde con b5 (el vii° de la mayor) en "Pentatónica según acorde": no hay pentatónica propia —
+// por defecto se muestra su ARPEGIO con el texto "No existe pentatónica para este acorde"
+// (decisión de Alberto 2026-09-27); 'b5' = la pentatónica menor con b5 (R b3 4 b5 b7) de
+// tnPentaToneMap, que se deja como alternativa.
+const AS_PENTA_VII_MODE='arpeggio'; // 'arpeggio' | 'b5'
+function asIsB5Chord(chord){const m=(chord||'').match(/^([A-G][b#]?)(.*)/);return !!m&&resolveChordDefs(m[2].trim()).some(iv=>iv.n==='b5');}
+function asChordInfo(chord){
+  if(asState.quality!=='pentatonic')return tnChordToneMap(chord);
+  return (AS_PENTA_VII_MODE==='arpeggio'&&asIsB5Chord(chord))?tnChordToneMap(chord):tnPentaToneMap(chord);
+}
 
 function asRenderPreview(){
   const board=document.getElementById('asBoard'),st=document.getElementById('asStatus');
@@ -11743,7 +11778,7 @@ const AS_SHAPES_KEY='gv_arpscale_chordshapes';
 // también lo leen los scripts por lotes). NO editar a mano: lo regenera bake-chord-shapes.js.
 // Contenido inicial: Forma C, tríadas, transcrito de la captura de Alberto (2026-09-18) — la
 // captura era la versión cerrada (+12), aquí en abierta.
-const AS_SHAPES_DEFAULT={"boxes":{"A":[[0,3],[0,5],[1,2],[1,3],[1,5],[2,2],[2,3],[2,5],[3,2],[3,4],[3,5],[4,3],[4,5],[4,6],[5,3],[5,5]],"C":[[0,0],[0,1],[0,3],[1,0],[1,2],[1,3],[2,0],[2,2],[2,3],[3,0],[3,2],[4,0],[4,1],[4,3],[5,0],[5,1],[5,3]],"D":[[0,10],[0,12],[0,13],[1,10],[1,12],[2,9],[2,10],[2,12],[3,9],[3,10],[3,12],[4,10],[4,12],[4,13],[5,10],[5,12],[5,13]],"E":[[0,7],[0,8],[0,10],[1,7],[1,8],[1,10],[2,7],[2,9],[2,10],[3,7],[3,9],[3,10],[4,8],[4,10],[5,7],[5,8],[5,10]],"G":[[0,5],[0,7],[0,8],[1,5],[1,7],[1,8],[2,5],[2,7],[3,4],[3,5],[3,7],[4,5],[4,6],[4,8],[5,5],[5,7],[5,8]]},"shapes":{"triads|A|0":[[[4,5],[3,5],[2,5],[1,3]]],"triads|A|1":[[[4,3],[3,2],[2,3],[1,5]]],"triads|A|2":[[[5,3],[4,5],[3,4],[2,2]]],"triads|A|3":[[[5,5],[4,6],[3,5],[2,3]],[[4,6],[3,5],[2,3],[0,5]]],"triads|A|4":[[[5,3],[4,3],[3,4],[2,5],[1,5],[0,3]]],"triads|A|5":[[[5,5],[4,5],[3,5],[2,2]]],"triads|A|6":[[[4,3],[3,4],[2,3],[1,2]]],"triads|C|0":[[[5,0],[4,1],[3,0],[2,2],[1,3]]],"triads|C|1":[[[4,3],[3,2],[2,0],[0,1]],[[5,1],[4,3],[3,2],[2,3]]],"triads|C|2":[[[5,0],[4,0],[3,0],[2,2],[1,2],[0,0]]],"triads|C|3":[[[5,1],[4,1],[3,2],[2,3],[1,3],[0,1]]],"triads|C|4":[[[5,3],[4,0],[3,0],[2,0],[1,2],[0,3]]],"triads|C|5":[[[5,0],[4,1],[3,2],[2,2],[1,0]]],"triads|C|6":[[[4,3],[2,3],[1,2]]],"triads|D|0":[[[4,13],[3,12],[2,10],[0,12]],[[5,12],[4,13],[3,12],[2,10]]],"triads|D|1":[[[5,10],[4,10],[2,12],[1,12],[0,10]]],"triads|D|2":[[[5,12],[4,12],[3,12],[2,9]]],"triads|D|3":[[[5,13],[4,10],[3,10],[2,10],[1,12],[0,13]]],"triads|D|4":[[[5,10],[4,12],[3,12],[2,12],[1,10]]],"triads|D|5":[[[4,10],[3,9],[2,10],[1,12]]],"triads|D|6":[[[5,13],[4,12],[2,12]],[[0,10],[2,9],[3,10]]],"triads|E|0":[[[5,8],[4,8],[3,9],[2,10],[1,10],[0,8]]],"triads|E|1":[[[5,10],[4,10],[3,10],[2,7]]],"triads|E|2":[[[5,7],[4,8],[3,9],[2,9],[1,7]]],"triads|E|3":[[[5,8],[4,10],[3,10],[2,10],[1,8]]],"triads|E|4":[[[5,7],[4,8],[3,7],[2,9],[1,10]]],"triads|E|5":[[[5,8],[4,10],[3,9],[2,10]],[[4,10],[3,9],[2,7],[0,8]]],"triads|E|6":[[[3,7],[2,9],[1,8]]],"triads|G|0":[[[5,8],[4,5],[3,5],[2,5],[1,7],[0,8]]],"triads|G|1":[[[5,5],[4,6],[3,7],[2,7],[1,5]]],"triads|G|2":[[[4,5],[3,4],[2,5],[1,7]]],"triads|G|3":[[[5,5],[4,6],[3,5],[2,7],[1,8]]],"triads|G|4":[[[5,7],[4,8],[3,7],[2,5],[0,7]],[[4,8],[3,7],[2,5],[0,7]]],"triads|G|5":[[[5,5],[4,5],[3,5],[2,7],[1,7],[0,5]]],"triads|G|6":[[[5,7],[4,6],[3,7]]]}};
+const AS_SHAPES_DEFAULT={"boxes":{"A":[[0,3],[0,5],[1,2],[1,3],[1,5],[2,2],[2,3],[2,5],[3,2],[3,4],[3,5],[4,3],[4,5],[4,6],[5,3],[5,5]],"C":[[0,0],[0,1],[0,3],[1,0],[1,2],[1,3],[2,0],[2,2],[2,3],[3,0],[3,2],[4,0],[4,1],[4,3],[5,0],[5,1],[5,3]],"D":[[0,10],[0,12],[0,13],[1,10],[1,12],[2,9],[2,10],[2,12],[3,9],[3,10],[3,12],[4,10],[4,12],[4,13],[5,10],[5,12],[5,13]],"E":[[0,7],[0,8],[0,10],[1,7],[1,8],[1,10],[2,7],[2,9],[2,10],[3,7],[3,9],[3,10],[4,8],[4,10],[5,7],[5,8],[5,10]],"G":[[0,5],[0,7],[0,8],[1,5],[1,7],[1,8],[2,5],[2,7],[3,4],[3,5],[3,7],[4,5],[4,6],[4,8],[5,5],[5,7],[5,8]]},"shapes":{"sevenths|A|0":[[[1,3],[2,5],[3,4],[4,5],[5,3]]],"sevenths|A|1":[[[1,5],[3,5],[4,6],[5,5]]],"sevenths|A|2":[[[2,2],[3,4],[4,3],[5,3]]],"sevenths|A|3":[[[2,3],[3,5],[4,5],[5,5]]],"sevenths|A|4":[[[0,3],[2,3],[3,4],[4,3]]],"sevenths|A|5":[[[0,5],[2,5],[3,5],[4,5],[5,5]]],"sevenths|A|6":[[[1,2],[2,3],[3,2],[4,3]],[[0,5],[1,5],[2,3],[3,4]]],"sevenths|C|0":[[[1,3],[2,2],[3,0],[4,0]]],"sevenths|C|1":[[[2,0],[3,2],[4,1],[5,1]]],"sevenths|C|2":[[[0,0],[1,2],[2,0],[3,0],[4,3]],[[0,0],[2,0],[3,0],[4,0],[5,0]]],"sevenths|C|3":[[[2,3],[3,2],[4,1],[5,0]],[[0,1],[2,2],[3,2],[4,1]]],"sevenths|C|4":[[[2,0],[3,0],[4,0],[5,1]]],"sevenths|C|5":[[[1,0],[2,2],[3,0],[4,1],[5,0]],[[1,0],[3,0],[4,1],[5,0]]],"sevenths|C|6":[[[1,2],[2,3],[3,2],[4,3]]],"sevenths|D|0":[[[2,10],[3,12],[4,12],[5,12]]],"sevenths|D|1":[[[0,10],[1,12],[2,10],[3,10],[4,13]],[[0,10],[2,10],[3,10],[4,10],[5,10]]],"sevenths|D|2":[[[0,12],[2,12],[3,12],[4,12],[5,12]]],"sevenths|D|3":[[[2,10],[3,10],[4,10],[5,12]]],"sevenths|D|4":[[[1,10],[2,12],[3,10],[4,12],[5,10]]],"sevenths|D|5":[[[1,12],[3,12],[4,13],[5,12]]],"sevenths|D|6":[[[0,10],[2,9],[3,10],[4,10]]],"sevenths|E|0":[[[2,10],[3,9],[4,8],[5,7]],[[0,8],[2,9],[3,9],[4,8]]],"sevenths|E|1":[[[0,10],[2,10],[3,10],[4,10],[5,10]]],"sevenths|E|2":[[[1,7],[2,9],[3,7],[4,8],[5,7]],[[1,7],[3,7],[4,8],[5,7]]],"sevenths|E|3":[[[1,8],[2,10],[3,9],[4,10],[5,8]]],"sevenths|E|4":[[[0,10],[2,9],[3,10],[4,8]],[[1,10],[2,9],[3,10],[4,8]]],"sevenths|E|5":[[[2,7],[3,9],[4,8],[5,8]]],"sevenths|E|6":[[[0,10],[2,9],[3,10],[4,10]]],"sevenths|G|0":[[[2,5],[3,5],[4,5],[5,7]]],"sevenths|G|1":[[[1,5],[2,7],[3,5],[4,6],[5,5]],[[1,5],[3,5],[4,6],[5,5]]],"sevenths|G|2":[[[1,7],[3,7],[4,8],[5,7]]],"sevenths|G|3":[[[1,8],[2,7],[3,5],[4,5]]],"sevenths|G|4":[[[0,7],[2,5],[3,7],[4,6]]],"sevenths|G|5":[[[0,5],[1,7],[2,5],[3,5],[4,8]],[[0,5],[2,5],[3,5],[4,5],[5,5]]],"sevenths|G|6":[[[0,7],[2,7],[3,7],[4,6]]],"triads|A|0":[[[4,5],[3,5],[2,5],[1,3]]],"triads|A|1":[[[4,3],[3,2],[2,3],[1,5]]],"triads|A|2":[[[5,3],[4,5],[3,4],[2,2]]],"triads|A|3":[[[5,5],[4,6],[3,5],[2,3]],[[4,6],[3,5],[2,3],[0,5]]],"triads|A|4":[[[5,3],[4,3],[3,4],[2,5],[1,5],[0,3]]],"triads|A|5":[[[5,5],[4,5],[3,5],[2,2]]],"triads|A|6":[[[4,3],[3,4],[2,3],[1,2]]],"triads|C|0":[[[5,0],[4,1],[3,0],[2,2],[1,3]]],"triads|C|1":[[[4,3],[3,2],[2,0],[0,1]],[[5,1],[4,3],[3,2],[2,3]]],"triads|C|2":[[[5,0],[4,0],[3,0],[2,2],[1,2],[0,0]]],"triads|C|3":[[[5,1],[4,1],[3,2],[2,3],[1,3],[0,1]]],"triads|C|4":[[[5,3],[4,0],[3,0],[2,0],[1,2],[0,3]]],"triads|C|5":[[[5,0],[4,1],[3,2],[2,2],[1,0]]],"triads|C|6":[[[4,3],[2,3],[1,2]]],"triads|D|0":[[[4,13],[3,12],[2,10],[0,12]],[[5,12],[4,13],[3,12],[2,10]]],"triads|D|1":[[[5,10],[4,10],[2,12],[1,12],[0,10]]],"triads|D|2":[[[5,12],[4,12],[3,12],[2,9]]],"triads|D|3":[[[5,13],[4,10],[3,10],[2,10],[1,12],[0,13]]],"triads|D|4":[[[5,10],[4,12],[3,12],[2,12],[1,10]]],"triads|D|5":[[[4,10],[3,9],[2,10],[1,12]]],"triads|D|6":[[[5,13],[4,12],[2,12]],[[0,10],[2,9],[3,10]]],"triads|E|0":[[[5,8],[4,8],[3,9],[2,10],[1,10],[0,8]]],"triads|E|1":[[[5,10],[4,10],[3,10],[2,7]]],"triads|E|2":[[[5,7],[4,8],[3,9],[2,9],[1,7]]],"triads|E|3":[[[5,8],[4,10],[3,10],[2,10],[1,8]]],"triads|E|4":[[[5,7],[4,8],[3,7],[2,9],[1,10]]],"triads|E|5":[[[5,8],[4,10],[3,9],[2,10]],[[4,10],[3,9],[2,7],[0,8]]],"triads|E|6":[[[3,7],[2,9],[1,8]]],"triads|G|0":[[[5,8],[4,5],[3,5],[2,5],[1,7],[0,8]]],"triads|G|1":[[[5,5],[4,6],[3,7],[2,7],[1,5]]],"triads|G|2":[[[4,5],[3,4],[2,5],[1,7]]],"triads|G|3":[[[5,5],[4,6],[3,5],[2,7],[1,8]]],"triads|G|4":[[[5,7],[4,8],[3,7],[2,5],[0,7]],[[4,8],[3,7],[2,5],[0,7]]],"triads|G|5":[[[5,5],[4,5],[3,5],[2,7],[1,7],[0,5]]],"triads|G|6":[[[5,7],[4,6],[3,7]]]}};
 let asShapesStore=null;
 let asShapesDirty=false; // hay cambios en memoria sin exportar — se avisa al cerrar la pestaña
 function asLoadShapes(){
@@ -11979,7 +12014,8 @@ function asIsDimTriad(chordInfo){
   return ivs.join(',')==='0,3,6';
 }
 function asDimShapeNotes(chord,notes){
-  if(asState.quality==='pentatonic'||(typeof asShapesMode==='function'&&asShapesMode()))return null;
+  if(asState.quality==='pentatonic'&&!(AS_PENTA_VII_MODE==='arpeggio'&&asIsB5Chord(chord)))return null; // en pentatónicas solo el vii° (arpeggio)
+  if(typeof asShapesMode==='function'&&asShapesMode())return null;
   const info=tnChordToneMap(chord);
   if(!asIsDimTriad(info)||!notes.length)return null;
   const cells=new Set(notes.map(n=>n.string+':'+n.fret));
@@ -12073,6 +12109,7 @@ async function asSendToEditor(){
     const flat=[];
     all.forEach((b,bi)=>{getBarSegments(b).forEach(s=>flat.push({bi,chord:s.chord,beat:s.beat||1}));});
     const cache={};
+    let guidePrev=null,guideLastChord=null; // notas guía: pareja 3ª-7ª vigente y su acorde
     const shapeOcc={}; // apariciones ya vistas de cada acorde (modo formas), para repartir sus formas
     let applied=0,unknown=[];
     // Compases SIN acorde DENTRO del tema (interludio real del XML — distinto de los compases
@@ -12093,11 +12130,37 @@ async function asSendToEditor(){
       // Modo formas + tema: el XML da el acorde por nombre, no por forma. Si ese acorde diatónico
       // tiene varias formas guardadas, se REPARTEN por apariciones (1ª vez forma 1, 2ª forma 2, 3ª
       // forma 1…) — así en un tema que repite la progresión salen todas, sin decidirlo a mano.
-      let entry=null,cacheKey=chord;
+      let entry=null,cacheKey=chord,guidePair=null;
+      // "Notas guía" (capítulo del vídeo largo, pedido de Alberto 2026-09-27): por acorde, UNA pareja
+      // 3ª-7ª dentro de la caja, la que menos se mueve desde la pareja anterior (la línea de notas
+      // guía clásica: la 7ª baja medio tono a la 3ª del siguiente…). Se mantiene mientras no cambie
+      // el acorde. La primera: la más centrada en la caja.
+      if(asState.quality==='guides'){
+        if(chord!==guideLastChord){
+          const rp=noteToSt((chord.match(/^([A-G][b#]?)/)||[])[1]||'C');
+          const iv=n=>((n.st-rp)%12+12)%12;
+          const thirds=notes.filter(n=>[3,4].includes(iv(n))),sevenths=notes.filter(n=>[10,11].includes(iv(n)));
+          const center=(Math.min(...notes.map(n=>n.fret))+Math.max(...notes.map(n=>n.fret)))/2;
+          const pairs=[];
+          thirds.forEach(a=>sevenths.forEach(b=>{if(a.string!==b.string&&Math.abs(a.fret-b.fret)<=3&&Math.abs(a.string-b.string)<=2)pairs.push([a,b]);}));
+          const d=(p,q)=>Math.abs(p.fret-q.fret)+2*Math.abs(p.string-q.string);
+          const cost=pr=>guidePrev?pr.reduce((acc,p)=>acc+Math.min(...guidePrev.map(q=>d(p,q))),0)
+            :Math.abs((pr[0].fret+pr[1].fret)/2-center)+Math.abs((pr[0].string+pr[1].string)/2-2.5)*0.5;
+          guidePrev=pairs.length?pairs.reduce((a,b)=>cost(b)<cost(a)?b:a):null;
+          guideLastChord=chord;
+        }
+        guidePair=guidePrev;
+        cacheKey=chord+'|'+(guidePair?guidePair.map(n=>n.string+':'+n.fret).join(','):'-');
+      }
       if(asShapesMode()){
         // Por clase de nota, no por grafía: BiaB escribe p.ej. "Fdim" donde la escala de F# mayor
-        // genera "E#dim" — con === ese acorde se quedaba sin forma (y sin fotograma).
-        const chordKey=ch=>{const m=(ch||'').match(/^([A-G][b#]?)(.*)$/);return m?noteToSt(m[1])+'|'+m[2]:ch;};
+        // genera "E#dim" — con === ese acorde se quedaba sin forma (y sin fotograma). Y la calidad
+        // también por sus intervalos (semitonos), no por texto: BiaB escribe "CMaj7" y la escala
+        // genera "Cmaj7" — por texto no casaban y Cmaj7/Fmaj7 se quedaban sin forma (se veía la
+        // del acorde anterior; bug visto en el primer vídeo de acordes de 7ª en escala).
+        const chordKey=ch=>{const m=(ch||'').match(/^([A-G][b#]?)(.*)$/);if(!m)return ch;
+          const q=resolveChordDefs(m[2].trim()).map(iv=>iv.st).sort((a,b)=>a-b).join(',');
+          return noteToSt(m[1])+'|'+q;};
         const forms=asState.chords.filter(c=>chordKey(c.chord)===chordKey(chord)&&c.hasShape);
         const n=shapeOcc[chord]||0;shapeOcc[chord]=n+1;
         entry=forms.length?forms[n%forms.length]:null;
@@ -12106,7 +12169,7 @@ async function asSendToEditor(){
       if(!(cacheKey in cache)){
         const svg=asShapesMode()
           ?(()=>{const k=asShapeKeysForEntry(entry);return k?asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax,k):null;})()
-          :asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax,dimShapes[chord]||null);
+          :asBuildArpeggioSVG(notes,asChordInfo(chord),chord,fretMin,fretMax,guidePair||dimShapes[chord]||null);
         if(!svg){if(!unknown.includes(chord))unknown.push(chord);cache[cacheKey]=null;}
         else{
           const parsed=svgStringToParsed(svg);
@@ -12221,7 +12284,7 @@ async function asSendToEditor(){
 // caben ENTERAS dentro de esta misma caja — la misma animación de zoom/crossfade que usan
 // generateExploreTriadA/B/C, pero sin salir nunca de la posición fija (a diferencia de esos, que
 // recorren las 12 posiciones por todo el mástil).
-async function asSendToEditorTriadExplore(fretShift=0){
+async function asSendToEditorTriadExplore(fretShift=0,mode='all'){
   if(!asState.chords.length){alert('Esta escala no tiene acordes diatónicos limpios de ese tipo — prueba con tríadas o cambia de escala.');return null;}
   const label='Tríadas dentro de la posición';
 
@@ -12394,14 +12457,25 @@ async function asSendToEditorTriadExplore(fretShift=0){
     // localVoicingsForCached() sigue devolviendo el orden canónico 321→654 (se cachea por NOMBRE
     // de acorde, reutilizable si el acorde se repite más adelante); pickDirection() decide aquí,
     // racha a racha, si se usa tal cual o invertido.
-    let runStart=0;
+    let runStart=0,linkPrev=null;
     while(runStart<all.length){
       const chord=(all[runStart].chord||'').trim();
       if(!chord){runStart++;continue;}
       let runEnd=runStart+1;
       while(runEnd<all.length&&(all[runEnd].chord||'').trim()===chord)runEnd++;
       const runBars=[];for(let k=runStart;k<runEnd;k++)runBars.push(k);
-      const cands=pickDirection(localVoicingsForCached(chord));
+      let cands=pickDirection(localVoicingsForCached(chord));
+      // mode 'link' (capítulo "Enlace de tríadas" del vídeo largo, pedido de Alberto 2026-09-27): UNA
+      // tríada por acorde, la de la caja que MENOS se mueve desde la anterior (notas comunes
+      // quietas, el resto al traste más cercano) — la animación de deslizamiento de tríadas hace el
+      // resto. La primera: la más centrada en la caja.
+      if(mode==='link'&&cands.length){
+        const pts=v=>v.strings.map((st,i)=>({st,f:v.frets[i]}));
+        const cost=v=>linkPrev?pts(v).reduce((a,p)=>a+Math.min(...pts(linkPrev).map(q=>Math.abs(q.f-p.f)+2*Math.abs(q.st-p.st))),0)
+          :Math.abs(v.frets.reduce((a,b)=>a+b,0)/v.frets.length-(Math.min(...boxNotes.map(n=>n.fret))+Math.max(...boxNotes.map(n=>n.fret)))/2);
+        const best=cands.reduce((a,b)=>cost(b)<cost(a)?b:a);
+        linkPrev=best;cands=[best];
+      }
       const N=cands.length;
       const totalSlots=runBars.length*4;
       const slotAlloc=allocateSlots(N||1,totalSlots);
@@ -13696,6 +13770,9 @@ function onGlobalNoteDisplayChange(){
 }
 function getNoteDisplay(cycleIdx){
   const ci = cycleIdx !== undefined ? cycleIdx : (curBar>=0?getAllBars()[curBar]?.cycleIdx:0)||0;
+  // Con el intervalo en placa pequeña (intervalBadge) la nota lleva SIEMPRE su nombre: el intervalo ya
+  // se ve en la placa (vídeo largo de una posición, pedido de Alberto 2026-09-27).
+  if(getVisConfig().intervalBadge===true) return 'notes';
   const mode = getGlobalNoteDisplay();
   if(mode==='notes') return 'notes';
   if(mode==='intervals') return 'intervals';
@@ -13828,6 +13905,9 @@ function asScaleNameFor(chordName){
   if(!chordName)return '';
   const m=(chordName||'').match(/^([A-G][b#]?)(.*)/);if(!m)return '';
   const quality=m[2].trim();
+  if(asIsB5Chord(chordName))return AS_PENTA_VII_MODE==='arpeggio'
+    ?'No existe pentatónica para este acorde · arpegio de '+chordName
+    :'Pentatónica menor b5 de '+m[1];
   const isMinor=resolveChordDefs(quality).some(d=>d.n==='b3');
   return (isMinor?'Pentatónica menor de ':'Pentatónica mayor de ')+m[1];
 }
@@ -15476,6 +15556,7 @@ const VIS_ELEMENTS=[
   {id:'darkFretboard',label:'Estilo del mástil: oscuro integrado (desactiva para respetar el estilo del SVG original)', def:true, group:'Franjas y elementos del mástil'},
   {id:'realisticNeck',label:'Mástil realista: cuerdas metálicas con volumen y trastes con brillo', def:false, group:'Franjas y elementos del mástil'},
   {id:'forceOwnNoteStyle',label:'Aplicar estilo propio a las notas: usa siempre rojo (tónica) y azul (resto), ignorando los colores del SVG', def:true, group:'Franjas y elementos del mástil'},
+  {id:'intervalBadge',label:'Intervalo en pequeño junto a cada nota (el mástil muestra siempre el nombre de la nota)', def:false, group:'Franjas y elementos del mástil'},
   {id:'scaleFromChord',label:'Escala del acorde que suena (ignora tonalidad)', def:false, group:'Escala y notas'},
   // ── TRIADS: transition between positions ──
   {id:'triadShowGhost',label:'Mostrar notas fantasma de la siguiente posición antes del cambio', def:true, group:'Transición · Tríadas', xtype:'triads'},
