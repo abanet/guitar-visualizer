@@ -8,3 +8,5 @@ scripts/.youtube-token*.json
 __pycache__/
 scripts/.tokens-caducados/
 scripts/.catalog-tonicas-done.txt
+scripts/.catalog-acordes-done.txt
+scripts/.catalog-arpegios-done.txt
