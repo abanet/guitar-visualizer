@@ -43,7 +43,10 @@ function parseArgs(argv) {
   return a;
 }
 // Prioridad mínima y 2 hilos: puede montarse mientras otro lote GRABA en tiempo real sin quitarle CPU.
-const ff = (args) => execFileP('nice', ['-n', '19', 'ffmpeg', '-loglevel', 'error', '-y', '-threads', '2', ...args], { maxBuffer: 1 << 26 });
+// GV_ASSEMBLE_FAST=1 (lote nocturno, sin nada grabando a la vez): todos los hilos y prioridad normal.
+const ff = (args) => process.env.GV_ASSEMBLE_FAST === '1'
+  ? execFileP('ffmpeg', ['-loglevel', 'error', '-y', ...args], { maxBuffer: 1 << 26 })
+  : execFileP('nice', ['-n', '19', 'ffmpeg', '-loglevel', 'error', '-y', '-threads', '2', ...args], { maxBuffer: 1 << 26 });
 async function duration(f) {
   try { await execFileP('ffmpeg', ['-i', f]); } catch (e) {
     const m = (e.stderr || '').match(/Duration:\s*(\d+):(\d+):([\d.]+)/); if (m) return +m[1] * 3600 + +m[2] * 60 + +m[3];
@@ -64,21 +67,34 @@ const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2
   // --piezas: todos los capítulos desde <out>/piezas (versión del vídeo largo, con el intervalo en
   // placa pequeña — ver scripts/lib/posicion-larga-vis-config.json), en vez de los vídeos sueltos.
   const P = path.join(outDir, 'piezas'), usePiezas = !!args.piezas;
+  // --cerrada: la versión "Forma X cerrada" (misma forma +12 trastes, sin cuerdas al aire) — piezas con
+  // _Cerrada/_cerrada en el nombre (las generan los scripts con --closed / --closed-only).
+  const C = !!args.cerrada, CT = C ? '_Cerrada' : '', ct = C ? '_cerrada' : '';
   const src = (dir, sub, file) => usePiezas ? path.join(P, sub, file) : path.join(dir, sub, file);
   const CH = [
-    { short: 'Escala', title: 'La escala', src: usePiezas ? path.join(P, `${k}_Forma${pos}_ConstruyeLaPosicion.mp4`) : path.join(outDir, `${k}_Forma${pos}_ConstruyeLaPosicion.mp4`), whole: true },
+    { short: 'Escala', title: 'La escala', src: usePiezas ? path.join(P, `${k}_Forma${pos}${CT}_ConstruyeLaPosicion.mp4`) : path.join(outDir, `${k}_Forma${pos}_ConstruyeLaPosicion.mp4`), whole: true },
+    // Tónicas de los acordes (Alberto 2026-09-28): antes de las tríadas, localizar dónde cae la
+    // fundamental de cada grado dentro de la forma (quality 'roots').
+    { short: 'Tónicas', title: 'Tónicas de los acordes', sub: 'Dónde está la fundamental de cada acorde', src: path.join(P, 'tonicas', `EscalaCTriadasEscala-${k}_Notas_forma${pos}${ct}.mp4`), cycle: 14 },
+    // Enlace ANTES que Tríadas (Alberto 2026-09-28, por dificultad): el enlace es una sola tríada por
+    // acorde; en Tríadas hay que meter hasta 4 posiciones por acorde.
+    { short: 'Enlace', title: 'Enlace de tríadas', sub: 'De un acorde al siguiente moviendo lo mínimo', src: path.join(P, `${root}_major_Forma${pos}${CT}_Enlace_TriadasEnPosicion.mp4`), cycle: 14 },
     // Tríadas de 3 notas (una por cuerda) que caben en la forma — ANTES de los arpegios (Alberto:
     // "después de la presentación dice que va a mostrar las tríadas pero muestra los arpegios").
-    { short: 'Tríadas', title: 'Tríadas de la escala', sub: 'Todas las tríadas de 3 notas dentro de la forma', src: path.join(P, `${root}_major_Forma${pos}_TriadasEnPosicion.mp4`), cycle: 14 },
-    { short: 'Enlace', title: 'Enlace de tríadas', sub: 'De un acorde al siguiente moviendo lo mínimo', src: path.join(P, `${root}_major_Forma${pos}_Enlace_TriadasEnPosicion.mp4`), cycle: 14 },
+    { short: 'Tríadas', title: 'Tríadas de la escala', sub: 'Todas las tríadas de 3 notas dentro de la forma', src: path.join(P, `${root}_major_Forma${pos}${CT}_TriadasEnPosicion.mp4`), cycle: 14 },
     // Orden de Alberto: primero los acordes y luego sus arpegios (tríadas y tétradas).
-    { short: 'Acordes', title: 'Acordes de la escala', sub: 'Una forma de cada acorde', src: src(T, 'acordes', `EscalaCTriadasEscala-${k}_FormasAcorde_Notas_forma${pos}.mp4`), cycle: 14 },
-    { short: 'Arpegios', title: 'Arpegios de las tríadas', sub: 'El arpegio de cada acorde', src: src(T, 'arpegios', `EscalaCTriadasEscala-${k}_Notas_forma${pos}.mp4`), cycle: 14 },
-    { short: 'Pentatónicas', title: 'Pentatónicas de la escala', sub: 'La pentatónica de cada acorde', src: path.join(P, 'pentatonicas', `EscalaCTriadasEscala-${k}_Notas_forma${pos}.mp4`), cycle: 14 },
-    { short: 'Acordes 7ª', title: 'Acordes de 7ª', sub: 'Una forma de cada cuatriada', src: usePiezas ? path.join(P, 'acordes7', `EscalaCCambiosaTodosGradosCon7-${k}_FormasAcorde_Notas_forma${pos}.mp4`) : path.join(S, 'acordes', `EscalaCCambiosaTodosGradosCon7-${k}_FormasAcorde_Notas_forma${pos}.mp4`), cycle: 24 },
-    { short: 'Arpegios 7ª', title: 'Arpegios de 7ª', sub: 'Las cuatriadas de la escala', src: usePiezas ? path.join(P, 'arpegios7', `EscalaCCambiosaTodosGradosCon7-${k}_Notas_forma${pos}.mp4`) : path.join(S, 'arpegios', `EscalaCCambiosaTodosGradosCon7-${k}_Notas_forma${pos}.mp4`), cycle: 24 },
-    { short: 'Notas guía', title: 'Notas guía', sub: 'La 3ª y la 7ª de cada acorde, enlazadas', src: path.join(P, 'guias', `EscalaCCambiosaTodosGradosCon7-${k}_Notas_forma${pos}.mp4`), cycle: 24 },
+    { short: 'Acordes', title: 'Acordes de la escala', sub: 'Una forma de cada acorde', src: src(T, 'acordes', `EscalaCTriadasEscala-${k}_FormasAcorde_Notas_forma${pos}${ct}.mp4`), cycle: 14 },
+    { short: 'Arpegios', title: 'Arpegios de las tríadas', sub: 'El arpegio de cada acorde', src: src(T, 'arpegios', `EscalaCTriadasEscala-${k}_Notas_forma${pos}${ct}.mp4`), cycle: 14 },
+    { short: 'Pentatónicas', title: 'Pentatónicas de la escala', sub: 'La pentatónica de cada acorde', src: path.join(P, 'pentatonicas', `EscalaCTriadasEscala-${k}_Notas_forma${pos}${ct}.mp4`), cycle: 14 },
+    { short: 'Acordes 7ª', title: 'Acordes de 7ª', sub: 'Una forma de cada cuatriada', src: usePiezas ? path.join(P, 'acordes7', `EscalaCCambiosaTodosGradosCon7-${k}_FormasAcorde_Notas_forma${pos}${ct}.mp4`) : path.join(S, 'acordes', `EscalaCCambiosaTodosGradosCon7-${k}_FormasAcorde_Notas_forma${pos}${ct}.mp4`), cycle: 24 },
+    { short: 'Arpegios 7ª', title: 'Arpegios de 7ª', sub: 'Las cuatriadas de la escala', src: usePiezas ? path.join(P, 'arpegios7', `EscalaCCambiosaTodosGradosCon7-${k}_Notas_forma${pos}${ct}.mp4`) : path.join(S, 'arpegios', `EscalaCCambiosaTodosGradosCon7-${k}_Notas_forma${pos}${ct}.mp4`), cycle: 24 },
+    // Notas guía: fuera de este vídeo (Alberto) — se reserva para una serie de ii-V-I, donde la
+    // resolución 7ª→3ª se oye de verdad (quality 'guides' de la app sigue disponible).
   ].filter(c => { if (fs.existsSync(c.src)) return true; console.log(`⚠ falta ${path.basename(c.src)} — capítulo "${c.title}" fuera`); return false; });
+  // Con --piezas (lote de vídeos largos) NO se monta un vídeo incompleto: 2026-09-29 una racha de
+  // TimeoutError de madrugada dejó 5 vídeos con capítulos de menos (alguno de 36 s). Sin salida, el
+  // lote reanudable lo vuelve a intentar en la siguiente pasada.
+  if (usePiezas && CH.length < 9) { console.error(`✗ faltan capítulos (${CH.length}/9) — no se monta ${k}_Forma${pos}${CT}`); process.exit(1); }
   for (const c of CH) c.dur = c.whole ? await duration(c.src) : (2 + laps * c.cycle + 1) * bar85;
   const next = i => CH[i + 1];
 
@@ -93,7 +109,7 @@ const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2
       <div style="font:700 24px Arial;color:#e2b34f;letter-spacing:.14em">CAPÍTULO ${i + 1}</div>
       <div style="font:700 68px Arial;color:#8ab4ff;margin-top:14px;text-shadow:0 0 20px rgba(120,160,255,.45)">${c.title}</div>
       <div style="font:700 26px Arial;color:rgba(255,255,255,.7);margin-top:14px">${c.sub || ''}</div>
-      <div style="font:700 20px Arial;color:rgba(255,255,255,.45);margin-top:26px">Escala de ${root} mayor · Forma ${pos}</div></div>`, c.card);
+      <div style="font:700 20px Arial;color:rgba(255,255,255,.45);margin-top:26px">Escala de ${root} mayor · Forma ${pos}${C ? ' cerrada' : ''}</div></div>`, c.card);
     if (next(i)) {
       c.ann = path.join(tmp, `ann${i}.png`);
       // Abajo a la derecha, bajo el mini-diagrama "Siguiente": el único hueco libre en TODOS los
@@ -157,11 +173,15 @@ const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2
   CH.forEach((c, i) => { if (i) { bar += `;${lastB}drawbox=x=${Math.round(BAR.w * c.start / musicEnd) - 2}:y=0:w=4:h=${BAR.h}:color=black:t=fill[bar${i}]`; lastB = `[bar${i}]`; } });
   let v = `[0:v]null[vv];${bar};[vv]${lastB}overlay=x=${BAR.x}:y=${BAR.y}:enable='lte(t,${musicEnd.toFixed(3)})'[vb]`;
   let lastV = '[vb]';
+  // Etiquetas: un capítulo corto (p.ej. "Escala", ~25 s de 15 min) deja su tramo tan estrecho que
+  // su nombre pisaba el del siguiente — cada etiqueta empieza, como pronto, donde acaba la anterior.
+  let labelEnd = 0;
   CH.forEach((c, i) => {
-    const x = BAR.x + Math.round(BAR.w * c.start / musicEnd), now = `between(t,${c.start.toFixed(3)},${(c.start + c.realDur).toFixed(3)})`;
+    const x = Math.max(BAR.x + Math.round(BAR.w * c.start / musicEnd), labelEnd + 12), now = `between(t,${c.start.toFixed(3)},${(c.start + c.realDur).toFixed(3)})`;
     v += `;${lastV}drawtext=${fontOpt}:text='${esc(c.short)}':x=${x}:y=${BAR.y - 20}:fontsize=13:fontcolor=white@0.45:enable='lte(t,${musicEnd.toFixed(3)})'[l${i}a]`;
     v += `;[l${i}a]drawtext=${fontOpt}:text='${esc(c.short)}':x=${x}:y=${BAR.y - 20}:fontsize=13:fontcolor=0x8ab4ff:enable='${now}'[l${i}]`;
     lastV = `[l${i}]`;
+    labelEnd = x + Math.round(c.short.length * 7.6);
     if (next(i)) {
       const end = (c.start + c.realDur).toFixed(3);
       v += `;${lastV}drawtext=${fontOpt}:text='Siguiente en %{eif\\:floor((${end}-t)/60)\\:d}\\:%{eif\\:mod(floor(${end}-t)\\,60)\\:d\\:2}':x=${BAR.x + BAR.w}-tw:y=${BAR.y - 20}:fontsize=13:fontcolor=0xe2b34f:enable='${now}'[n${i}]`;
@@ -169,7 +189,7 @@ const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2
     }
   });
   fs.mkdirSync(outDir, { recursive: true });
-  const out = path.join(outDir, `${k}_Forma${pos}_ExploraLaPosicion.mp4`);
+  const out = path.join(outDir, `${k}_Forma${pos}${CT}_ExploraLaPosicion.mp4`);
   await ff(['-i', joined, '-filter_complex', v, '-map', lastV, '-map', '0:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', out]);
 
   // 4) Capítulos de YouTube (el primero tiene que ser 0:00).

@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!--
+  Miniatura del vídeo largo "Explora la posición" (scripts/generate-posicion-thumbnails.js): sobre la
+  plantilla vacía de Alberto (1672×941, "MARATÓN · ESCALA DE _ MAYOR · FORMA _" + iconos de capítulos)
+  se escribe la tónica grande en turquesa a la izquierda de "MAYOR" y la letra de la forma dentro de la
+  píldora amarilla detrás de "FORMA" (posiciones medidas sobre Plantilla_Rellena.png). Cerrada: etiqueta
+  "CERRADA" junto a la píldora.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&display=block" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; }
+  html, body { width: 1672px; height: 941px; overflow: hidden; background: #fff; }
+  #bg { position: absolute; inset: 0; width: 1672px; height: 941px; }
+  /* El texto de la plantilla va inclinado ~-6°: tónica y letra de forma giradas igual. */
+  #tonica { position: absolute; left: 211px; bottom: calc(941px - 668px); transform: translateX(-50%) rotate(-6deg); transform-origin: 50% 100%;
+    font: 900 var(--ts, 345px)/0.74 Montserrat, sans-serif; letter-spacing: -8px; color: #5fb0b8; white-space: nowrap; }
+  #tonica .alt { font-size: .45em; vertical-align: .75em; letter-spacing: 0; margin-left: 0; }
+  /* Plantilla con la píldora amarilla VACÍA (Alberto la cambió): se escribe "FORMA X" entero, centrado
+     en la píldora (centro ≈ 535,604; inclinada ~-9°, medido sobre la imagen). */
+  #forma { position: absolute; left: 535px; top: 604px; transform: translate(-50%, -50%) rotate(-8.5deg);
+    font: 800 64px/1 Montserrat, sans-serif; color: #1d2330; white-space: nowrap; letter-spacing: 1px; }
+  #cerrada { position: absolute; left: 392px; top: 676px; transform: rotate(-8.5deg); transform-origin: 0 0; display: none; padding: 7px 16px 6px; border-radius: 12px;
+    background: #1d2330; color: #f6d36b; font: 900 26px/1 Montserrat, sans-serif; letter-spacing: 2px; }
+</style></head>
+<body>
+<img id="bg">
+<div id="tonica"></div><div id="forma"></div><div id="cerrada">CERRADA</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  document.getElementById('bg').src = q.get('bg');
+  const t = q.get('tonica'), el = document.getElementById('tonica');
+  if (t.length > 1) el.style.setProperty('--ts', '285px');
+  el.innerHTML = t[0] + (t.length > 1 ? `<span class="alt">${t[1]}</span>` : '');
+  document.getElementById('forma').textContent = 'FORMA ' + q.get('forma');
+  if (q.get('cerrada') === '1') document.getElementById('cerrada').style.display = 'block';
+</script>
+</body></html>

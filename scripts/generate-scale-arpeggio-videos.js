@@ -49,7 +49,16 @@
  *   --root <nota>           Tónica, p.ej. C, F#, Bb (con --scale, alternativa a --config)
  *   --scale <clave>         Escala (clave interna, p.ej. major, dorian, harmonic_minor — ver
  *                           SEQ_SCALE_FORMULAS en guitarvisualizer.html)
- *   --quality <sevenths|triads|pentatonic|shapes-triads|shapes-sevenths>  Qué resaltar de cada acorde
+ *   --quality <sevenths|triads|pentatonic|shapes-triads|shapes-sevenths|roots>  Qué resaltar de cada acorde
+ *   --root-zones <scale|window|neck|strings|reveal>  (reveal: mástil 0-15, las tónicas de cada acorde
+ *                           aparecen una a una y quedan de fantasma; una vuelta)
+ *   --root-zones <scale|window|neck|strings>  "Localiza la tónica" (neck: mástil 0-12 entero; strings: una
+ *                           cuerda por vuelta, --zone-strings "6,5,4,3"; --reveal-from N:
+ *                           desde la vuelta N la tónica aparece en el 2º compás del acorde)
+ *   (antes: <scale|window>): tónicas del acorde que suena en una zona que sube
+ *                           una por vuelta (scale: las posiciones de la escala desde el traste 0;
+ *                           window: ventanas fijas, --zone-windows "0-4,3-7,5-9,…"). Salida
+ *                           <xml>_LocalizaTonica.mp4. --laps: nº de vueltas/zonas (scale, def. 7)
  *                           (por defecto: sevenths). "shapes-*" = formas de acorde GUARDADAS (paso 2b de
  *                           la pestaña, vienen incluidas en la app; solo escala mayor): en vez de todas las
  *                           notas del acorde, la forma concreta de cada uno. Los acordes con varias formas
@@ -100,6 +109,7 @@
  *                           más arriba, sin cuerdas al aire (<nombre>_formaX_cerrada.mp4). Esta
  *                           flag lo desactiva y genera solo la variante abierta de siempre.
  *                           Requiere la validación (no funciona con --skip-validate).
+ *   --closed-only           Solo las variantes cerradas (de las posiciones con cuerdas al aire)
  *   --extra <seg>           Segundos extra al final de cada vídeo (por defecto: 2)
  *   --strict                Si algún acorde de alguna posición no comparte ninguna nota con
  *                           ella (avisado en la validación), aborta en vez de solo avisar.
@@ -109,6 +119,7 @@
  */
 const { chromium } = require('playwright');
 const path = require('path');
+const { recordWithStartCheck } = require('./lib/start-check');
 const fs = require('fs');
 const os = require('os');
 const { execFile } = require('child_process');
@@ -270,7 +281,7 @@ async function detectMarkerFrameTime(videoPath, tmpDir) {
   }
 }
 
-async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig, positionsLib }) {
+async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig, positionsLib, rootZones }) {
   const tag = variant === 'closed12' ? `forma${posLabel}_cerrada` : `forma${posLabel}`;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
@@ -341,7 +352,9 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
     // "Mástil:" notas/intervalos, cfg.noteDisplay) se quedan con el valor por defecto del HTML
     // hasta que algo más los repinte (bug reportado: "eso tiene que ir en el fichero de
     // configuración" — ya vive en gv_vis, pero aplicar solo el localStorage no bastaba).
-    await page.evaluate((vc) => { const cfg = { ...getVisConfig(), ...(vc || {}), nextPreview: true }; localStorage.setItem('gv_vis', JSON.stringify(cfg)); applyVisConfig(cfg); }, visConfig || null);
+    // nextPreview:false explícito en --visconfig sí se respeta (Localiza la tónica por forma, Alberto 2026-09-29:
+    // sin notación ni "Siguiente"); si no, siempre encendida como hasta ahora.
+    await page.evaluate((vc) => { const cfg = { ...getVisConfig(), ...(vc || {}), nextPreview: !(vc && vc.nextPreview === false) }; localStorage.setItem('gv_vis', JSON.stringify(cfg)); applyVisConfig(cfg); }, visConfig || null);
     // Librería de formas corregidas a mano (ver --positions-lib) — misma clave/formato que el
     // propio localStorage del navegador, así asActiveNotes() la usa sin más.
     if (positionsLib) await page.evaluate((lib) => localStorage.setItem('gv_arpscale_positions', JSON.stringify(lib)), positionsLib);
@@ -365,7 +378,7 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
     }
 
     log('generando posición y enviando al visualizador…');
-    const result = await page.evaluate(({ cfg, posLabel, variant }) => {
+    const result = await page.evaluate(async ({ cfg, posLabel, variant, rootZones }) => {
       showTab('arpscale');
       const posIdx = AS_POS_LABELS.indexOf(posLabel);
       document.getElementById('asRoot').value = cfg.root;
@@ -375,6 +388,21 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
       const custom = (cfg.customNotesByPosition || {})[posLabel];
       if (custom && custom.length) asSetCustomNotes(cfg.root, cfg.scale, posLabel, custom);
       asGenerate();
+      // --root-zones: "Localiza la tónica" (asSendToEditorRootZones) — la zona cambia en cada vuelta,
+      // así que el tope de trastes se fija DESPUÉS, con la zona más alta.
+      if (rootZones) {
+        const r = await asSendToEditorRootZones(rootZones);
+        if (!r) return { error: 'asSendToEditorRootZones no generó nada' };
+        // Cada compás se ve con SU ventana nativa (la de su zona): sin tope de trastes (el tope
+        // estira la vista hasta él — en la 1ª prueba todo el mástil 0-19 con la zona apiñada a la
+        // izquierda) y sin "Zona ampliada" (encuadraría solo las tónicas, cambiando acorde a acorde).
+        setMaxFretsShown('');
+        // Desvanecido de las notas que se van: medio tiempo (no 1) — con la respuesta retardada todas
+        // las tónicas "se van" y con 1 tiempo desaparecían antes de acabar el compás.
+        localStorage.setItem('gv_arpFadeBeats', '0.5');
+        { const vc = { ...getVisConfig(), zoomToZone: false, nextPreview: false, legendIntro: false }; localStorage.setItem('gv_vis', JSON.stringify(vc)); applyVisConfig(vc); } // sin notación ni "Siguiente" (Alberto 2026-09-29)
+        return { ok: true, bars: totalBars, chords: [`${r.laps} vueltas`, `zonas ${r.zones.join(' · ')}`] };
+      }
       if (variant === 'closed12') {
         // Variante "cerrada": la MISMA forma CAGED, 12 trastes más arriba (una octava), sin
         // cuerdas al aire — se usa el propio mecanismo de "corrección manual" (paso 2) para
@@ -407,7 +435,7 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
       }
       asSendToEditor(); // mismo camino que el botón — genera frames, fija bgAuto, showTab('player')
       return { ok: true, bars: totalBars, chords: asState.chords.map((c) => c.chord) };
-    }, { cfg, posLabel, variant });
+    }, { cfg, posLabel, variant, rootZones });
     if (result && result.error) throw new Error(result.error);
     log(`ok: ${result.bars} compases (${result.chords.join(', ')})`);
 
@@ -526,7 +554,7 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
   // en este ejercicio (antes el nombre decía _Auto_ aunque el vídeo saliera siempre en notas).
   const noteDisplayTag = noteDisplayLabels[(visConfig && visConfig.noteDisplay) || 'notes'] || 'Notas';
   const shapesTag = /^shapes-/.test(cfg.quality) ? '_FormasAcorde' : '';
-  const outPath = path.join(outDir, `${baseName}${shapesTag}_${noteDisplayTag}_${tag}.mp4`);
+  const outPath = path.join(outDir, rootZones ? `${baseName}_LocalizaTonica.mp4` : `${baseName}${shapesTag}_${noteDisplayTag}_${tag}.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
   // Recorte EXACTO por timestamp de fotograma (filtro trim+setpts), no por keyframe: "-ss" ANTES
   // de "-i" busca al keyframe más cercano y puede desviarse del punto real hasta un GOP entero —
@@ -599,6 +627,19 @@ async function main() {
   // sabe la validación) se añade además su gemela 'closed12' (misma forma, +12 trastes, sin
   // cuerdas al aire) — salvo que se pida --no-closed-variant.
   let jobs = positions.map((posLabel) => ({ posLabel, variant: 'open' }));
+  // --root-zones scale|window: "Localiza la tónica" (ver asSendToEditorRootZones en la app) — un solo
+  // vídeo por tema, la zona sube una por vuelta; --zone-windows "0-4,3-7,…" solo en modo window.
+  const rootZones = args['root-zones'] ? {
+    mode: args['root-zones'],
+    laps: args.laps ? parseInt(args.laps, 10) : undefined,
+    windows: args['zone-windows'] ? String(args['zone-windows']).split(',').map((w) => w.split('-').map(Number)) : undefined,
+    revealFromLap: args['reveal-from'] ? parseInt(args['reveal-from'], 10) : undefined,
+    // --beats-per-root N (modo reveal): una tónica cada N tiempos como máximo (por defecto 1)
+    beatsPerRoot: args['beats-per-root'] ? parseFloat(args['beats-per-root']) : undefined,
+    // --zone-strings "6,5,4,3": cuerdas de guitarra (6 = grave) por vuelta, modo strings → índice 6-n
+    strings: args['zone-strings'] ? String(args['zone-strings']).split(',').map((n) => 6 - parseInt(n, 10)) : undefined,
+  } : null;
+  if (rootZones) { jobs = [{ posLabel: positions[0], variant: 'open' }]; args['skip-validate'] = true; }
   if (!args['skip-validate']) {
     console.log('Validando las posiciones antes de grabar nada…');
     const results = await validatePositions({ appUrl, cfg, positions, positionsLib });
@@ -610,6 +651,8 @@ async function main() {
       jobs = positions.flatMap((posLabel) => openSet.has(posLabel)
         ? [{ posLabel, variant: 'open' }, { posLabel, variant: 'closed12' }]
         : [{ posLabel, variant: 'open' }]);
+      // --closed-only: solo las gemelas cerradas (para rellenar una cerrada sin regrabar la abierta)
+      if (args['closed-only']) jobs = jobs.filter(j => j.variant === 'closed12');
     }
   } else {
     console.log('(validación saltada por --skip-validate — tampoco se generan variantes cerradas: hace falta saber qué posiciones tienen cuerdas al aire)');
@@ -624,7 +667,8 @@ async function main() {
   async function worker() {
     while (idx < jobs.length) {
       const { posLabel, variant } = jobs[idx++];
-      const out = await runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig, positionsLib });
+      // recordWithStartCheck: si el recorte inicial falla y el vídeo empieza con la app a la vista, se repite.
+      const out = await recordWithStartCheck(() => runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, wholeTheme, audioPath, audioDuration, bpm, extraSec, width, height, outDir, tmpDir, visConfig, positionsLib, rootZones }));
       results.push(out);
     }
   }

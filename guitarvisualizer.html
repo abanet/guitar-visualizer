@@ -396,6 +396,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .bar-beat.beat-active{background:rgba(255,255,255,.1);}
 .minimal-mode{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:2;}
 .minimal-mode.active{display:flex;}
+/* "Localiza la tónica · aparición" (Alberto 2026-10-01): barra de lo que queda de la nota actual (B) y, en el
+   último compás, "Siguiente: G en 4·3·2·1" con un pulso en cada tiempo (A). Ver updateRevealTimer. */
+.reveal-timer{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;width:clamp(220px,26vw,380px);}
+.reveal-timer .rt-bar{width:100%;height:7px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;}
+.reveal-timer .rt-fill{height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,#5d82d6,#7B9FE8);box-shadow:0 0 10px rgba(123,159,232,.6);}
+.reveal-timer .rt-fill.ending{background:linear-gradient(90deg,#d9a84a,#f6d36b);box-shadow:0 0 12px rgba(246,211,107,.7);}
+.reveal-timer .rt-count{min-height:1.3em;font:600 clamp(15px,1.6vw,24px)/1.3 Helvetica,Arial,sans-serif;color:rgba(255,255,255,.75);white-space:nowrap;}
+.reveal-timer .rt-count b{color:#f6d36b;font-weight:800;}
+.reveal-timer .rt-count .rt-n{display:inline-block;min-width:1ch;color:#fff;font-weight:800;}
+.reveal-timer .rt-count .rt-n.pulse{animation:rtPulse .45s ease-out;}
+@keyframes rtPulse{0%{transform:scale(1.6);color:#f6d36b}100%{transform:scale(1);color:#fff}}
+/* Final de "Localiza la tónica · aparición": las fantasmas brillan como estrellas (ver buildAutoBg). */
+#bgMapCanvas g.twinkle circle{animation:gvTwinkle var(--d) ease-in-out var(--dl) infinite;}
+#bgMapCanvas g.twinkle text{animation:gvTwinkleText var(--d) ease-in-out var(--dl) infinite;}
+@keyframes gvTwinkle{0%,100%{fill:rgba(150,150,150,.12);stroke:#999;filter:none}
+  50%{fill:rgba(255,222,130,var(--pk));stroke:rgba(255,236,170,.95);filter:drop-shadow(0 0 var(--gl) rgba(255,215,110,.95))}}
+@keyframes gvTwinkleText{0%,100%{fill:#888}50%{fill:var(--tc)}}
+/* Modo "Acordes de la escala" (vídeo largo de una posición, pedido de Alberto 2026-09-28): los acordes
+   de la armonización en fila, cada uno con su grado, y el que suena destacado. */
+.scale-chords-mode{position:absolute;top:0;bottom:0;left:clamp(24px,4vw,70px);right:clamp(24px,4vw,70px);display:none;flex-direction:row;gap:clamp(4px,.7vw,12px);padding:clamp(6px,1vw,14px) 6px;z-index:2;align-items:stretch;}
+.scale-chords-mode.active{display:flex;}
+.sc-pill{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);opacity:.5;transition:opacity .25s,background .25s,border-color .25s,transform .25s,box-shadow .25s;}
+.sc-pill .sc-deg{font:700 clamp(7px,.8vw,13px)/1 Georgia,'Times New Roman',serif;color:rgba(255,255,255,.7);letter-spacing:.04em;margin-bottom:3px;}
+.sc-pill .sc-name{font:800 clamp(10px,1.25vw,20px)/1 Helvetica,Arial,sans-serif;color:#fff;white-space:nowrap;}
+.sc-pill.on{opacity:1;background:rgba(123,159,232,.28);border-color:#7B9FE8;transform:scale(1.04);box-shadow:0 0 14px rgba(123,159,232,.55);}
+.sc-pill.on .sc-deg{color:#f6d36b;}
 .minimal-chord{font-size:clamp(48px,9.5vw,95px);font-weight:800;line-height:1;letter-spacing:-3px;transition:color .25s,text-shadow .25s;}
 
 
@@ -901,8 +927,12 @@ body.presentation #channelWatermark{display:flex;}
               </div>
               <!-- MINIMAL MODE overlay inside carousel -->
               <div class="minimal-mode" id="minimalMode"><span class="minimal-chord" id="vMinChord">—</span></div>
+              <!-- SCALE MODE: todos los acordes de la escala con su grado, el que suena destacado -->
+              <div class="scale-chords-mode" id="scaleChordsMode"></div>
             </div>
             <div class="chord-notes" id="vNotes"></div>
+            <!-- Localiza la tónica · aparición: tiempo que le queda a la nota actual + cuenta atrás al cambio -->
+            <div class="reveal-timer" id="revealTimer" style="display:none"><div class="rt-bar"><div class="rt-fill" id="rtFill"></div></div><div class="rt-count" id="rtCount"></div></div>
           </div>
           <div class="meta-right">
             <div class="beat-row" id="vBeats"></div>
@@ -990,7 +1020,7 @@ body.presentation #channelWatermark{display:flex;}
         <option value="both">Notas + intervalos</option><option value="off">Ocultar</option>
       </select>
       <label>Modo:</label>
-      <select id="chordDisplayMode" onchange="setChordDisplayMode(this.value)" data-tip="Carrusel: acorde grande. Compases: compás actual y siguiente. Minimalista: solo el acorde."><option value="carousel">Carrusel</option><option value="bars" selected>Compases</option><option value="minimal">Minimalista</option></select>
+      <select id="chordDisplayMode" onchange="setChordDisplayMode(this.value)" data-tip="Carrusel: acorde grande. Compases: compás actual y siguiente. Minimalista: solo el acorde."><option value="carousel">Carrusel</option><option value="bars" selected>Compases</option><option value="minimal">Minimalista</option><option value="scale">Acordes de la escala</option></select>
       <label>Voz 1:</label>
       <select id="followVoice" data-tip="Resalta este intervalo de la tétrada con un anillo de color"><option value="none">Ninguna</option><option value="R">Raíz</option><option value="3">3ª</option><option value="5">5ª</option><option value="b7">7ª menor</option><option value="7">7ª mayor</option><option value="9">9ª</option></select>
       <input type="color" id="followColor" value="#FFE033" style="width:28px;height:28px;padding:1px;border-radius:4px;border:1px solid var(--border2);cursor:pointer;" data-tip="Color del anillo Voz 1">
@@ -1862,6 +1892,7 @@ body.presentation #channelWatermark{display:flex;}
             <option value="shapes-triads">Formas guardadas · Tríadas</option>
             <option value="shapes-sevenths">Formas guardadas · Tétradas</option>
             <option value="guides">Notas guía (3ª y 7ª enlazadas)</option>
+            <option value="roots">Tónicas de los acordes</option>
           </select></div>
         <button class="btn accent" onclick="asGenerate()"><i class="ti ti-bolt"></i> Generar posición</button>
       </div>
@@ -5072,7 +5103,9 @@ function updateNextPreviewLegend(elapsed){
   // Resaltar:Pentatónica — en "Estructuras en escala" con Resaltar:Tríadas/Tétradas (asState.quality,
   // ver arpscale) lo resaltado son las notas del ACORDE, no una pentatónica (bug reportado: el
   // vídeo decía "pentatónica" grabado en el propio vídeo con tríadas resaltadas).
-  const isPentaQuality=!hasScaleBg||(typeof asState!=='undefined'&&asState&&asState.quality==='pentatonic');
+  // Resaltar: Tónicas (Localiza la tónica, también en el círculo sin fondo de escala) → siempre del acorde.
+  const isRootsQuality=typeof asState!=='undefined'&&asState&&asState.quality==='roots';
+  const isPentaQuality=!isRootsQuality&&(!hasScaleBg||(typeof asState!=='undefined'&&asState&&asState.quality==='pentatonic'));
   const rootLabelEl=document.getElementById('legendRootLabel');
   if(rootLabelEl)rootLabelEl.textContent=isPentaQuality?'Tónica de la pentatónica':'Tónica del acorde';
   const outsideLabelEl=document.getElementById('legendOutsideLabel');
@@ -11603,7 +11636,7 @@ function asGenerate(){
   if(!notes.length){if(st)st.textContent='No se pudo generar la posición.';return;}
   const editingOpen=asState.editingOpen;
   const shapeBase=asShapeBase(quality);
-  asState={root,scale,posIdx,quality,notes,chords:shapeBase?asBuildShapeChordEntries(root,scale,shapeBase,posIdx):arpBuildDiatonicChords(root,scale,quality==='guides'?'sevenths':quality),editingOpen};
+  asState={root,scale,posIdx,quality,notes,chords:shapeBase?asBuildShapeChordEntries(root,scale,shapeBase,posIdx):arpBuildDiatonicChords(root,scale,quality==='guides'?'sevenths':quality==='roots'?'triads':quality),editingOpen};
   asFillChordSelect();
   asRenderBoxEditor();
   asRenderPreview();
@@ -12015,6 +12048,7 @@ function asIsDimTriad(chordInfo){
 }
 function asDimShapeNotes(chord,notes){
   if(asState.quality==='pentatonic'&&!(AS_PENTA_VII_MODE==='arpeggio'&&asIsB5Chord(chord)))return null; // en pentatónicas solo el vii° (arpeggio)
+  if(asState.quality==='roots')return null; // tónicas: solo la fundamental, nunca la forma de arpegio dim
   if(typeof asShapesMode==='function'&&asShapesMode())return null;
   const info=tnChordToneMap(chord);
   if(!asIsDimTriad(info)||!notes.length)return null;
@@ -12075,7 +12109,7 @@ async function asSendToEditor(){
   // con +2 sobraban dos trastes vacíos, demasiado hueco muerto en el mástil).
   const fretMax=Math.min(24,Math.max(...frets)+1);
   const nameEl=document.getElementById('exerciseName');
-  const asFrameLabel=asState.quality==='pentatonic'?'pentatónica':'arpegio';
+  const asFrameLabel=asState.quality==='pentatonic'?'pentatónica':asState.quality==='roots'?'tónicas':'arpegio';
   const exName=`${asState.root} ${SEQ_SCALE_LABELS[asState.scale]||asState.scale} (Forma ${AS_POS_LABELS[asState.posIdx]}) — ${asState.quality==='pentatonic'?'pentatónicas en escala':'arpegios diatónicos'}`;
 
   // Fotograma "localiza la escala": las notas de la POSICIÓN (forma CAGED concreta), tónica en
@@ -12131,6 +12165,14 @@ async function asSendToEditor(){
       // tiene varias formas guardadas, se REPARTEN por apariciones (1ª vez forma 1, 2ª forma 2, 3ª
       // forma 1…) — así en un tema que repite la progresión salen todas, sin decidirlo a mano.
       let entry=null,cacheKey=chord,guidePair=null;
+      // "Tónicas de los acordes" (capítulo del vídeo largo, pedido de Alberto 2026-09-28, antes de las
+      // tríadas): de cada acorde solo su fundamental, TODAS las que hay en la caja — para localizar
+      // dónde cae la tónica de cada grado dentro de la posición.
+      if(asState.quality==='roots'){
+        const rp=noteToSt((chord.match(/^([A-G][b#]?)/)||[])[1]||'C');
+        guidePair=notes.filter(n=>((n.st-rp)%12+12)%12===0);
+        if(!guidePair.length)guidePair=null;
+      }
       // "Notas guía" (capítulo del vídeo largo, pedido de Alberto 2026-09-27): por acorde, UNA pareja
       // 3ª-7ª dentro de la caja, la que menos se mueve desde la pareja anterior (la línea de notas
       // guía clásica: la 7ª baja medio tono a la 3ª del siguiente…). Se mantiene mientras no cambie
@@ -12284,6 +12326,190 @@ async function asSendToEditor(){
 // caben ENTERAS dentro de esta misma caja — la misma animación de zoom/crossfade que usan
 // generateExploreTriadA/B/C, pero sin salir nunca de la posición fija (a diferencia de esos, que
 // recorren las 12 posiciones por todo el mástil).
+// "Localiza la tónica" (serie propia, pedido de Alberto 2026-09-28): la tónica del acorde que suena,
+// TODAS las que caen en una zona del mástil, y la zona cambia en cada vuelta del tema, empezando por
+// la más pegada al traste 0 y subiendo (sin nombres CAGED). Dos modos:
+//  - mode 'scale': zonas = las 5 posiciones de la escala (asState.root/scale) ordenadas por traste,
+//    y luego las primeras +12 hasta tener una por vuelta (tope traste 20). Fondo: la escala.
+//  - mode 'window': zonas = ventanas fijas de trastes (opts.windows, p.ej. [[0,4],[3,7]…]) para
+//    progresiones sin tonalidad (círculo de cuartas/quintas). Sin fondo de escala.
+// Una "vuelta" empieza cada vez que el tema VUELVE al primer acorde viniendo de otro (así da igual
+// si un acorde dura más en algún sitio, p.ej. el C de 4 compases entre secciones del círculo).
+// Pasadas las zonas, se queda en la última.
+// "Localiza la tónica · aparición" (prueba pedida por Alberto 2026-09-30): mástil 0-15 vacío; en cada acorde
+// del círculo sus tónicas aparecen una a una de izquierda a derecha (repartidas en los 6 primeros tiempos,
+// las 2 últimas todas juntas); al cambiar de acorde se funden a fantasma y se quedan. Tras una vuelta
+// entera (12 acordes) el mástil acaba lleno de fantasmas: las 12 notas en los 15 trastes.
+async function asRootRevealFrames(opts){
+  const a=opts.neckFrom??0,b=opts.neckTo??15;
+  const cellNote=(string,fret)=>{const st=getNoteStAtFret(string,fret);return{string,fret,st,note:NTS[((st%12)+12)%12],isRoot:false};};
+  const allCells=[];for(let st=0;st<6;st++)for(let f=a;f<=b;f++)allCells.push(cellNote(st,f));
+  const NOBOX=[{string:0,fret:-1}]; // posBox sin ninguna casilla real = ninguna fantasma (vacío dejaría el fondo entero)
+  // Marcas DENTRO del SVG (data-rootreveal / data-finale): viajan con el fotograma por cualquier ruta de
+  // repintado — las propiedades del objeto del compás se perdían en algunas (fantasmas por debajo de las cuerdas).
+  const frame=(tones,chord,ghostCells,finale)=>{let svg=arpBuildZoneSVG(tones,chord,'',[],a,b,true,ghostCells.length?ghostCells:NOBOX);
+    svg=svg.replace(/<svg\b/,'<svg data-rootreveal="1"'+(finale?' data-finale="1"':''));return{svg,parsed:svgStringToParsed(svg)};};
+  for(let ci=0;ci<cycles.length;ci++){if(cycles[ci].mode==='ref')makeCycleCustom(ci);}
+  renderEditor();
+  const all=getAllBars();
+  const barLoc=[];
+  {let g=0;for(let ci=0;ci<cycles.length;ci++){const eb=getEffectiveBars(ci);for(let li=0;li<eb.length;li++){if(g<all.length){barLoc[g]={ci,local:li};g++;}}}}
+  // Rachas de compases con el mismo acorde, en orden; la vuelta termina al volver al primer acorde.
+  const runs=[];all.forEach((bb,bi)=>{const c=(bb.chord||'').trim();if(!c)return;const last=runs[runs.length-1];if(last&&last.chord===c&&last.end===bi-1)last.end=bi;else runs.push({chord:c,start:bi,end:bi});});
+  const firstChord=runs.length?runs[0].chord:null;
+  let lapEnd=runs.findIndex((r,i)=>i>0&&r.chord===firstChord);if(lapEnd<0)lapEnd=runs.length;
+  const put=(bi,slot,f,name)=>{const loc=barLoc[bi];if(!loc)return 0;const t=getTargetBars(loc.ci);if(!t||!t[loc.local])return 0;
+    t[loc.local].imgs[slot]={type:'svg',data:f.svg,name,svgParsed:JSON.parse(JSON.stringify(f.parsed)),rootReveal:true};return 1;};
+  let applied=0,ghosts=[],lastRoot=null;
+  for(let ri=0;ri<runs.length;ri++){
+    const r=runs[ri];
+    if(ri>=lapEnd){ // vuelta terminada: todo el mástil en fantasma, sin nada encendido
+      const f=frame([],r.chord,allCells,true);for(let bi=r.start;bi<=r.end;bi++){applied+=put(bi,0,f,'Todo el mástil');
+        const loc=barLoc[bi],t=loc&&getTargetBars(loc.ci);if(t&&t[loc.local]&&t[loc.local].imgs[0])t[loc.local].imgs[0].finale=true;} // brillo de estrellas (buildAutoBg)
+      continue;}
+    const rp=noteToSt((r.chord.match(/^([A-G][b#]?)/)||[])[1]||'C');
+    // Zigzag (Alberto 2026-09-30): el 1er acorde de izquierda a derecha; cada acorde siguiente arranca por la
+    // tónica MÁS CERCANA a la última que se dio y va en sentido contrario ("volver hacia atrás"). A igual
+    // traste, primero la cuerda más cercana a esa última nota.
+    const dir=ri%2===0?1:-1;
+    const roots=allCells.filter(n=>((n.st-rp)%12+12)%12===0)
+      .sort((x,y)=>dir*(x.fret-y.fret)||(lastRoot?Math.abs(x.string-lastRoot.string)-Math.abs(y.string-lastRoot.string):x.string-y.string))
+      .map(n=>({...n,isRoot:true}));
+    lastRoot=roots[roots.length-1];
+    // Una tónica por corchea (bar.subdiv=2: 8 fotogramas por compás): de una en una, nunca dos de golpe
+    // (Alberto: "tienen que ser de una en una"); el resto del acorde quedan todas a la vista.
+    // Repartidas a partes iguales en los 6 primeros tiempos (12 corcheas; con ≤9 tónicas nunca caen dos en
+    // la misma corchea) y los 2 últimos tiempos todas juntas antes de fundirse a fantasma.
+    const SUB=2,per=4*SUB,slots=(r.end-r.start+1)*per,span=Math.max(roots.length,slots-2*SUB);
+    // Paso entre tónicas: 1 tiempo si hay tiempo de sobra (backing de 3 compases por acorde, pensado para
+    // esto — una tónica por tiempo, regular); si no, repartidas en lo que haya (backing de 2 compases).
+    // opts.beatsPerRoot (2026-10-01: Alberto quiere una tónica cada 2 tiempos, backing de 5 compases por
+    // acorde): tope del paso en tiempos; si no cabe, se reparten en lo que haya.
+    const step=Math.min(SUB*(opts.beatsPerRoot||1),span/roots.length);
+    const appearAt=roots.map((_,i)=>Math.floor(i*step));
+    let lastN=-1,f=null;
+    for(let sl=0;sl<slots;sl++){
+      const n=appearAt.filter(x=>x<=sl).length;
+      if(n!==lastN){f=frame(roots.slice(0,n),r.chord,ghosts);lastN=n;}
+      const bi=r.start+Math.floor(sl/per);
+      applied+=put(bi,sl%per,f,r.chord+' (tónicas '+n+'/'+roots.length+')');
+      const loc=barLoc[bi];if(loc){const t=getTargetBars(loc.ci);if(t&&t[loc.local])t[loc.local].subdiv=SUB;}
+    }
+    ghosts=ghosts.concat(roots.map(n=>({...n,isRoot:false})));
+  }
+  // Cuenta atrás: mástil vacío.
+  // Cuenta atrás (Alberto 2026-09-30): el mástil entero "estrellado" (mismo brillo que el final) durante
+  // compás y medio y en el último medio compás se apaga (tick, introStars) — arranca el ejercicio vacío.
+  {const f=frame([],'—',allCells,true);asIntroScaleFrame={type:'svg',data:f.svg,name:'Mástil estrellado',svgParsed:f.parsed,finale:true,introStars:true};}
+  renderEditor();if(typeof renderBank==='function')renderBank();if(typeof checkReady==='function')checkReady();
+  if(typeof setExerciseType==='function'){const sel=document.getElementById('exerciseType');if(sel)sel.value='arpeggios';setExerciseType('arpeggios');}
+  const gnd=document.getElementById('globalNoteDisplay');if(gnd&&gnd.value!=='notes')gnd.value='notes';
+  bgAuto={mode:'scale',root:'C',scale:'chromatic'}; // fantasmas = las casillas de posBox (las ya descubiertas)
+  bgAutoSyncUI();rebuildBgMapIfVisible();
+  showTab('player');
+  return{applied,laps:1,zones:[a+'-'+b+' · '+Math.min(lapEnd,runs.length)+' acordes'],fretMax:b};
+}
+async function asSendToEditorRootZones(opts={}){
+  const mode=opts.mode||'scale';
+  if(!cycles.length){alert('Carga primero el tema (Audio & XML).');return null;}
+  if(mode==='reveal')return asRootRevealFrames(opts);
+  const cellNote=(string,fret)=>{const st=getNoteStAtFret(string,fret);return{string,fret,st,note:NTS[((st%12)+12)%12],isRoot:false};};
+  let zones=[];
+  if(mode==='scale'){
+    const keep=asState.posIdx,posSel=document.getElementById('asPos');
+    const boxes=[];
+    for(let pi=0;pi<AS_POS_LABELS.length;pi++){posSel.value=String(pi);asGenerate();boxes.push(asActiveNotes().map(n=>({...n})));}
+    posSel.value=String(keep);asGenerate();
+    const lo=b=>Math.min(...b.map(n=>n.fret)),hi=b=>Math.max(...b.map(n=>n.fret));
+    boxes.sort((a,b)=>lo(a)-lo(b));
+    zones=boxes.slice();
+    const laps=opts.laps||7;
+    for(let i=0;zones.length<laps&&i<boxes.length;i++){
+      const up=boxes[i].map(n=>({...n,fret:n.fret+12}));
+      if(hi(up)<=20)zones.push(up);
+    }
+  }else if(mode==='strings'){
+    // 'strings' (círculo, cuerda a cuerda — Alberto 2026-09-29, opción A): una cuerda por vuelta
+    // (opts.strings, índices 0=6ª grave … 5=1ª), mástil 0-12; fantasmas y tónicas SOLO en esa cuerda.
+    const a=opts.neckFrom??0,b=opts.neckTo??12;
+    zones=(opts.strings||[0,1,2,3]).map(si=>{const c=[];for(let f=a;f<=b;f++)c.push(cellNote(si,f));return c;});
+  }else if(mode==='neck'){
+    // 'neck' (círculo de cuartas/quintas, Alberto 2026-09-29): TODO el mástil 0-12 en todas las
+    // vueltas — todas las tónicas del acorde que suena (las de C, luego las de G…).
+    const a=opts.neckFrom??0,b=opts.neckTo??12,cells=[];
+    for(let st=0;st<6;st++)for(let f=a;f<=b;f++)cells.push(cellNote(st,f));
+    zones=[cells];
+  }else{
+    zones=(opts.windows||[[0,4],[3,7],[5,9],[7,11],[9,13],[12,16]]).map(([a,b])=>{
+      const cells=[];for(let s=0;s<6;s++)for(let f=a;f<=b;f++)cells.push(cellNote(s,f));return cells;});
+  }
+  // Las vueltas 'ref' reflejan los compases de la 1ª: cada vuelta necesita los SUYOS para llevar su
+  // propia zona (mismo arreglo que asSendToEditorTriadExplore).
+  for(let ci=0;ci<cycles.length;ci++){if(cycles[ci].mode==='ref')makeCycleCustom(ci);}
+  renderEditor();
+  const all=getAllBars();
+  const barLoc=[];
+  {let g=0;for(let ci=0;ci<cycles.length;ci++){const eb=getEffectiveBars(ci);for(let li=0;li<eb.length;li++){if(g<all.length){barLoc[g]={ci,local:li};g++;}}}}
+  const first=(all.find(b=>(b.chord||'').trim())||{}).chord;
+  // Vuelta de cada compás. Si la ÚLTIMA vuelta es más corta que la primera (el acorde final del tema,
+  // p.ej. el I que cierra tras la 6ª vuelta), se queda en la zona de la vuelta anterior.
+  const lapOf=[];
+  {let lap=-1,prev=null;all.forEach((b,bi)=>{const chord=(b.chord||'').trim();if(chord){if(chord===first.trim()&&prev!==chord)lap++;prev=chord;}lapOf[bi]=Math.max(lap,0);});
+   const len=l=>lapOf.filter(x=>x===l).length,lastLap=lapOf[lapOf.length-1];
+   if(lastLap>0&&len(lastLap)<len(0))for(let i=0;i<lapOf.length;i++)if(lapOf[i]===lastLap)lapOf[i]=lastLap-1;}
+  let applied=0;
+  const scalePcs=mode==='scale'?new Set(zones.flat().map(n=>((n.st%12)+12)%12)):(mode==='neck'||mode==='strings')?new Set([0,2,4,5,7,9,11]):null; // neck/strings: fantasmas = notas naturales
+  const cache={},zoneRanges=[];
+  all.forEach((b,bi)=>{
+    const chord=(b.chord||'').trim();
+    if(!chord)return;
+    const zi=Math.min(lapOf[bi],zones.length-1),zone=zones[zi];
+    // Respuesta retardada (opts.revealFromLap, 1 = primera vuelta): desde esa vuelta, en el PRIMER
+    // compás de cada acorde no se ilumina nada (solo fantasmas: el alumno busca) y en el siguiente
+    // aparecen las tónicas para comprobar.
+    const hide=opts.revealFromLap&&lapOf[bi]+1>=opts.revealFromLap&&(all[bi-1]?.chord||'').trim()!==chord;
+    const fr=zone.map(n=>n.fret),fretMin=Math.max(0,Math.min(...fr)-1),fretMax=Math.min(24,Math.max(...fr)+1);
+    zoneRanges[zi]=[Math.min(...fr),Math.max(...fr)];
+    const key=zi+'|'+chord+(hide?'|oculto':'');
+    if(!(key in cache)){
+      const rp=noteToSt((chord.match(/^([A-G][b#]?)/)||[])[1]||'C');
+      // Fantasma en TODOS los trastes que se ven, no solo en la caja (Alberto 2026-09-29: "todos los
+      // trastes que aparecen tengan nota fantasma", referencia para contar hasta la tónica) y se iluminan TODAS las tónicas de esa ventana (así ninguna queda solo en fantasma).
+      // La ventana real la decide arpBuildZoneSVG (puede añadir trastes de margen): se construye una
+      // vez para leer su rango y otra con la rejilla completa de ese rango.
+      // (corrección de Alberto al momento: "las notas fantasma sólo las de la escala" — en modo scale
+      // la rejilla se filtra a las notas de la escala; en el círculo, sin tonalidad, van las 12.)
+      // Las tónicas salen de la rejilla COMPLETA (en 'neck' las fantasmas son solo naturales y Bb, Eb…
+      // se quedaban sin tónica); la rejilla filtrada solo decide las fantasmas (posBox).
+      const onStrings=mode==='strings'?new Set(zone.map(n=>n.string)):null; // 'strings': solo la cuerda de esta vuelta
+      const grid=(a,b,all)=>{const g=[];for(let s=0;s<6;s++){if(onStrings&&!onStrings.has(s))continue;for(let f=a;f<=b;f++){const c=cellNote(s,f);if(all||!scalePcs||scalePcs.has(c.st))g.push(c);}}return g;};
+      const build=(cells,full)=>{const tones=hide?[]:full.filter(n=>((n.st-rp)%12+12)%12===0).map(n=>({...n,isRoot:true}));
+        return (tones.length||hide)?arpBuildZoneSVG(tones,chord,'',[],fretMin,fretMax,true,cells):null;};
+      let svg=build(grid(fretMin,fretMax),grid(fretMin,fretMax,true));
+      const nr=svg&&svgStringToParsed(svg).fretRange;
+      if(nr&&(nr.min!==fretMin||nr.max!==fretMax)){const lo=Math.max(0,nr.min),hi=Math.min(24,nr.max);svg=build(grid(lo,hi),grid(lo,hi,true));}
+      cache[key]=svg?{svg,parsed:svgStringToParsed(svg)}:null;
+    }
+    const c=cache[key],loc=barLoc[bi];if(!c||!loc)return;
+    const target=getTargetBars(loc.ci);
+    if(target&&target[loc.local]){
+      target[loc.local].imgs[0]={type:'svg',data:c.svg,name:chord+' (tónicas, zona '+(zi+1)+')',svgParsed:JSON.parse(JSON.stringify(c.parsed))};
+      applied++;
+    }
+  });
+  const nameEl=document.getElementById('exerciseName');
+  if(nameEl)nameEl.value=mode==='scale'?`${asState.root} mayor — localiza la tónica`:'Localiza la tónica — círculo';
+  renderEditor();if(typeof renderBank==='function')renderBank();if(typeof checkReady==='function')checkReady();
+  if(typeof setExerciseType==='function'){const sel=document.getElementById('exerciseType');if(sel)sel.value='arpeggios';setExerciseType('arpeggios');}
+  const gnd=document.getElementById('globalNoteDisplay');if(gnd&&gnd.value!=='notes')gnd.value='notes';
+  // Fantasmas = fondo automático de escala recortado a posBox (la rejilla de cada fotograma): en modo
+  // scale las notas de la escala; en el círculo las 12 (escala 'chromatic').
+  bgAuto=mode==='scale'?{mode:'scale',root:asState.root,scale:asState.scale}:(mode==='neck'||mode==='strings')?{mode:'scale',root:'C',scale:'major'}:{mode:'scale',root:'C',scale:'chromatic'};
+  bgAutoSyncUI();rebuildBgMapIfVisible();
+  showTab('player');
+  return{applied,laps:Math.max(...lapOf)+1,zones:zoneRanges.map(r=>r?r.join('-'):'—'),fretMax:Math.max(...zones.flat().map(n=>n.fret))+1};
+}
+
 async function asSendToEditorTriadExplore(fretShift=0,mode='all'){
   if(!asState.chords.length){alert('Esta escala no tiene acordes diatónicos limpios de ese tipo — prueba con tríadas o cambia de escala.');return null;}
   const label='Tríadas dentro de la posición';
@@ -12327,11 +12553,19 @@ async function asSendToEditorTriadExplore(fretShift=0,mode='all'){
     const cands=[];
     GROUP_ORDER.forEach(gi=>{
       for(let inv=0;inv<3;inv++){
-        const v=getChordVoicing(chord,TRIAD_STRING_GROUPS[gi],inv);
+        const v0=getChordVoicing(chord,TRIAD_STRING_GROUPS[gi],inv);
+        if(!v0||!v0.frets||!v0.frets.length)continue;
+        // getChordVoicing da la voicing más cercana al traste 0: si la caja está arriba (traste ≥ ~9,
+        // p.ej. Forma A de A en 11-15) casi ninguna caía dentro y el compás acababa con 1 tríada o
+        // con el arpegio de reserva (bug 2026-09-28, 19 de 60 vídeos largos). Se prueba también la
+        // misma forma una octava arriba/abajo y vale la que caiga entera en la caja.
         // __gi (grupo de cuerdas de origen) va PEGADO al voicing — lo necesita pickDirection()
         // para saber por qué extremo empieza/acaba esta lista sin recalcular nada; no estorba a
         // los consumidores normales (voicingToNotes/svgForChord), que solo miran frets/strings/etc.
-        if(v&&v.frets&&v.frets.length&&v.strings.every((sIdx,i)=>boxCellSet.has(sIdx+':'+v.frets[i]))){v.__gi=gi;cands.push(v);}
+        for(const o of [0,12,-12]){
+          const v=o?{...v0,frets:v0.frets.map(f=>f+o)}:v0;
+          if(v.frets.every(f=>f>=0&&f<=24)&&v.strings.every((sIdx,i)=>boxCellSet.has(sIdx+':'+v.frets[i]))){v.__gi=gi;cands.push(v);break;}
+        }
       }
     });
     return cands;
@@ -12999,6 +13233,33 @@ function seqPaintPlayer(elapsed,introSec){
   layer.innerHTML=html;
 }
 
+// "Localiza la tónica · aparición" (Alberto 2026-10-01): bajo el carrusel, una barra que se llena durante los
+// compases del acorde actual (lo que le queda a esta nota) y, en su último compás, "Siguiente: G en 4·3·2·1"
+// con un pulso en cada tiempo. Solo con fotogramas de ese ejercicio (data-rootreveal) y no en el final.
+let _rtLastN=-1;
+function updateRevealTimer(imgs,allBars,bi,timeInBar,barSec,beatSec){
+  const box=document.getElementById('revealTimer');if(!box)return;
+  const raw=((imgs||[]).find(s=>s)?.svgParsed?.raw)||'';
+  const on=/data-rootreveal="1"/.test(raw)&&!/data-finale="1"/.test(raw);
+  if(!on){if(box.style.display!=='none')box.style.display='none';_rtLastN=-1;return;}
+  if(box.style.display==='none')box.style.display='flex';
+  const cur=(allBars[bi]?.chord||'').trim();
+  let i0=bi,i1=bi;while(i0>0&&(allBars[i0-1]?.chord||'').trim()===cur)i0--;while(i1+1<allBars.length&&(allBars[i1+1]?.chord||'').trim()===cur)i1++;
+  const total=(i1-i0+1)*barSec,done=Math.min(total,(bi-i0)*barSec+timeInBar);
+  const fill=document.getElementById('rtFill'),cnt=document.getElementById('rtCount');
+  // Último acorde: lo que viene es el final de estrellas, no otra nota → sin aviso de "Siguiente" (Alberto).
+  const nextRaw=((allBars[i1+1]?.imgs||[]).find(s=>s)?.svgParsed?.raw)||'';
+  const nextIsFinale=!allBars[i1+1]||/data-finale="1"/.test(nextRaw);
+  const lastBar=bi===i1&&!nextIsFinale;
+  if(fill){fill.style.width=(100*done/total).toFixed(2)+'%';fill.classList.toggle('ending',lastBar);}
+  const next=nextIsFinale?'':(allBars[i1+1]?.chord||'').trim();
+  if(!cnt)return;
+  if(lastBar&&next&&next!==cur){
+    const n=Math.max(1,Math.ceil((barSec-timeInBar)/beatSec-1e-6));
+    if(n!==_rtLastN){_rtLastN=n;cnt.innerHTML=`Siguiente: <b>${next}</b> en <span class="rt-n pulse">${n}</span>`;}
+  }else if(_rtLastN!==0){_rtLastN=0;cnt.innerHTML='&nbsp;';}
+}
+
 function tick(){
   if(!isPlaying)return;
   if(!audioEl){rafId=requestAnimationFrame(tick);return;}
@@ -13093,19 +13354,33 @@ function tick(){
       }
     }
     tickBeats(elapsed%introBarSec,introBarSec,introBeats);
+    // "Localiza la tónica · aparición": las fantasmas estrelladas de la cuenta atrás se funden en el último
+    // medio compás, para que el primer acorde arranque con el mástil vacío.
+    if(asIntroScaleFrame&&asIntroScaleFrame.introStars){
+      // Sin metrónomo (círculos de tiempo) durante las estrellas: con 96 brillos animados se desincronizaba
+      // a la vista (Alberto 2026-10-01); vuelve al salir de la intro (ver "Leaving intro").
+      {const vb=document.getElementById('vBeats');if(vb&&vb.style.visibility!=='hidden')vb.style.visibility='hidden';}
+      const bgc=document.getElementById('bgMapCanvas');
+      if(bgc){const want=elapsed>=introSec-0.5*introBarSec?'0':'1';if(bgc.style.opacity!==want){bgc.style.transition='opacity .7s ease';bgc.style.opacity=want;}}
+    }
     // show the intro tempo (first bar's tempo) on screen, not a stale value
     {const vb=document.getElementById('vBpm');if(vb){const ib=Math.round(getIntroBPM());if(ib>0)vb.textContent=ib+' bpm';}}
     rafId=requestAnimationFrame(tick);return;
   }
   // Leaving intro: remove intro styling so chord shows normally
+  {const bgc=document.getElementById('bgMapCanvas');if(bgc&&bgc.style.opacity==='0'){bgc.style.transition='none';bgc.style.opacity='';}} // ver introStars arriba
+  {const vb=document.getElementById('vBeats');if(vb&&vb.style.visibility==='hidden')vb.style.visibility='';} // metrónomo de vuelta tras las estrellas
   {const c0=document.getElementById('vChord');
    if(c0){
-     c0.classList.remove('intro-num','intro-pulse','intro-pulse-strong');
      // Estilos INLINE de la cuenta atrás (color/resplandor azul, ver arriba) — classList.remove
      // no los toca. Si no se limpian aquí, el acorde real (ya escrito en #vChord un poco más
      // abajo) se ve un instante con el color de la intro (bug reportado: "parece que aparece
      // primero en modo carrusel").
-     c0.style.color='';c0.style.textShadow='';
+     // SOLO al salir de la intro (aún lleva intro-num): este bloque corre en CADA fotograma y borraba
+     // también el color que updateCarousel pone al acorde real → en modo Carrusel el acorde salía casi
+     // negro (visto 2026-10-01 en Localiza la tónica).
+     if(c0.classList.contains('intro-num')){c0.style.color='';c0.style.textShadow='';}
+     c0.classList.remove('intro-num','intro-pulse','intro-pulse-strong');
    }
    document.querySelectorAll('.chord-center.intro-open,.chord-carousel.intro-open').forEach(e=>e.classList.remove('intro-open'));
    // Restaura #slotCur/#slotPrev/#slotNext y el panel de Compases/Minimalista al estado que le
@@ -13167,17 +13442,23 @@ function tick(){
   const segIdx=getSegmentIndexAtBeat(bar,beatInBar);
   const barChordNow=getChordAtBeat(bar,beatInBar); // chord sounding right now
 
-  // Active slot: last non-null at or before current beat
+  // Active slot: last non-null at or before current beat.
+  // bar.subdiv (opcional, solo "Localiza la tónica · aparición", 2026-09-30): el compás lleva
+  // barBeats*subdiv fotogramas (p.ej. 8 = uno por corchea) para que las tónicas aparezcan de una en
+  // una aunque haya más que tiempos. Sin subdiv (todos los demás ejercicios) todo sigue igual: 1 por tiempo.
+  updateRevealTimer(imgs,allBars,bi,timeInBar,currentBarSec,beatSec);
+  const sub=bar.subdiv>1?bar.subdiv:1,stepSec=beatSec/sub;
+  const stepInBar=sub>1?Math.min(Math.floor(timeInBar/stepSec),barBeats*sub-1):beatInBar;
   let si=0;
-  for(let b=0;b<=beatInBar;b++){if(imgs[b])si=b;}
+  for(let b=0;b<=stepInBar;b++){if(imgs[b])si=b;}
   const slot=imgs[si]||null;
 
   // Find NEXT slot change within this bar (next beat with a different image)
   let nextSlotBeat=-1;
-  for(let b=si+1;b<4;b++){if(imgs[b]){nextSlotBeat=b;break;}}
+  for(let b=si+1;b<4*sub;b++){if(imgs[b]){nextSlotBeat=b;break;}}
 
   // Time remaining until next event: either next slot in bar, or next bar
-  const timeToNextSlot=nextSlotBeat>=0?(nextSlotBeat*beatSec)-timeInBar:null;
+  const timeToNextSlot=nextSlotBeat>=0?(nextSlotBeat*stepSec)-timeInBar:null;
   const timeToNextBar=currentBarSec-timeInBar;
   const nextBi=bi+1;
 
@@ -13215,7 +13496,15 @@ function tick(){
     // previous/next chord segments (for the carousel) — across bars and within the bar
     const segs=getBarSegments(bar);
     const prevChord = segIdx>0 ? segs[segIdx-1].chord : (()=>{const pb=allBars[bi-1];const ps=pb?getBarSegments(pb):null;return ps?ps[ps.length-1].chord:'';})();
-    const nextChord = segIdx<segs.length-1 ? segs[segIdx+1].chord : (allBars[bi+1]?getBarSegments(allBars[bi+1])[0].chord:'');
+    let nextChord = segIdx<segs.length-1 ? segs[segIdx+1].chord : (allBars[bi+1]?getBarSegments(allBars[bi+1])[0].chord:'');
+    // carouselDistinct (opcional, Localiza la tónica · aparición, 2026-10-01): con acordes de 5 compases el
+    // compás vecino es el MISMO acorde ("C · C · C"); aquí anterior/siguiente = el acorde DISTINTO más cercano.
+    let prevShown=prevChord;
+    if(getVisConfig().carouselDistinct===true){
+      const cur=(barChordNow||'').trim();
+      prevShown='';for(let k=bi-1;k>=0;k--){const c=(allBars[k]?.chord||'').trim();if(c&&c!==cur){prevShown=c;break;}}
+      nextChord='';for(let k=bi+1;k<allBars.length;k++){const c=(allBars[k]?.chord||'').trim();if(c&&c!==cur){nextChord=c;break;}}
+    }
     // In arpeggio mode, detect if this segment continues the SAME position (same chord).
     // Content routing: tn frames never take the arpeggio crossfade path.
     const _exBC=EXERCISES[exFor(slot?.svgParsed)]||{};
@@ -13238,7 +13527,7 @@ function tick(){
     }
     if(!keepFade)clearGhostNotes();
     const curEl=document.getElementById('vChord');if(curEl)curEl.style.opacity='1';
-    updateCarousel(prevChord,barChordNow,nextChord,fn);
+    updateCarousel(prevShown,barChordNow,nextChord,fn);
     const fe=document.getElementById('vFn');const lbl=fnLbl(fn);
     const showFnBadge=getVisConfig().showFnBadge!==false;
     if(showFnBadge&&lbl){fe.textContent=lbl;fe.className='slot-fn-badge '+fnBC(fn);fe.style.visibility='visible';}
@@ -13367,6 +13656,7 @@ function tick(){
     if(_exF&&_exF.onFrame)_exF.onFrame({slot,bi,allBars,elapsed,beatSec,imgs,si,currentBarSec});
   }
   if(getChordDisplayMode()==='bars') updateBarsMinimal(barChordNow,allBars[bi+1]?.chord||'',getFn(barChordNow),allBars,bi,beatInBar);
+  else if(getChordDisplayMode()==='scale') updateScaleChords(barChordNow,allBars);
   if(seqActive)seqPaintPlayer(elapsed,introSec);
   tickBeats(timeInBar,currentBarSec,barBeats);
   rafId=requestAnimationFrame(tick);
@@ -13406,7 +13696,9 @@ function bgAutoChanged(){
 // Clases de nota (pc 0-11) + tónica + defs de intervalo para el modo activo. null si no aplica.
 function bgAutoPcs(bar,activeSlot){
   if(bgAuto.mode==='scale'||bgAuto.mode==='scaleTriad'){
-    const formula=SEQ_SCALE_FORMULAS[bgAuto.scale]||SEQ_SCALE_FORMULAS.major;
+    // 'chromatic' (12 notas) solo existe para el fondo — Localiza la tónica en el círculo, sin tonalidad;
+    // no está en SEQ_SCALE_FORMULAS para no salir en los selectores de escala.
+    const formula=bgAuto.scale==='chromatic'?[0,1,2,3,4,5,6,7,8,9,10,11]:(SEQ_SCALE_FORMULAS[bgAuto.scale]||SEQ_SCALE_FORMULAS.major);
     const rootPc=noteToSt(bgAuto.root);if(rootPc<0)return null;
     return{rootRaw:bgAuto.root,rootPc,pcs:formula.map(st=>({pc:(rootPc+st)%12,semi:st}))};
   }
@@ -13531,7 +13823,7 @@ function buildAutoBg(bar,activeSlot){
       if(!alwaysGhost&&activePositions.has(`${Math.round(cx/15)},${Math.round(cy/15)}`))continue;
       let label='';
       if(labelMode==='intervals')label=p.semi===0?'R':(p.ivName||SEQ_DEGREE_NAMES[p.semi]||IV_BY_SEMI[p.semi]||'');
-      else label=spellNote(info.rootRaw,p.ivName||IV_BY_SEMI[p.semi]||'R',p.semi)||NTS[pc];
+      else label=(bgAuto.scale==='chromatic'&&bgAuto.mode==='scale')?NTS[pc]:(spellNote(info.rootRaw,p.ivName||IV_BY_SEMI[p.semi]||'R',p.semi)||NTS[pc]); // 12 notas: F#/Db/Ab/Eb/Bb como en el círculo
       const g=document.createElementNS(NS,'g');
       // (Se probó un fundido de entrada aquí con opacity 0→1 vía rAF — revertido: si el vídeo
       // grababa el fotograma ANTES de que el rAF disparase el cambio, ese fotograma salía con
@@ -13583,6 +13875,43 @@ function buildAutoBg(bar,activeSlot){
       painted++;
     }
   }
+  // Final de "Localiza la tónica · aparición" (Alberto 2026-09-30): con el mástil lleno de fantasmas, cada
+  // una brilla como una estrella — no todas a la vez (retraso aleatorio), cada una con su intensidad y su
+  // ritmo. Los tiempos se anclan al inicio del final (_twinkleT0) para que al repintar este mapa en cada
+  // compás el parpadeo siga donde iba en vez de reiniciarse.
+  // Con el brillo las fantasmas van ENCIMA del mástil (z 3 > svgCanvas): con "Mástil realista" las cuerdas
+  // metálicas se pintaban por encima de las estrellas (Alberto 2026-10-01). Fuera del final, z 1 como siempre.
+  // Alberto: "las notas siempre tienen prioridad a las cuerdas" — en "aparición" (rootReveal) todo el vídeo:
+  // ahí fantasma y nota activa nunca comparten casilla, así que subir la capa no tapa nada.
+  const isFinale=!!(activeSlot&&(activeSlot.finale||/data-finale="1"/.test(raw)));
+  const isReveal=isFinale||!!(activeSlot&&activeSlot.rootReveal)||/data-rootreveal="1"/.test(raw);
+  el.style.zIndex=isReveal?'3':'1';
+  // #bgMapCanvas lleva opacity .6 en CSS (para todos los ejercicios): a .6 el disco opaco de abajo deja ver
+  // las cuerdas. En "aparición", al 100% (salvo si la cuenta atrás lo está fundiendo a 0, ver introStars).
+  if(isReveal&&el.style.opacity!=='0')el.style.opacity='1';
+  // ...y para que de verdad tapen la cuerda, un disco opaco del color del fondo bajo cada fantasma (la fantasma
+  // es translúcida). <ellipse>, no <circle>, como asScaleBacking: el brillo (g.twinkle circle) no lo toca.
+  if(el.style.zIndex==='3'){
+    const bgCol=stageBgColor(el);
+    el.querySelectorAll('g').forEach(g=>{const c=g.querySelector('circle');if(!c)return;
+      const e=document.createElementNS(NS,'ellipse');
+      e.setAttribute('cx',c.getAttribute('cx'));e.setAttribute('cy',c.getAttribute('cy'));
+      e.setAttribute('rx',c.getAttribute('r'));e.setAttribute('ry',c.getAttribute('r'));e.setAttribute('fill',bgCol);
+      g.insertBefore(e,g.firstChild);});
+  }
+  if(isFinale){
+    const now=performance.now()/1000;
+    if(!window._twinkleT0||now-window._twinkleT0>600)window._twinkleT0=now;
+    const since=now-window._twinkleT0;
+    el.querySelectorAll('g').forEach((g,i)=>{
+      const h=x=>{const v=Math.sin((i+1)*x)*43758.5453;return v-Math.floor(v);}; // pseudoaleatorio estable por casilla
+      const pk=0.35+0.65*h(12.9898),dur=1.6+2.4*h(78.233),dl=0.4+3.2*h(37.719);
+      g.setAttribute('class','twinkle');
+      g.style.setProperty('--pk',pk.toFixed(2));g.style.setProperty('--gl',(4+10*pk).toFixed(1)+'px');
+      g.style.setProperty('--d',dur.toFixed(2)+'s');g.style.setProperty('--dl',(dl-since).toFixed(2)+'s');
+      g.style.setProperty('--tc',pk>0.6?'#3a2a05':'#fff6d8');
+    });
+  }else window._twinkleT0=0;
   el.style.display=painted?'block':'none';
   return true;
 }
@@ -13744,6 +14073,8 @@ function setChordDisplayMode(mode){
   });
   if(bm) bm.classList.toggle('active',mode==='bars');
   if(mm) mm.classList.toggle('active',mode==='minimal');
+  document.getElementById('scaleChordsMode')?.classList.toggle('active',mode==='scale');
+  _scaleChordsSig='';
   const fn=document.getElementById('vFn');
   if(fn&&mode!=='carousel') fn.style.visibility='hidden';
 }
@@ -13931,6 +14262,32 @@ function updateBarsMinimal(curChord,nextChord,fn,allBars,bi,beatInBar){
       mc.style.color=NEUTRAL;mc.style.textShadow=`0 0 40px rgba(${r},${g},${b},.7),0 0 80px rgba(${r},${g},${b},.35)`;
     }
   }
+}
+
+// Modo "Acordes de la escala": fila con los acordes DIATÓNICOS que aparecen en el tema (los del
+// backing, así en los capítulos de 7ª salen Amaj7, Bm7…), ordenados por grado respecto a la
+// tonalidad, con su número romano (minúscula = menor, ° = disminuido, ø = semidisminuido). La fila se
+// reconstruye solo si cambia el tema o la tonalidad; en cada fotograma solo se mueve el destacado.
+let _scaleChordsSig='';
+function scaleChordDegree(chord,keyPc){
+  const m=/^([A-G])([#b]?)(.*)$/.exec((chord||'').trim());if(!m)return null;
+  const pc=((noteToSt(m[1]+m[2])-keyPc)%12+12)%12,deg=[0,2,4,5,7,9,11].indexOf(pc);if(deg<0)return null;
+  const q=m[3],R=['I','II','III','IV','V','VI','VII'][deg];
+  const half=/m7b5|ø/.test(q),dim=!half&&/dim|°/.test(q),minor=!half&&!dim&&/^m(?!aj)/i.test(q)&&!/^M/.test(q);
+  return{deg,label:(half||dim||minor)?R.toLowerCase()+(half?'ø':dim?'°':''):R};
+}
+function updateScaleChords(curChord,allBars){
+  const box=document.getElementById('scaleChordsMode');if(!box)return;
+  const key=(document.getElementById('keySelect')?.value||'C').replace(/m$/,'');
+  const sig=key+'|'+(allBars||[]).length;
+  if(sig!==_scaleChordsSig){
+    _scaleChordsSig=sig;
+    const keyPc=noteToSt(key),byDeg={};
+    (allBars||[]).forEach(b=>{const c=(b&&b.chord||'').trim();const d=c&&scaleChordDegree(c,keyPc);if(d&&!(d.deg in byDeg))byDeg[d.deg]={chord:c,label:d.label};});
+    box.innerHTML=Object.keys(byDeg).sort((a,b)=>a-b).map(d=>`<div class="sc-pill" data-chord="${byDeg[d].chord}"><span class="sc-deg">${byDeg[d].label}</span><span class="sc-name">${byDeg[d].chord}</span></div>`).join('');
+  }
+  const cur=(curChord||'').trim();
+  box.querySelectorAll('.sc-pill').forEach(el=>el.classList.toggle('on',el.dataset.chord===cur));
 }
 
 function updateCarousel(prevChord, curChord, nextChord, fn){
@@ -15544,6 +15901,7 @@ const VIS_ELEMENTS=[
   {id:'showMetro',    label:'Metrónomo',             def:true, group:'Información en pantalla'},
   {id:'showCarousel', label:'Zona de acorde (carrusel + notas)', def:false, group:'Información en pantalla'},
   {id:'showFnBadge',  label:'Badge de función (I/IV/V)', def:false, group:'Información en pantalla'},
+  {id:'carouselDistinct', label:'Carrusel: anterior/siguiente = el acorde distinto más cercano (no el compás vecino)', def:false, group:'Información en pantalla'},
   {id:'showScaleHint',label:'Escala/arpegio sugerido',def:false, group:'Información en pantalla'},
   {id:'showNotes',    label:'Notas del acorde',       def:false, group:'Información en pantalla'},
   {id:'showIntervalGaps',label:'Distancia en intervalos entre notas del acorde', def:false, group:'Información en pantalla'},
@@ -15612,6 +15970,7 @@ function getVisConfig(){
 }
 function applyVisConfig(cfg){
   if(!cfg)cfg=getVisConfig();
+  if(cfg.chordDisplayMode){const cdm=document.getElementById('chordDisplayMode');if(cdm&&cdm.value!==cfg.chordDisplayMode){cdm.value=cfg.chordDisplayMode;setChordDisplayMode(cfg.chordDisplayMode);}}
   const gnd=document.getElementById('globalNoteDisplay');
   if(gnd&&cfg.noteDisplay&&gnd.value!==cfg.noteDisplay){gnd.value=cfg.noteDisplay;onGlobalNoteDisplayChange();}
   const show=(id,el)=>{if(el)el.style.display=cfg[id]===false?'none':'';}

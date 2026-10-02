@@ -63,6 +63,8 @@ function parseArgs(argv) {
   // que sigue la mano: PRIMERO las de encima de la última octava (continuando hacia el agudo) y
   // DESPUÉS las de debajo de la 1ª tónica — un solo salto (1ª cuerda → 6ª). Antes iban de grave a
   // agudo y saltaba de la octava a la 6ª y otra vez a la 1ª (corregido a petición de Alberto).
+  // --closed: la misma posición 12 trastes más arriba, sin cuerdas al aire (vídeo "Forma X cerrada").
+  if (args.closed) box.forEach(n => { n.fret += 12; });
   const notes = box.map(n => ({ ...n, midi: OPEN_MIDI[n.string] + n.fret })).sort((a, b) => a.midi - b.midi);
   const first = notes.findIndex(n => n.isRoot);
   const groups = [];
@@ -87,7 +89,12 @@ function parseArgs(argv) {
   push(beat, 0, 'Las tónicas: aquí está la escala');
   const afterFlash = n => n.isRoot ? 'active' : 'ghost';
   groups.forEach(g => {
-    g.notes.forEach(n => { state.set(key(n), 'active'); push(beat, n.isRoot ? 0.04 : APPEAR, g.caption, n); });
+    // Una tónica ya encendida que vuelve a sonar hace un DESTELLO (estado 'flash') durante su pulso y
+    // vuelve a 'active' — si no, parecía inmóvil y no se veía que era la que sonaba (Alberto).
+    g.notes.forEach(n => {
+      if (n.isRoot) { state.set(key(n), 'flash'); push(beat, 0.08, g.caption, n); state.set(key(n), 'active'); }
+      else { state.set(key(n), 'active'); push(beat, APPEAR, g.caption, n); }
+    });
     g.notes.forEach(n => state.set(key(n), 'flash')); push(beat, 0.15, g.caption);
     g.notes.forEach(n => state.set(key(n), afterFlash(n))); push(beat, TO_GHOST, g.caption);
   });
@@ -97,7 +104,7 @@ function parseArgs(argv) {
   const frameUrl = 'file://' + path.join(__dirname, 'lib', 'scale-intro-frame.html');
   const frets = notes.map(n => n.fret);
   const fretMin = Math.max(1, Math.min(...frets) - 1), fretMax = Math.max(...frets) + 1;
-  const title = `Escala de ${root} mayor · Forma ${posLabel}`;
+  const title = `Escala de ${root} mayor · Forma ${posLabel}${args.closed ? ' cerrada' : ''}`;
   // Texto de Alberto: el capítulo 1 presenta la posición ANTES de lo que viene (por defecto, las
   // tríadas: es el capítulo 2 del vídeo largo). --next cambia lo que se anuncia.
   const subtitle = `Localiza la escala mayor de ${root} antes de comenzar con ${args.next || 'las tríadas'}…`;
@@ -134,7 +141,7 @@ function parseArgs(argv) {
     fc += `${prev}[${k}]xfade=transition=fade:duration=${x}:offset=${off.toFixed(3)}${last ? ',format=yuv420p[v]' : `[v${k}];`}`;
     prev = `[v${k}]`;
   }
-  const out = path.join(outDir, `${root.replace('#', 's')}_Forma${posLabel}_ConstruyeLaPosicion.mp4`);
+  const out = path.join(outDir, `${root.replace('#', 's')}_Forma${posLabel}${args.closed ? '_Cerrada' : ''}_ConstruyeLaPosicion.mp4`);
   ff.push('-filter_complex', fc, '-map', '[v]', '-map', `${steps.length}:a`, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', out);
   await execFileP('nice', ['-n', '10', 'ffmpeg', ...ff], { maxBuffer: 1 << 24 });

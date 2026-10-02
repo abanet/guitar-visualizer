@@ -70,6 +70,7 @@
  */
 const { chromium } = require('playwright');
 const path = require('path');
+const { recordWithStartCheck } = require('./lib/start-check');
 const fs = require('fs');
 const os = require('os');
 const { execFile } = require('child_process');
@@ -309,7 +310,11 @@ async function detectOpenPositions({ appUrl, root, scale, positions, positionsLi
         document.getElementById('asPos').value = String(posIdx);
         document.getElementById('asQuality').value = 'triads';
         asGenerate();
-        return asState.notes.length ? Math.min(...asState.notes.map((n) => n.fret)) : null;
+        // asActiveNotes() (la caja de referencia corregida), NO asState.notes (la generada en bruto): con la
+        // bruta, Ab Forma G no salía "con cuerdas al aire" y la variante cerrada de tríadas no se generaba
+        // (2026-09-29), mientras el resto de piezas (que usan la corregida) sí la tenían.
+        const box = asActiveNotes();
+        return box.length ? Math.min(...box.map((n) => n.fret)) : null;
       }, { root, scale, posLabel });
       if (minFret === 0) open.add(posLabel);
     }
@@ -393,9 +398,10 @@ async function main() {
     return closedOnly ? [{ posLabel, closed: true }] : [{ posLabel, closed: false }, { posLabel, closed: true }];
   });
   const t0 = Date.now();
-  const results = await runPool(jobs, concurrency, (job) =>
+  // recordWithStartCheck: si el recorte inicial falla y el vídeo empieza con la app a la vista, se repite.
+  const results = await runPool(jobs, concurrency, (job) => recordWithStartCheck(() =>
     runOne({ appUrl, root: args.root, scale: args.scale, posLabel: job.posLabel, closed: job.closed, visConfig: args.visconfig ? JSON.parse(fs.readFileSync(path.resolve(args.visconfig), 'utf8')) : null, link: !!args.link, introBars, bpm, xmlPath, cycleLen, wholeTheme, audioPath, extraSec, positionsLib, width, height, outDir, tmpDir })
-  );
+  ));
 
   const ok = results.filter((r) => r.ok).length;
   const fail = results.filter((r) => !r.ok);
