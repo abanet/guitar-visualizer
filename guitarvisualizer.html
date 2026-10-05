@@ -16379,6 +16379,19 @@ const CSS=`
   background:var(--tv-c1);box-shadow:0 0 16px color-mix(in srgb, var(--tv-c1) 60%, transparent);}
 #tvTrackHead{position:absolute;top:50%;left:0;width:18px;height:18px;border-radius:50%;transform:translate(-50%,-50%);
   background:radial-gradient(circle at 40% 35%,#fff,var(--tv-c1));box-shadow:0 0 18px color-mix(in srgb, var(--tv-c1) 90%, transparent),0 0 4px #fff;}
+/* Perfil de tempo (solo con mapa de tempo, ver tvBuildTempoProfile): la barra de progreso plana
+   se sustituye por el dibujo escalonado del BPM a lo largo del tema — arriba = más rápido. */
+#tvTempoProfile{position:absolute;left:0;top:-30px;width:100%;height:80px;overflow:visible;display:none;}
+/* Para darle altura al perfil, la fila de tiempos sube 30px (no más: tocaría el rótulo de la cuenta atrás). */
+#tvOverlay.tv-profile-on #tvBeats{top:782px;}
+#tvTempoProfile path{fill:none;stroke-width:3;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;}
+#tvTempoProfile .tv-prof-base{stroke:rgba(255,255,255,.2);}
+#tvTempoProfile .tv-prof-lit{stroke:var(--tv-c1);filter:drop-shadow(0 0 6px color-mix(in srgb, var(--tv-c1) 70%, transparent));}
+#tvTempoRoute{position:absolute;left:0;bottom:48px;display:none;white-space:nowrap;font-size:15px;font-weight:700;letter-spacing:.16em;color:#68727f;}
+#tvTempoRoute b{color:#aab3c0;font-weight:800;}
+#tvTrack.tv-has-profile{background:transparent;box-shadow:none;}
+#tvTrack.tv-has-profile #tvTrackFill,#tvTrack.tv-has-profile .tv-milestone{display:none;}
+#tvTrack.tv-has-profile #tvTempoProfile,#tvTrack.tv-has-profile #tvTempoRoute{display:block;}
 #tvOverlay .tv-gear{width:38px;height:38px;color:#68727f;opacity:.75;}
 `;
 const st=document.createElement('style'); st.id='tvStyles'; st.textContent=CSS; document.head.appendChild(st);
@@ -16468,7 +16481,7 @@ function tvBuild(){
     <div id="tvBeats"></div>
     <div id="tvFooter">
       <div class="tv-time" id="tvOTimeCur">00:00</div>
-      <div id="tvTrack"><div id="tvTrackFill"></div><div class="tv-milestone" data-p="25" style="left:25%"></div><div class="tv-milestone" data-p="50" style="left:50%"></div><div class="tv-milestone" data-p="75" style="left:75%"></div><div id="tvTrackHead"></div></div>
+      <div id="tvTrack"><div id="tvTempoRoute"></div><svg id="tvTempoProfile" viewBox="0 0 1000 80" preserveAspectRatio="none"><defs><clipPath id="tvProfClip"><rect id="tvProfClipRect" x="0" y="-20" width="0" height="120"/></clipPath></defs><path class="tv-prof-base"/><path class="tv-prof-lit" clip-path="url(#tvProfClip)"/></svg><div id="tvTrackFill"></div><div class="tv-milestone" data-p="25" style="left:25%"></div><div class="tv-milestone" data-p="50" style="left:50%"></div><div class="tv-milestone" data-p="75" style="left:75%"></div><div id="tvTrackHead"></div></div>
       <div class="tv-time right" id="tvOTimeTot">10:00</div>
       <div class="tv-gear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></div>
     </div>
@@ -16640,6 +16653,43 @@ function tvUpdateMilestones(){
     track.insertBefore(d,head);
   }
   refs.milestones=Array.from(track.querySelectorAll('.tv-milestone'));
+  tvBuildTempoProfile();
+}
+
+/* ---- Perfil de tempo: con mapa de tempo, la barra de progreso se convierte en el esquema del
+   recorrido (un escalón por tramo de BPM, a escala de tiempo real, arriba = más rápido) y encima
+   se escribe el recorrido en cifras ("70 → 110 → 70 BPM": inicio, extremos intermedios y final).
+   Así se ve de un vistazo si el tema sube, baja, hace pirámide o zigzag, y por dónde vas. Sin
+   mapa de tempo no se toca nada: sigue la barra plana de siempre. ---- */
+const TV_PROF_H=80, TV_PROF_PAD=3, TV_PROF_TOP=-30; // alto y posición del SVG respecto a #tvTrack (ver CSS)
+function tvBuildTempoProfile(){
+  const track=document.getElementById('tvTrack'), svg=document.getElementById('tvTempoProfile'), route=document.getElementById('tvTempoRoute');
+  if(!track||!svg) return;
+  refs.profile=null; track.classList.remove('tv-has-profile'); if(refs.ov)refs.ov.classList.remove('tv-profile-on');
+  const dur=tvHasTempoMap()?tvGetDuration():0;
+  if(!(dur>0)) return;
+  // Un tramo por cada racha de compases al mismo BPM; la claqueta va al tempo del primer compás.
+  const raw=[{t:0,bpm:Math.round(getIntroBPM()||getBpmAtBar(0)||getCfgBPM())}];
+  const bars=getCfgBars();
+  for(let bi=0;bi<bars;bi++){
+    const bpm=Math.round(getBpmAtBar(bi)||getCfgBPM());
+    if(bpm!==raw[raw.length-1].bpm) raw.push({t:getBarStartTime(bi),bpm});
+  }
+  const bpms=raw.map(r=>r.bpm), lo=Math.min(...bpms), hi=Math.max(...bpms);
+  if(hi<=lo) return;
+  const yOf=(bpm)=>TV_PROF_PAD+(hi-bpm)/(hi-lo)*(TV_PROF_H-2*TV_PROF_PAD);
+  const segs=raw.map((r,i)=>({p0:r.t/dur,p1:(i+1<raw.length?raw[i+1].t:dur)/dur,y:yOf(r.bpm)}));
+  let d='';
+  segs.forEach((g,i)=>{ d+=(i?'L':'M')+(g.p0*1000).toFixed(2)+' '+g.y.toFixed(2)+'L'+(g.p1*1000).toFixed(2)+' '+g.y.toFixed(2); });
+  svg.querySelectorAll('path').forEach(el=>el.setAttribute('d',d));
+  if(route){
+    const first=bpms[0], last=bpms[bpms.length-1], iHi=bpms.indexOf(hi), iLo=bpms.indexOf(lo);
+    const mids=[]; if(hi!==first&&hi!==last)mids.push([iHi,hi]); if(lo!==first&&lo!==last)mids.push([iLo,lo]);
+    mids.sort((a,b)=>a[0]-b[0]);
+    route.innerHTML=[first,...mids.map(m=>m[1]),last].map(v=>'<b>'+v+'</b>').join(' → ')+' BPM';
+  }
+  refs.profile={segs};
+  track.classList.add('tv-has-profile'); if(refs.ov)refs.ov.classList.add('tv-profile-on');
 }
 
 // Umbral (en compases) a partir del cual la pastilla "próximo cambio" pasa a su estado
@@ -16865,6 +16915,15 @@ function tvPaintAtElapsed(elapsedRaw){
   const tf=document.getElementById('tvTrackFill'), th=document.getElementById('tvTrackHead');
   if(tf) tf.style.transform='scaleX('+vprog+')';
   if(th) th.style.left=(vprog*100)+'%';
+  if(th){
+    // Con perfil de tempo, el cabezal va subido al escalón en curso y el tramo ya recorrido se ilumina.
+    const prof=refs.profile;
+    if(prof){
+      const g=prof.segs.find(x=>vprog<x.p1)||prof.segs[prof.segs.length-1];
+      th.style.top=(g.y+TV_PROF_TOP).toFixed(2)+'px';
+      const cr=document.getElementById('tvProfClipRect'); if(cr) cr.setAttribute('width',(vprog*1000).toFixed(2));
+    }else if(th.style.top) th.style.top='';
+  }
   if(refs.milestones)for(const el of refs.milestones)el.classList.toggle('lit',vprog>=parseFloat(el.dataset.p)/100);
   tvSetText('tvOTimeCur', fmtT(elapsedRaw));
   tvSetText('tvOTimeTot', dur?fmtT(dur):'—:—');
@@ -16992,6 +17051,7 @@ function tvStopFn(){
   tvSetText('tvOBar','1');
   const tf=document.getElementById('tvTrackFill'), th=document.getElementById('tvTrackHead');
   if(tf) tf.style.transform='scaleX(0)'; if(th) th.style.left='0%';
+  if(refs.profile){ if(th) th.style.top=(refs.profile.segs[0].y+TV_PROF_TOP).toFixed(2)+'px'; const cr=document.getElementById('tvProfClipRect'); if(cr) cr.setAttribute('width','0'); }
   tvSetText('tvOTimeCur','00:00');
 }
 (function wirePlayback(){

@@ -98,7 +98,9 @@
  *   --width/--height       Tamaño del viewport grabado (por defecto: 1920x1080, la resolución
  *                          nativa del módulo)
  *   --fps <n>              Fotogramas por segundo del vídeo (por defecto: 25)
- *   --max-sec <seg>        Genera solo los primeros <seg> segundos (para muestras de prueba)
+ *   --max-sec <seg>        Genera solo <seg> segundos (para muestras de prueba)
+ *   --start-sec <seg>      Empieza en el segundo <seg> del tema en vez de al principio (muestras
+ *                          de un tramo concreto, p.ej. un cambio de tempo)
  *   --realtime             Vuelve al método antiguo: grabar en directo con recordVideo. Solo
  *                          para comparar — el punto de pulso sale con ~±80ms de baile, ver
  *                          captureOffline()
@@ -407,14 +409,16 @@ async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audi
 // (n+0.5: el centro del intervalo que ese fotograma está en pantalla, para que el error de
 // cuantización quede repartido en ±medio fotograma en vez de ser siempre retraso.)
 const OFFLINE_FPS = 25;
-async function captureOffline({ page, context, total, fps, tag, log, audioPath, extraSec, outDir, appVersion, maxSec }) {
+async function captureOffline({ page, context, total, fps, tag, log, audioPath, extraSec, outDir, appVersion, maxSec, startSec }) {
   const outPath = path.join(outDir, `${tag}.mp4`);
-  const durSec = maxSec > 0 ? Math.min(total, maxSec) : total;
+  const fromSec = Math.min(Math.max(0, startSec || 0), total);
+  const durSec = maxSec > 0 ? Math.min(total - fromSec, maxSec) : total - fromSec;
   const frames = Math.ceil(durSec * fps);
+  const n0 = Math.round(fromSec * fps);
   const ff = spawn('ffmpeg', [
     '-y',
     '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(fps), '-i', 'pipe:0',
-    '-i', audioPath,
+    ...(n0 ? ['-ss', (n0 / fps).toFixed(6)] : []), '-i', audioPath,
     // Los JPEG llegan en rango completo (0-255); se pasan a rango de vídeo normal (16-235), que es
     // lo que espera YouTube — sin esto el mp4 sale etiquetado yuvj420p.
     '-filter_complex', `[0:v]scale=in_range=pc:out_range=tv,format=yuv420p[v];[1:a]apad=pad_dur=${extraSec}[a]`,
@@ -440,7 +444,7 @@ async function captureOffline({ page, context, total, fps, tag, log, audioPath, 
   for (let n = 0; n < frames; n++) {
     if (ff.exitCode !== null) break;
     // Las dos órdenes se mandan seguidas (CDP las atiende en orden): un viaje de ida y vuelta menos por fotograma.
-    const painted = cdp.send('Runtime.evaluate', { expression: `tvExport.renderFrame(${((n + 0.5) / fps).toFixed(6)},${n ? (1 / fps).toFixed(6) : 0})` });
+    const painted = cdp.send('Runtime.evaluate', { expression: `tvExport.renderFrame(${((n0 + n + 0.5) / fps).toFixed(6)},${n ? (1 / fps).toFixed(6) : 0})` });
     const shot = cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 95, optimizeForSpeed: true });
     const res = await painted;
     if (res.exceptionDetails) throw new Error('renderFrame falló: ' + (res.exceptionDetails.exception && res.exceptionDetails.exception.description || res.exceptionDetails.text));
@@ -458,7 +462,7 @@ async function captureOffline({ page, context, total, fps, tag, log, audioPath, 
   return outPath;
 }
 
-async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, outDir, tmpDir, allowShortAudio, realtime, fps, maxSec }) {
+async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, outDir, tmpDir, allowShortAudio, realtime, fps, maxSec, startSec }) {
   const tag = path.parse(audioPath).name;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
@@ -536,7 +540,7 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
     log(`duración objetivo: ${total.toFixed(1)}s (contenido ${contentDuration.toFixed(1)}s + ${extraSec}s extra)`);
 
     if (!realtime) {
-      offlineOut = await captureOffline({ page, context, total, fps, tag, log, audioPath, extraSec, outDir, appVersion, maxSec });
+      offlineOut = await captureOffline({ page, context, total, fps, tag, log, audioPath, extraSec, outDir, appVersion, maxSec, startSec });
     } else {
     playStartAt = await page.evaluate(() => new Promise((resolve) => {
       const stamp = () => resolve(performance.timeOrigin + performance.now());
@@ -574,7 +578,7 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
 // calculan aquí: se dejan en manos del propio motor (tvGetDuration(), tras cargar el XML), que
 // ya sabe seguir los cambios de tempo compás a compás — replicar esa matemática en Node sería la
 // forma más fácil de que este script y la app se desincronizaran entre sí con el tiempo.
-async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict, allowShortAudio, realtime, fps, maxSec }) {
+async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict, allowShortAudio, realtime, fps, maxSec, startSec }) {
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
   const audioDuration = await getAudioDurationSeconds(audioPath);
@@ -658,7 +662,7 @@ async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, hei
     log(`duración objetivo: ${total.toFixed(1)}s (teórica ${readBack.dur.toFixed(1)}s · audio ${contentDuration.toFixed(1)}s + ${extraSec}s extra)`);
 
     if (!realtime) {
-      offlineOut = await captureOffline({ page, context, total, fps, tag, log, audioPath, extraSec, outDir, appVersion, maxSec });
+      offlineOut = await captureOffline({ page, context, total, fps, tag, log, audioPath, extraSec, outDir, appVersion, maxSec, startSec });
     } else {
     playStartAt = await page.evaluate(() => new Promise((resolve) => {
       const stamp = () => resolve(performance.timeOrigin + performance.now());
@@ -725,6 +729,7 @@ async function main() {
   const height = args.height ? parseInt(args.height, 10) : 1080;
   const fps = args.fps ? parseFloat(args.fps) : OFFLINE_FPS;
   const maxSec = args['max-sec'] ? parseFloat(args['max-sec']) : 0;
+  const startSec = args['start-sec'] ? parseFloat(args['start-sec']) : 0;
 
   if (!fs.existsSync(appPath)) { console.error('No existe: ' + appPath); process.exit(1); }
 
@@ -778,7 +783,7 @@ async function main() {
       console.log(`\n[${i + 1}/${jobs.length}] ${job.tag}`);
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gv-rhythm-'));
       try {
-        await runOneXml({ appUrl, xmlPath: job.xmlPath, audioPath: job.audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag: job.tag, strict: !!args.strict, allowShortAudio: !!args['allow-short-audio'] , realtime: !!args.realtime, fps, maxSec });
+        await runOneXml({ appUrl, xmlPath: job.xmlPath, audioPath: job.audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag: job.tag, strict: !!args.strict, allowShortAudio: !!args['allow-short-audio'] , realtime: !!args.realtime, fps, maxSec, startSec });
         writeYoutubeChapters(job.xmlPath, cfg, path.join(outDir, `${job.tag}.txt`), (msg) => console.log(`[${job.tag}] ${msg}`));
         ok++;
       } catch (e) {
@@ -823,7 +828,7 @@ async function main() {
     console.log(`Generando vídeo de tempo progresivo (${tag})…`);
     const t0 = Date.now();
     try {
-      const outPath = await runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict: !!args.strict, allowShortAudio: !!args['allow-short-audio'] , realtime: !!args.realtime, fps, maxSec });
+      const outPath = await runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict: !!args.strict, allowShortAudio: !!args['allow-short-audio'] , realtime: !!args.realtime, fps, maxSec, startSec });
       writeYoutubeChapters(xmlPath, cfg, path.join(outDir, `${tag}.txt`), console.log);
       console.log(`\nHecho en ${((Date.now() - t0) / 1000).toFixed(1)}s: ${outPath}`);
     } catch (e) {
@@ -864,7 +869,7 @@ async function main() {
   console.log(`Generando ${jobs.length} vídeos (concurrencia=${concurrency})…`);
   const t0 = Date.now();
   const results = await runPool(jobs, concurrency, (job) =>
-    runOne({ appUrl, audioPath: job.audioPath, bpm: job.bpm, cfg, extraSec, width, height, outDir, tmpDir, allowShortAudio: !!args['allow-short-audio'] , realtime: !!args.realtime, fps, maxSec })
+    runOne({ appUrl, audioPath: job.audioPath, bpm: job.bpm, cfg, extraSec, width, height, outDir, tmpDir, allowShortAudio: !!args['allow-short-audio'] , realtime: !!args.realtime, fps, maxSec, startSec })
   );
 
   const ok = results.filter((r) => r.ok).length;
