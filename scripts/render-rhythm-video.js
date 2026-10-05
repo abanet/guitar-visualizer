@@ -4,18 +4,14 @@
  * MÓDULO RITMO/TEMPO en guitarvisualizer.html) a partir de una carpeta con varios audios —
  * típicamente el mismo groove exportado de BiaB a distintos tempos (rock_60.m4a … rock_150.m4a).
  *
- * Igual que generate-triad-videos.js: carga el audio DE VERDAD en el navegador y graba en
- * tiempo real con Playwright (recordVideo) mientras la app reproduce — no fotograma a fotograma.
- * (Se probó primero el enfoque "offline" descrito en NOTES.md, pintando cada frame a mano con
- * page.screenshot(); con pistas de varios minutos —los backing tracks de este módulo duran
- * bastante más que un ejercicio de tríadas— resultó muchísimo más lento que grabar en directo,
- * así que se descartó a favor de este pipeline ya probado.)
+ * A diferencia de generate-triad-videos.js (que graba en tiempo real con recordVideo mientras la
+ * app reproduce), aquí el vídeo se pinta FOTOGRAMA A FOTOGRAMA, cada uno para su instante exacto,
+ * con tvExport.renderFrame() — ver captureOffline() más abajo para el porqué (grabando en directo
+ * el punto de pulso no caía a la vez que el golpe). Tarda ~1,7x la duración del vídeo; el método
+ * antiguo sigue disponible con --realtime.
  *
- * El fundido a negro + logo del final SÍ es el mismo que en tríadas: se detectó que el módulo
- * Ritmo tenía su propio bucle de pintado (tvFrame) que nunca disparaba ese fundido —vivía solo
- * dentro de tick(), que el modo Ritmo no usa—, así que se extrajo a armEndFade() y se conectó
- * también a tvFrame() (ver guitarvisualizer.html). Con eso, grabar en directo ya produce el
- * mismo remate sin necesitar nada especial desde este script.
+ * El fundido a negro + logo del final es el mismo que en tríadas (armEndFade() en
+ * guitarvisualizer.html); renderFrame() lo reproduce en función del instante pintado.
  *
  * El BPM de cada vídeo se lee del propio nombre de archivo (el nº final antes de la extensión:
  * rock_60.m4a → 60bpm). El nº de compases NO se pide a mano: lo calcula la propia app
@@ -101,12 +97,18 @@
  *                          las duraciones dividida entre la concurrencia)
  *   --width/--height       Tamaño del viewport grabado (por defecto: 1920x1080, la resolución
  *                          nativa del módulo)
+ *   --fps <n>              Fotogramas por segundo del vídeo (por defecto: 25)
+ *   --max-sec <seg>        Genera solo los primeros <seg> segundos (para muestras de prueba)
+ *   --realtime             Vuelve al método antiguo: grabar en directo con recordVideo. Solo
+ *                          para comparar — el punto de pulso sale con ~±80ms de baile, ver
+ *                          captureOffline()
  */
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
+const { once } = require('events');
 const { promisify } = require('util');
 const execFileP = promisify(execFile);
 const { parseTempoByMeasure, analyzeTempoProgression } = require('./lib/tempo-progression');
@@ -393,7 +395,70 @@ async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audi
   return outPath;
 }
 
-async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, outDir, tmpDir, allowShortAudio }) {
+// Render DETERMINISTA fotograma a fotograma (camino por defecto desde oct 2026; el antiguo, grabar
+// en tiempo real con recordVideo, queda bajo --realtime). Grabando en directo, cada fotograma
+// lleva el instante en que Chrome consiguió entregarlo, no el instante que representa: medido
+// pulso a pulso (BluesShuffle, JazzSwingSmooth, AfroCubanoBolero a 100 bpm), el punto de pulso
+// bailaba ~160ms dentro de un mismo vídeo (4 fotogramas a 25fps) y el desfase medio cambiaba de
+// signo de una serie a otra (±120ms, el ruido del recorte de arranque medido con el evento
+// 'playing'). Aquí no hay reloj real de por medio: el fotograma n se pinta para el instante
+// (n+0.5)/fps con tvExport.renderFrame() (ver guitarvisualizer.html) y se captura después, tarde
+// lo que tarde — el vídeo sale ya alineado con el segundo 0 del audio, sin recorte que medir.
+// (n+0.5: el centro del intervalo que ese fotograma está en pantalla, para que el error de
+// cuantización quede repartido en ±medio fotograma en vez de ser siempre retraso.)
+const OFFLINE_FPS = 25;
+async function captureOffline({ page, context, total, fps, tag, log, audioPath, extraSec, outDir, appVersion, maxSec }) {
+  const outPath = path.join(outDir, `${tag}.mp4`);
+  const durSec = maxSec > 0 ? Math.min(total, maxSec) : total;
+  const frames = Math.ceil(durSec * fps);
+  const ff = spawn('ffmpeg', [
+    '-y',
+    '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(fps), '-i', 'pipe:0',
+    '-i', audioPath,
+    // Los JPEG llegan en rango completo (0-255); se pasan a rango de vídeo normal (16-235), que es
+    // lo que espera YouTube — sin esto el mp4 sale etiquetado yuvj420p.
+    '-filter_complex', `[0:v]scale=in_range=pc:out_range=tv,format=yuv420p[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-map', '[v]', '-map', '[a]',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
+    '-c:a', 'aac', '-b:a', '192k',
+    '-metadata', `comment=Generado con Guitar Visualizer v${appVersion}`,
+    '-shortest',
+    outPath,
+  ], { stdio: ['pipe', 'ignore', 'pipe'] });
+  let ffErr = '';
+  ff.stderr.on('data', (d) => { ffErr = (ffErr + d).slice(-4000); });
+  const ffDone = new Promise((resolve, reject) => {
+    ff.on('error', reject);
+    ff.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg terminó con código ${code}: ${ffErr.slice(-600)}`))));
+  });
+  ff.stdin.on('error', () => {}); // si ffmpeg muere, el error real llega por ffDone
+
+  const cdp = await context.newCDPSession(page);
+  log(`pintando ${frames} fotogramas a ${fps}fps (${durSec.toFixed(1)}s de vídeo)…`);
+  const t0 = Date.now();
+  let lastLog = t0;
+  for (let n = 0; n < frames; n++) {
+    if (ff.exitCode !== null) break;
+    // Las dos órdenes se mandan seguidas (CDP las atiende en orden): un viaje de ida y vuelta menos por fotograma.
+    const painted = cdp.send('Runtime.evaluate', { expression: `tvExport.renderFrame(${((n + 0.5) / fps).toFixed(6)},${n ? (1 / fps).toFixed(6) : 0})` });
+    const shot = cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 95, optimizeForSpeed: true });
+    const res = await painted;
+    if (res.exceptionDetails) throw new Error('renderFrame falló: ' + (res.exceptionDetails.exception && res.exceptionDetails.exception.description || res.exceptionDetails.text));
+    const buf = Buffer.from((await shot).data, 'base64');
+    if (!ff.stdin.write(buf)) await Promise.race([once(ff.stdin, 'drain'), ffDone.catch(() => {})]);
+    if (Date.now() - lastLog > 30000) {
+      lastLog = Date.now();
+      const rate = (n + 1) / ((lastLog - t0) / 1000);
+      log(`  ${Math.round(((n + 1) / frames) * 100)}% · ${rate.toFixed(1)} fotogramas/s · faltan ~${Math.round((frames - n - 1) / rate)}s`);
+    }
+  }
+  ff.stdin.end();
+  await ffDone;
+  log(`✓ ${outPath} (${((Date.now() - t0) / 1000).toFixed(0)}s de render)`);
+  return outPath;
+}
+
+async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, outDir, tmpDir, allowShortAudio, realtime, fps, maxSec }) {
   const tag = path.parse(audioPath).name;
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
@@ -405,7 +470,7 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({
     viewport: { width, height },
-    recordVideo: { dir: tmpDir, size: { width, height } },
+    ...(realtime ? { recordVideo: { dir: tmpDir, size: { width, height } } } : {}),
   });
   const page = await context.newPage();
   page.on('pageerror', (e) => log('pageerror: ' + e.message));
@@ -418,6 +483,7 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
   const recordStartAt = Date.now();
   let playStartAt = null;
   let stepError = null;
+  let offlineOut = null;
   let appVersion = 'unknown';
   try {
     log('cargando app…');
@@ -469,6 +535,9 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
     const total = contentDuration + extraSec;
     log(`duración objetivo: ${total.toFixed(1)}s (contenido ${contentDuration.toFixed(1)}s + ${extraSec}s extra)`);
 
+    if (!realtime) {
+      offlineOut = await captureOffline({ page, context, total, fps, tag, log, audioPath, extraSec, outDir, appVersion, maxSec });
+    } else {
     playStartAt = await page.evaluate(() => new Promise((resolve) => {
       const stamp = () => resolve(performance.timeOrigin + performance.now());
       startIt();
@@ -480,6 +549,7 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
     log(`grabando… (arranque: ${((playStartAt - recordStartAt) / 1000).toFixed(2)}s de setup a recortar)`);
     await page.waitForTimeout(total * 1000);
     await page.evaluate(() => { if (typeof pauseIt === 'function') pauseIt(); });
+    }
   } catch (e) {
     stepError = e;
   }
@@ -490,6 +560,7 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
   await browser.close().catch(() => {});
 
   if (stepError) throw stepError;
+  if (offlineOut) return offlineOut;
   if (!videoObj) throw new Error('No se generó ningún vídeo (context sin recordVideo).');
 
   const beats = cfg.beats || 4;
@@ -503,7 +574,7 @@ async function runOne({ appUrl, audioPath, bpm, cfg, extraSec, width, height, ou
 // calculan aquí: se dejan en manos del propio motor (tvGetDuration(), tras cargar el XML), que
 // ya sabe seguir los cambios de tempo compás a compás — replicar esa matemática en Node sería la
 // forma más fácil de que este script y la app se desincronizaran entre sí con el tiempo.
-async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict, allowShortAudio }) {
+async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict, allowShortAudio, realtime, fps, maxSec }) {
   const log = (msg) => console.log(`[${tag}] ${msg}`);
 
   const audioDuration = await getAudioDurationSeconds(audioPath);
@@ -514,7 +585,7 @@ async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, hei
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({
     viewport: { width, height },
-    recordVideo: { dir: tmpDir, size: { width, height } },
+    ...(realtime ? { recordVideo: { dir: tmpDir, size: { width, height } } } : {}),
   });
   const page = await context.newPage();
   page.on('pageerror', (e) => log('pageerror: ' + e.message));
@@ -525,6 +596,7 @@ async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, hei
   const recordStartAt = Date.now();
   let playStartAt = null;
   let stepError = null;
+  let offlineOut = null;
   let appVersion = 'unknown';
   let introBars = 0, baseBpm = 0, beats = cfg.beats || 4;
   try {
@@ -585,6 +657,9 @@ async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, hei
     const total = Math.max(readBack.dur, contentDuration) + extraSec;
     log(`duración objetivo: ${total.toFixed(1)}s (teórica ${readBack.dur.toFixed(1)}s · audio ${contentDuration.toFixed(1)}s + ${extraSec}s extra)`);
 
+    if (!realtime) {
+      offlineOut = await captureOffline({ page, context, total, fps, tag, log, audioPath, extraSec, outDir, appVersion, maxSec });
+    } else {
     playStartAt = await page.evaluate(() => new Promise((resolve) => {
       const stamp = () => resolve(performance.timeOrigin + performance.now());
       startIt();
@@ -596,6 +671,7 @@ async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, hei
     log(`grabando… (arranque: ${((playStartAt - recordStartAt) / 1000).toFixed(2)}s de setup a recortar)`);
     await page.waitForTimeout(total * 1000);
     await page.evaluate(() => { if (typeof pauseIt === 'function') pauseIt(); });
+    }
   } catch (e) {
     stepError = e;
   }
@@ -606,6 +682,7 @@ async function runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, hei
   await browser.close().catch(() => {});
 
   if (stepError) throw stepError;
+  if (offlineOut) return offlineOut;
   if (!videoObj) throw new Error('No se generó ningún vídeo (context sin recordVideo).');
 
   const expectedContentSec = baseBpm > 0 ? introBars * beats * (60 / baseBpm) : 0;
@@ -646,6 +723,8 @@ async function main() {
   const outDir = path.resolve(args.out || './video-out');
   const width = args.width ? parseInt(args.width, 10) : 1920;
   const height = args.height ? parseInt(args.height, 10) : 1080;
+  const fps = args.fps ? parseFloat(args.fps) : OFFLINE_FPS;
+  const maxSec = args['max-sec'] ? parseFloat(args['max-sec']) : 0;
 
   if (!fs.existsSync(appPath)) { console.error('No existe: ' + appPath); process.exit(1); }
 
@@ -699,7 +778,7 @@ async function main() {
       console.log(`\n[${i + 1}/${jobs.length}] ${job.tag}`);
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gv-rhythm-'));
       try {
-        await runOneXml({ appUrl, xmlPath: job.xmlPath, audioPath: job.audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag: job.tag, strict: !!args.strict, allowShortAudio: !!args['allow-short-audio'] });
+        await runOneXml({ appUrl, xmlPath: job.xmlPath, audioPath: job.audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag: job.tag, strict: !!args.strict, allowShortAudio: !!args['allow-short-audio'] , realtime: !!args.realtime, fps, maxSec });
         writeYoutubeChapters(job.xmlPath, cfg, path.join(outDir, `${job.tag}.txt`), (msg) => console.log(`[${job.tag}] ${msg}`));
         ok++;
       } catch (e) {
@@ -744,7 +823,7 @@ async function main() {
     console.log(`Generando vídeo de tempo progresivo (${tag})…`);
     const t0 = Date.now();
     try {
-      const outPath = await runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict: !!args.strict, allowShortAudio: !!args['allow-short-audio'] });
+      const outPath = await runOneXml({ appUrl, xmlPath, audioPath, cfg, extraSec, width, height, outDir, tmpDir, tag, strict: !!args.strict, allowShortAudio: !!args['allow-short-audio'] , realtime: !!args.realtime, fps, maxSec });
       writeYoutubeChapters(xmlPath, cfg, path.join(outDir, `${tag}.txt`), console.log);
       console.log(`\nHecho en ${((Date.now() - t0) / 1000).toFixed(1)}s: ${outPath}`);
     } catch (e) {
@@ -785,7 +864,7 @@ async function main() {
   console.log(`Generando ${jobs.length} vídeos (concurrencia=${concurrency})…`);
   const t0 = Date.now();
   const results = await runPool(jobs, concurrency, (job) =>
-    runOne({ appUrl, audioPath: job.audioPath, bpm: job.bpm, cfg, extraSec, width, height, outDir, tmpDir, allowShortAudio: !!args['allow-short-audio'] })
+    runOne({ appUrl, audioPath: job.audioPath, bpm: job.bpm, cfg, extraSec, width, height, outDir, tmpDir, allowShortAudio: !!args['allow-short-audio'] , realtime: !!args.realtime, fps, maxSec })
   );
 
   const ok = results.filter((r) => r.ok).length;

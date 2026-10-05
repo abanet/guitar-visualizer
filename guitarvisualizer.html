@@ -16902,6 +16902,29 @@ window.tvExport={
     stopAmbient(); // el script pinta cada fotograma a mano; el bucle idle solo estorbaría
   },
   renderAt(t){ tvPaintAtElapsed(Math.max(0,t||0)); },
+  // Fotograma COMPLETO y determinista para el instante t (lo usa scripts/render-rhythm-video.js):
+  // además del pintado puro de renderAt(), reproduce a mano todo lo que en directo depende del
+  // reloj real — el fundido final (armEndFade(), una transición CSS), el polvo de fondo
+  // (drawDust(), que avanza por dt) y cualquier transición/animación CSS en curso — para que el
+  // fotograma no dependa de cuánto tarde en capturarse. dt = segundos desde el fotograma anterior.
+  renderFrame(t,dt){
+    t=Math.max(0,t||0); dt=Math.max(0,dt||0);
+    stopAmbient(); // tvSync()/tvShow() lo rearrancan; en reposo pisaría el brillo del pulso
+    fitScale();
+    tvPaintAtElapsed(t);
+    const fade=document.getElementById('endFadeOverlay'), dur=tvGetDuration();
+    if(fade){
+      fade.style.transition='none';
+      fade.style.opacity=(dur&&document.body.classList.contains('presentation'))?String(Math.min(1,Math.max(0,(t-(dur-END_FADE_SEC))/END_FADE_SEC))):'0';
+    }
+    drawDust(dt);
+    for(const a of document.getAnimations()){
+      a._gvT=(a._gvT===undefined)?0:a._gvT+dt*1000;
+      const end=a.effect?a.effect.getComputedTiming().endTime:Infinity;
+      if(a._gvT>=end){ a.finish(); continue; }
+      a.pause(); a.currentTime=a._gvT;
+    }
+  },
   getTotalDuration(){ const {beats,spb,preRoll}=tvClock(); return preRoll+getCfgBars()*beats*spb; },
   presentationOn(){ if(!document.body.classList.contains('presentation')) togglePresentation(); }
 };
