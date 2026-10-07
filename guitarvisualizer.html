@@ -4094,14 +4094,27 @@ function paintTriadGhosts(nextNotes,intensity,currentNotes,commonsOnly,chordForL
     // Coincidente sin anclaje: la nota YA está encendida en el mástil. Pintar el fantasma
     // encima solo produce la "letra doble" — no se pinta nada (el ancla es la versión opt-in).
     if(o.coincident){o.g.style.opacity='0';return;}
-    o.g.style.opacity=String(0.4+0.6*e);
+    // Con "estilo propio" y deslizamiento activo, el fantasma se apaga a medida que la nota real
+    // desliza hacia él (y sigue apagado si esa nota ya está encima): dos rellenos translúcidos
+    // solapados se suman y se veían como un destello de color plano al llegar.
+    let slideFade=1;
+    if(getVisConfig().forceOwnNoteStyle===true){
+      if(vlAnimId&&window._vlSlide)slideFade=1-Math.max(0,Math.min(1,(performance.now()-window._vlSlide.t0)/window._vlSlide.dur));
+      else if(Array.isArray(vlCurrentNotes)&&vlCurrentNotes.some(c=>Math.abs(c.cx-o.c.cx.baseVal.value)<6&&Math.abs(c.cy-o.c.cy.baseVal.value)<6))slideFade=0;
+    }
+    o.g.style.opacity=String((0.4+0.6*e)*slideFade);
     const target=parseRGB(o.col);
     const r=Math.round(ghostRGB[0]+(target[0]-ghostRGB[0])*e);
     const g2=Math.round(ghostRGB[1]+(target[1]-ghostRGB[1])*e);
     const b=Math.round(ghostRGB[2]+(target[2]-ghostRGB[2])*e);
-    const a=(0.38+0.62*e).toFixed(2);
+    // Con "estilo propio" el fantasma debe acabar en el MISMO relleno translúcido que la nota real
+    // (rojo .45 / cian .5, borde blanco tenue): si acaba en el color plano opaco, se ve un destello
+    // de "color antiguo" justo al llegar al acorde nuevo.
+    const ownG=getVisConfig().forceOwnNoteStyle===true;
+    const aEnd=ownG?(o.col==='#E53935'?0.45:0.5):1;
+    const a=(0.38+(aEnd-0.38)*e).toFixed(2);
     o.c.setAttribute('fill',`rgba(${r},${g2},${b},${a})`);
-    o.c.setAttribute('stroke',e<0.85?gStroke:o.col);
+    o.c.setAttribute('stroke',e<0.85?gStroke:(ownG?'rgba(255,255,255,.25)':o.col));
     o.c.setAttribute('stroke-width','2');
     if(e<0.85)o.c.setAttribute('stroke-dasharray',`5,${3*(1-e)+0.001}`);else o.c.removeAttribute('stroke-dasharray');
     o.t.setAttribute('fill',e<0.6?gText:'white');
@@ -5695,6 +5708,7 @@ function animateVoiceLeading(fromNotes,toParsed,durationMs,explicitChord){
   const starts=fromNotes.slice(0,n).map(fn=>({cx:fn.cx,cy:fn.cy,fill:fn.fill}));
   const ends=toNotes.slice(0,n).map(tn=>({cx:tn.cx,cy:tn.cy,fill:tn.fill,stroke:tn.stroke,sw:tn.strokeWidth}));
   const startTime=performance.now();
+  window._vlSlide={t0:startTime,dur:durationMs}; // lo lee paintTriadGhosts para apagar el fantasma durante el deslizamiento
   function easeIO(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
 
   function step(){
@@ -10726,7 +10740,13 @@ function exTriadsApproach(ctx){
           // sincronía con el propio deslizamiento — y se marca _lastBgPosKey para que el tick del
           // cambio de compás real no lo vuelva a reconstruir de golpe cuando llegue (bug
           // reportado: "al terminar la animación desaparecen todas las fantasma y se redibujan").
-          buildBgMap(allBars[nextBi],nextBarSlot);
+          // OJO: bgAutoPcs() saca las notas del fondo de currentChordData, que aquí todavía es el
+          // acorde SALIENTE (el compás no ha cambiado). Sin este relevo temporal el fondo se
+          // construía con las notas del acorde anterior y, como _lastBgPosKey queda marcado, ya no
+          // se rehacía al llegar el cambio real: los fantasmas iban siempre un acorde por detrás.
+          {const _ccd=currentChordData;
+           currentChordData={...(currentChordData||{}),chord:allBars[nextBi].chord};
+           try{buildBgMap(allBars[nextBi],nextBarSlot);}finally{currentChordData=_ccd;}}
           _lastBgPosKey=nextBarSlot.svgParsed.tnFrame?tnNotesKey(nextBarSlot.svgParsed.notes):nextBarSlot.svgParsed.notes.map(n=>Math.round(n.cx)+','+Math.round(n.cy)).sort().join('|');
         }
       }
@@ -13922,8 +13942,13 @@ function buildAutoBg(bar,activeSlot){
       // distinta y cambia con cada acorde). La tónica de escala se marca aparte con el anillo
       // dorado de abajo (mismo criterio que en las notas activas, ver renderSVGStatic) —
       // prueba/feedback de Alberto 2026-09-06.
-      c.setAttribute('fill','rgba(150,150,150,0.12)');
-      c.setAttribute('stroke','#999');
+      // EXCEPCIÓN (pedido de Alberto 2026-10-07, "exactamente igual que el tema completo"): cuando
+      // el fondo son las notas del ACORDE que suena ('figure'/'triadFull'), su tónica SÍ va en
+      // rojizo — ahí no hay confusión posible, es la misma tónica roja de la tríada activa. El gris
+      // único se mantiene para los fondos de ESCALA, que es el caso que motivó el cambio de arriba.
+      const chordRootGhost=p.semi===0&&(bgAuto.mode==='figure'||bgAuto.mode==='triadFull');
+      c.setAttribute('fill',chordRootGhost?'rgba(229,57,53,0.10)':'rgba(150,150,150,0.12)');
+      c.setAttribute('stroke',chordRootGhost?'rgba(229,57,53,0.55)':'#999');
       c.setAttribute('stroke-width','2');c.setAttribute('stroke-dasharray','5,4');
       g.appendChild(c);
       if(p.semi===0&&activeSlot?.svgParsed?.asScaleGen===true&&getVisConfig().scaleTonicRing!==false){
