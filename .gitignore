@@ -10,3 +10,6 @@ scripts/.tokens-caducados/
 scripts/.catalog-tonicas-done.txt
 scripts/.catalog-acordes-done.txt
 scripts/.catalog-arpegios-done.txt
+scripts/.catalog-acordes7-done.txt
+scripts/.catalog-arpegios7-done.txt
+scripts/.catalog-acordes7-ids.txt
