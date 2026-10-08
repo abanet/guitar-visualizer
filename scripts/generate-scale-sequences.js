@@ -86,6 +86,8 @@ function parseArgs(argv) {
   const beat = 60 / bpm;
   const tempos = args.tempos ? String(args.tempos).split(',').map(Number).filter(n => n > 0) : null;
   const ruta = args.ruta === 'caja' || args.ruta === 'tonica' ? args.ruta : (tempos ? 'caja' : 'tonica');   // progresivo: posición entera por defecto
+  const antic = ['grupo', 'todo'].includes(args.anticipa) ? args.anticipa : 'no';
+  const ladderTempos = args.ladder ? String(args.ladder).split(',').map(Number).filter(n => n > 0) : tempos;   // --ladder: escalera que se DIBUJA (para clips de prueba de unas pocas vueltas)
   const backingDir = args.backing ? path.resolve(String(args.backing).replace(/^~/, os.homedir())) : null;
   const outDir = path.resolve(args.out || path.join(os.homedir(), 'Downloads', 'PosicionEscala'));
   fs.mkdirSync(outDir, { recursive: true });
@@ -126,17 +128,32 @@ function parseArgs(argv) {
     return [...starts.map(up), ...bajada, ...remonte, { idx: [first] }];
   };
   // gb = pulsos por grupo (1; en progresivo las cuatriadas van en corcheas = 2 pulsos por acorde).
-  const pushGroups = (sq, groups, b, base, bpm, gb = 1) => {
+  // Fila de la escala (modo progresivo): los 7 acordes diatónicos con su grado, o las 7 notas en las
+  // terceras (con la calidad de cada tercera, mayor/menor, para ir asociando el sonido).
+  const ROMAN = { triadas: ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'], cuatriadas: ['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viiø'] };
+  const degLabel = d => notes.find(n => n.degree === d).label;
+  const stripItems = sk => [0, 1, 2, 3, 4, 5, 6].map(d => SEQS[sk].suffix ? { label: degLabel(d) + SEQS[sk].suffix[d], sub: ROMAN[sk][d] } : { label: degLabel(d), sub: String(d + 1) });
+  const pushGroups = (sq, groups, b, base, bpm, gb = 1, lap) => {
     groups.forEach((g, gi) => {
       const chordRoot = notes[Math.min(...g.idx)];
       const chord = sq.suffix && g.idx.length > 1 ? `${chordRoot.label}${sq.suffix[chordRoot.degree]}` : '';
       const st = baseState();
+      // Progresivo, --anticipa: 'grupo' = el grupo en curso entero desde su primer pulso (lo que falta, tenue)
+      // con la nota que suena AHORA destacada (brillo + halo) y, solo con --pista, el borde blanco en la 1ª nota del grupo siguiente un pulso antes;
+      // 'todo' = además aros en lo que falta y en el grupo siguiente (a Alberto le resultó confuso); 'no' = nada.
+      if (bpm && antic === 'todo') { (groups[gi + 1] ? groups[gi + 1].idx : []).forEach(ix => st.set(key(notes[ix]), 'soon')); g.idx.forEach(ix => st.set(key(notes[ix]), 'next')); }
+      else if (bpm && antic === 'grupo') g.idx.forEach(ix => st.set(key(notes[ix]), 'pend'));
       g.idx.forEach((ix, j) => {
         st.set(key(notes[ix]), 'active');
-        const caption = chord ? `${base} · ${chord}` : base, nb = gb / g.idx.length, at = gi * gb + j * nb;   // pulsos que dura la nota / pulso en que cae
+        const caption = bpm ? '' : chord ? `${base} · ${chord}` : base, nb = gb / g.idx.length, at = gi * gb + j * nb;   // pulsos que dura la nota / pulso en que cae
         const metro = k => bpm ? { bpm, beat: Math.floor(at + k + 1e-9) % 4 } : undefined;
-        if (nb <= 1) steps.push({ state: new Map(st), dur: b * nb, caption, sound: notes[ix], metro: metro(0) });
-        else for (let k = 0; k < nb; k++) steps.push({ state: new Map(st), dur: b, caption, sound: k ? undefined : notes[ix], metro: metro(k) });   // nota larga: un paso por pulso (metrónomo)
+        const nextIx = groups[gi + 1] ? groups[gi + 1].idx[0] : undefined;                // 1ª nota del grupo SIGUIENTE, durante todo el grupo
+        const ring = bpm && antic === 'grupo' && args.pista && nextIx !== undefined && j * (gb / g.idx.length) >= gb - 1 - 1e-9 ? key(notes[nextIx]) : undefined;   // solo en el último pulso del grupo
+        const strip = !bpm ? undefined : sq.suffix ? { on: [g.idx.length > 1 ? chordRoot.degree : notes[ix].degree] }
+          : { on: g.idx.slice(0, j + 1).map(i => notes[i].degree), q: g.idx.length === 2 ? (Math.abs(notes[g.idx[0]].midi - notes[g.idx[1]].midi) === 4 ? 'may' : 'men') : undefined };
+        const snap = new Map(st); if (bpm && antic === 'grupo') snap.set(key(notes[ix]), 'flash');   // tres niveles: AHORA (brillo + halo) / ya tocada / pendiente (tenue)
+        if (nb <= 1) steps.push({ state: snap, dur: b * nb, caption, sound: notes[ix], metro: metro(0), strip, lap, ring });
+        else for (let k = 0; k < nb; k++) steps.push({ state: new Map(snap), dur: b, caption, sound: k ? undefined : notes[ix], metro: metro(k), strip, lap, ring });   // nota larga: un paso por pulso (metrónomo)
       });
     });
   };
@@ -150,12 +167,13 @@ function parseArgs(argv) {
     const tick = (n, b, from) => { if (!backingDir) for (let k = 0; k < n; k++) clicks.push({ t: tt + k * b, accent: (from + k) % 4 === 0 }); tt += n * b; };
     const countBeats = backingDir ? 8 : 4;                                          // la base trae 2 compases de cuenta
     // Silencios pulso a pulso, para que el metrónomo visual (tempo + 4 puntos) siga marcando.
-    const rest = (n, b, from, caption, bpm) => { for (let k = 0; k < n; k++) steps.push({ state: baseState(), dur: b, caption, metro: { bpm, beat: (from + k) % 4 } }); };
-    rest(countBeats, 60 / tempos[0], 0, sq.name, tempos[0]); tick(countBeats, 60 / tempos[0], 0);
+    // lead = se anuncia el primer grupo de la vuelta que empieza (aro) durante el silencio.
+    const rest = (n, b, from, next, bpm, lap, lead) => { for (let k = 0; k < n; k++) { const st = baseState(); if (lead && antic !== 'no') groups[0].idx.forEach(ix => st.set(key(notes[ix]), antic === 'todo' ? 'next' : 'pend')); steps.push({ state: st, dur: b, caption: '', metro: { bpm, beat: (from + k) % 4, next }, strip: { on: [] }, lap, ring: lead && antic === 'grupo' && args.pista && k === n - 1 ? key(notes[groups[0].idx[0]]) : undefined }); } };
+    rest(countBeats - 4, 60 / tempos[0], 0, undefined, tempos[0], 0, false); rest(4, 60 / tempos[0], countBeats - 4, undefined, tempos[0], 0, true); tick(countBeats, 60 / tempos[0], 0);
     tempos.forEach((bpmL, li) => {
       const b = 60 / bpmL, next = tempos[li + 1];
-      pushGroups(sq, groups, b, sq.name, bpmL, gb); tick(seqBeats, b, 0);
-      rest(lapBeats - seqBeats, b, seqBeats, next ? `Siguiente vuelta: ${next} bpm` : '', bpmL); tick(lapBeats - seqBeats, b, seqBeats);
+      pushGroups(sq, groups, b, sq.name, bpmL, gb, li); tick(seqBeats, b, 0);
+      rest(lapBeats - seqBeats, b, seqBeats, next, bpmL, li, !!next); tick(lapBeats - seqBeats, b, seqBeats);
     });
     steps.push({ state: baseState(), dur: backingDir ? 4 * 60 / tempos[tempos.length - 1] : 1, caption: '' });   // con base: un compás más, en fundido
     console.log(`Vuelta: ${seqBeats} pulsos de secuencia + ${lapBeats - seqBeats} de respiro = ${lapBeats / 4} compases`);
@@ -176,10 +194,12 @@ function parseArgs(argv) {
   const cache = new Map(); let nPng = 0, framePage = null;
   const t0 = Date.now(), lap = []; const mark = n => lap.push(`${n} ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   for (const s of steps) {
-    const sig = s.caption + '|' + (s.metro ? `${s.metro.bpm}:${s.metro.beat}` : '') + '|' + notes.map(n => s.state.get(key(n))[0]).join('');
+    const sig = s.caption + '|' + (s.metro ? `${s.metro.bpm}:${s.metro.beat}:${s.metro.next || ''}` : '') + '|' + (s.strip ? s.strip.on.join(',') + (s.strip.q || '') : '') + '|' + (s.lap === undefined ? '' : s.lap) + '|' + (s.ring || '') + '|' + notes.map(n => s.state.get(key(n))[0]).join('');
     if (!cache.has(sig)) {
-      const data = { title: `Escala de ${root} mayor · Forma ${posLabel}${args.closed ? ' cerrada' : ''}`, subtitle: tempos ? 'Patrones melódicos de la escala mayor' : 'Secuencias dentro de la posición', caption: s.caption, metro: s.metro, fretMin, fretMax,
-        notes: notes.map(n => ({ string: n.string, fret: n.fret, label: n.label, isRoot: n.isRoot, state: s.state.get(key(n)) })) };
+      const data = { title: `Escala de ${root} mayor · Forma ${posLabel}${args.closed ? ' cerrada' : ''}`, subtitle: tempos ? `Patrones melódicos · ${SEQS[seqKeys[0]].name}` : 'Secuencias dentro de la posición', caption: s.caption, metro: s.metro,
+        ladder: tempos && s.lap !== undefined ? { tempos: ladderTempos, cur: ladderTempos.indexOf(tempos[s.lap]) } : undefined,
+        strip: s.strip && tempos ? { items: stripItems(seqKeys[0]), on: s.strip.on, q: s.strip.q, pill: !SEQS[seqKeys[0]].suffix } : undefined, fretMin, fretMax,
+        notes: notes.map(n => ({ string: n.string, fret: n.fret, label: n.label, isRoot: n.isRoot, state: s.state.get(key(n)), ring: s.ring === key(n) })) };
       if (!framePage) { framePage = await browser.newPage({ viewport: { width: 1600, height: 900 } }); await framePage.goto(frameUrl); }
       await framePage.evaluate(d => render(d), data);                               // una sola página para todos los fotogramas
       const png = path.join(tmp, `f${String(nPng++).padStart(4, '0')}.png`);
@@ -193,8 +213,21 @@ function parseArgs(argv) {
   let t = 0; const events = [];
   steps.forEach(s => { if (s.sound) events.push({ t, freq: 82.4069 * Math.pow(2, (s.sound.midi - 40) / 12) }); t += s.dur; });
   const total = t;
-  const wav = path.join(tmp, 'notas.wav');
-  fs.writeFileSync(wav, Buffer.from(await app.evaluate(renderToneTrackInPage, { events, total }), 'base64'));
+  // Las notas se sintetizan POR TRAMOS (un vídeo de 6 min de una sola vez tumba la pestaña: cientos de
+  // notas con su reverb en un único OfflineAudioContext) y se suman con su desfase; cada tramo lleva
+  // 3 s de cola para que la última nota termine de sonar.
+  const wav = path.join(tmp, 'notas.wav'), CHUNK = 40, parts = [];
+  for (let a = 0; a < total; a += CHUNK) {
+    const ev = events.filter(e => e.t >= a && e.t < a + CHUNK).map(e => ({ t: e.t - a, freq: e.freq }));
+    if (!ev.length) continue;
+    const w = path.join(tmp, `notas-${parts.length}.wav`);
+    fs.writeFileSync(w, Buffer.from(await app.evaluate(renderToneTrackInPage, { events: ev, total: Math.min(CHUNK, total - a) + 3 }), 'base64'));
+    parts.push({ w, a });
+  }
+  if (parts.length === 1 && parts[0].a === 0) fs.renameSync(parts[0].w, wav);
+  else await execFileP('ffmpeg', ['-loglevel', 'error', '-y', ...parts.flatMap(p => ['-i', p.w]), '-filter_complex',
+    parts.map((p, k) => `[${k}:a]adelay=${Math.round(p.a * 44100)}S|${Math.round(p.a * 44100)}S[p${k}]`).join(';') + ';' + parts.map((_, k) => `[p${k}]`).join('') + `amix=inputs=${parts.length}:normalize=0[a]`,
+    '-map', '[a]', '-ar', '44100', '-ac', '2', wav]);
   await browser.close();
   mark('audio');
 
