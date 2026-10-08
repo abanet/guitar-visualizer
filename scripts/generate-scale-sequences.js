@@ -6,7 +6,9 @@
  * (pluck del Mástil interactivo); el grupo se queda encendido hasta que empieza el siguiente, para ver
  * su forma. Cada secuencia sube por toda la posición y vuelve a bajar.
  *
- * Cada GRUPO ocupa un pulso: terceras = corcheas, tríadas = tresillos, cuatriadas = semicorcheas.
+ * Cada GRUPO ocupa un pulso: terceras = corcheas, tríadas = tresillos, cuatriadas = semicorcheas
+ * (en el modo progresivo las cuatriadas van en corcheas, 2 pulsos por acorde, como en el ejemplo 6 de
+ * "Everything You Need To Learn For Jazz Guitar").
  *   terceras    C-E, D-F, E-G…            (grados i, i+2)
  *   triadas     C-E-G, D-F-A…  + acorde   (i, i+2, i+4)
  *   cuatriadas  C-E-G-B, D-F-A-C… + acorde (i, i+2, i+4, i+6)
@@ -37,8 +39,8 @@ const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
 const POS_LABELS = ['E', 'D', 'C', 'A', 'G'];
 const SEQS = {
   terceras:   { name: 'Terceras',              span: [0, 2], file: 'EscalasPorTerceras' },
-  triadas:    { name: 'Tríadas por terceras',  span: [0, 2, 4],    suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },
-  cuatriadas: { name: 'Cuatriadas por terceras', span: [0, 2, 4, 6], suffix: ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'] },
+  triadas:    { name: 'Tríadas diatónicas',    span: [0, 2, 4], file: 'EscalasPorTriadas',   suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },
+  cuatriadas: { name: 'Arpegios de 7ª diatónicos', span: [0, 2, 4, 6], file: 'EscalasPorSeptimas', progBeats: 2, suffix: ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'] },
 };
 
 // Claqueta (WAV PCM 16 bits estéreo): un tic por pulso, más agudo y fuerte en el primero del compás.
@@ -123,15 +125,18 @@ function parseArgs(argv) {
     const remonte = []; for (let i = 1; i < first; i++) remonte.push(up(i));
     return [...starts.map(up), ...bajada, ...remonte, { idx: [first] }];
   };
-  const pushGroups = (sq, groups, b, base, bpm) => {
+  // gb = pulsos por grupo (1; en progresivo las cuatriadas van en corcheas = 2 pulsos por acorde).
+  const pushGroups = (sq, groups, b, base, bpm, gb = 1) => {
     groups.forEach((g, gi) => {
-      const metro = bpm ? { bpm, beat: gi % 4 } : undefined;
       const chordRoot = notes[Math.min(...g.idx)];
       const chord = sq.suffix && g.idx.length > 1 ? `${chordRoot.label}${sq.suffix[chordRoot.degree]}` : '';
       const st = baseState();
-      g.idx.forEach(ix => {
+      g.idx.forEach((ix, j) => {
         st.set(key(notes[ix]), 'active');
-        steps.push({ state: new Map(st), dur: b / g.idx.length, caption: chord ? `${base} · ${chord}` : base, sound: notes[ix], metro });
+        const caption = chord ? `${base} · ${chord}` : base, nb = gb / g.idx.length, at = gi * gb + j * nb;   // pulsos que dura la nota / pulso en que cae
+        const metro = k => bpm ? { bpm, beat: Math.floor(at + k + 1e-9) % 4 } : undefined;
+        if (nb <= 1) steps.push({ state: new Map(st), dur: b * nb, caption, sound: notes[ix], metro: metro(0) });
+        else for (let k = 0; k < nb; k++) steps.push({ state: new Map(st), dur: b, caption, sound: k ? undefined : notes[ix], metro: metro(k) });   // nota larga: un paso por pulso (metrónomo)
       });
     });
   };
@@ -139,8 +144,8 @@ function parseArgs(argv) {
   if (tempos) {
     // Progresivo: UNA secuencia, una vuelta entera por tempo; el tempo sube al volver a empezar en graves.
     // La vuelta se redondea a compases de 4/4 con al menos 2 pulsos de respiro (aviso del tempo siguiente).
-    const sq = SEQS[seqKeys[0]], groups = buildGroups(sq);
-    lapBeats = Math.ceil((groups.length + 2) / 4) * 4;
+    const sq = SEQS[seqKeys[0]], groups = buildGroups(sq), gb = sq.progBeats || 1, seqBeats = groups.length * gb;
+    lapBeats = Math.ceil((seqBeats + 2) / 4) * 4;
     let tt = 0;
     const tick = (n, b, from) => { if (!backingDir) for (let k = 0; k < n; k++) clicks.push({ t: tt + k * b, accent: (from + k) % 4 === 0 }); tt += n * b; };
     const countBeats = backingDir ? 8 : 4;                                          // la base trae 2 compases de cuenta
@@ -149,11 +154,11 @@ function parseArgs(argv) {
     rest(countBeats, 60 / tempos[0], 0, sq.name, tempos[0]); tick(countBeats, 60 / tempos[0], 0);
     tempos.forEach((bpmL, li) => {
       const b = 60 / bpmL, next = tempos[li + 1];
-      pushGroups(sq, groups, b, sq.name, bpmL); tick(groups.length, b, 0);
-      rest(lapBeats - groups.length, b, groups.length, next ? `Siguiente vuelta: ${next} bpm` : '', bpmL); tick(lapBeats - groups.length, b, groups.length);
+      pushGroups(sq, groups, b, sq.name, bpmL, gb); tick(seqBeats, b, 0);
+      rest(lapBeats - seqBeats, b, seqBeats, next ? `Siguiente vuelta: ${next} bpm` : '', bpmL); tick(lapBeats - seqBeats, b, seqBeats);
     });
     steps.push({ state: baseState(), dur: backingDir ? 4 * 60 / tempos[tempos.length - 1] : 1, caption: '' });   // con base: un compás más, en fundido
-    console.log(`Vuelta: ${groups.length} pulsos de secuencia + ${lapBeats - groups.length} de respiro = ${lapBeats / 4} compases`);
+    console.log(`Vuelta: ${seqBeats} pulsos de secuencia + ${lapBeats - seqBeats} de respiro = ${lapBeats / 4} compases`);
   } else {
     steps.push({ state: baseState(), dur: 2 * beat, caption: '' });
     for (const sk of seqKeys) {
@@ -168,29 +173,30 @@ function parseArgs(argv) {
   const frameUrl = 'file://' + path.join(__dirname, 'lib', 'scale-intro-frame.html');
   const frets = notes.map(n => n.fret);
   const fretMin = Math.max(1, Math.min(...frets) - 1), fretMax = Math.max(...frets) + 1;
-  const cache = new Map(); let nPng = 0;
+  const cache = new Map(); let nPng = 0, framePage = null;
+  const t0 = Date.now(), lap = []; const mark = n => lap.push(`${n} ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   for (const s of steps) {
     const sig = s.caption + '|' + (s.metro ? `${s.metro.bpm}:${s.metro.beat}` : '') + '|' + notes.map(n => s.state.get(key(n))[0]).join('');
     if (!cache.has(sig)) {
       const data = { title: `Escala de ${root} mayor · Forma ${posLabel}${args.closed ? ' cerrada' : ''}`, subtitle: tempos ? 'Patrones melódicos de la escala mayor' : 'Secuencias dentro de la posición', caption: s.caption, metro: s.metro, fretMin, fretMax,
         notes: notes.map(n => ({ string: n.string, fret: n.fret, label: n.label, isRoot: n.isRoot, state: s.state.get(key(n)) })) };
-      const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-      await page.addInitScript(d => { window.__DATA__ = d; }, data);
-      await page.goto(frameUrl);
+      if (!framePage) { framePage = await browser.newPage({ viewport: { width: 1600, height: 900 } }); await framePage.goto(frameUrl); }
+      await framePage.evaluate(d => render(d), data);                               // una sola página para todos los fotogramas
       const png = path.join(tmp, `f${String(nPng++).padStart(4, '0')}.png`);
-      await page.screenshot({ path: png });
-      await page.close();
+      await framePage.screenshot({ path: png });
       cache.set(sig, png);
     }
     s.png = cache.get(sig);
   }
 
+  mark('fotogramas');
   let t = 0; const events = [];
   steps.forEach(s => { if (s.sound) events.push({ t, freq: 82.4069 * Math.pow(2, (s.sound.midi - 40) / 12) }); t += s.dur; });
   const total = t;
   const wav = path.join(tmp, 'notas.wav');
   fs.writeFileSync(wav, Buffer.from(await app.evaluate(renderToneTrackInPage, { events, total }), 'base64'));
   await browser.close();
+  mark('audio');
 
   // Cortes secos (concat con duraciones): en secuencias rápidas un fundido por nota emborrona.
   const list = path.join(tmp, 'list.txt');
@@ -211,5 +217,6 @@ function parseArgs(argv) {
   await execFileP('nice', ['-n', '19', 'ffmpeg', '-loglevel', 'error', '-y', '-threads', '2', '-f', 'concat', '-safe', '0', '-i', list, '-i', wav, ...clickArgs,
     '-vf', 'fps=25,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', out], { maxBuffer: 1 << 24 });
   fs.rmSync(tmp, { recursive: true, force: true });
-  console.log(`✓ ${out} (${total.toFixed(1)} s, ${steps.length} pasos, ${nPng} fotogramas distintos)`);
+  mark('vídeo');
+  console.log(`✓ ${out} (${total.toFixed(1)} s, ${steps.length} pasos, ${nPng} fotogramas distintos; ${lap.join(', ')})`);
 })().catch(e => { console.error(e.stderr || e); process.exitCode = 1; });
