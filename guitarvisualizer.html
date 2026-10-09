@@ -2057,7 +2057,12 @@ body.presentation #channelWatermark{display:flex;}
           <button class="mi-btn" id="miStaffBtn" onclick="miToggleStaff()" title="Muestra/oculta un pentagrama (clave de sol, octava baja como en los libros de guitarra) con las notas pintadas en el mástil"><i class="ti ti-music"></i> Pentagrama</button>
           <button class="mi-btn" id="miStaffModeBtn" onclick="miToggleStaffMode()" style="display:none;" title="Acorde: todas las notas apiladas en una columna. Secuencia: una tras otra, de grave a agudo"><span id="miStaffModeLbl">Acorde</span></button>
           <button class="mi-btn" id="miStaffPinBtn" onclick="miPinStaff()" style="display:none;" title="Fija este pentagrama con sus notas (en el mástil pasan a fantasma, que puedes volver a pintar) y empieza uno nuevo vacío para la siguiente posición. Arrástralo a donde quieras; la ✕ (al pasar el ratón) lo quita junto con sus fantasmas"><i class="ti ti-pin"></i> Fijar</button>
-          <button class="mi-btn active" id="miIvTagsBtn" onclick="miToggleIvTags()" title="4 estados: solo ascendente (desde la tónica) → + descendente (desde el final, sentido contrario) → intervalos ocultos → sin franja de notas (deja libre esa zona; el mástil no cambia)"><i class="ti ti-arrows-vertical"></i> <span>Ver intervalos</span></button>
+          <select id="miIvTagsSel" class="mi-play-select" onchange="miSetIvTags(this.value)" title="Qué se ve en la franja de notas. Se elige directamente (antes era un botón que iba pasando por los cuatro estados)">
+            <option value="up" selected>Ver intervalos</option>
+            <option value="both">Ver intervalos (2 sentidos)</option>
+            <option value="off">Intervalos ocultos</option>
+            <option value="nostrip">Sin franja de notas</option>
+          </select>
         </div>
         <div class="mi-toolbar-group">
           <button class="mi-btn" id="miClickModeBtn" onclick="miToggleClickMode()" title="Pintar: el click revela/oculta notas y suena. Sonar: el click solo reproduce la nota (aparece un instante si no estaba pintada), sin cambiar lo dibujado"><i class="ti ti-pointer"></i> <span id="miClickModeLbl">Pintar</span></button>
@@ -16059,14 +16064,14 @@ function miToggleAnim(){
   miAnimEnabled=!miAnimEnabled;
   const b=document.getElementById('miAnimBtn');if(b)b.classList.toggle('active',miAnimEnabled);
 }
-function miToggleIvTags(){
-  miIvTagsMode={up:'both',both:'off',off:'nostrip',nostrip:'up'}[miIvTagsMode]||'up';
-  const b=document.getElementById('miIvTagsBtn');
-  if(b){
-    b.classList.toggle('active',miIvTagsMode==='up'||miIvTagsMode==='both');
-    const lbl={up:'Ver intervalos',both:'Ver intervalos (2 sentidos)',off:'Intervalos ocultos',nostrip:'Sin franja de notas'}[miIvTagsMode];
-    const span=b.querySelector('span');if(span)span.textContent=lbl;
-  }
+// Franja de notas: se ELIGE el estado directamente en el desplegable (pedido de Alberto: con el botón
+// cíclico, para ir de un estado a otro había que pasar por los intermedios y la franja desaparecía a
+// mitad de una explicación).
+function miSetIvTags(mode){
+  if(!['up','both','off','nostrip'].includes(mode))mode='up';
+  if(mode===miIvTagsMode)return;
+  miIvTagsMode=mode;
+  const sel=document.getElementById('miIvTagsSel');if(sel&&sel.value!==mode)sel.value=mode;
   // "Medir distancia" (Shift+click, flecha amarilla) queda referida a la posición de dos notas en
   // la franja — al cambiar este modo cambia el formato de esa franja, así que se suelta la
   // selección (igual que ya hace miTonicChanged) en vez de dejar la flecha/texto de una medición
@@ -16074,6 +16079,10 @@ function miToggleIvTags(){
   // desaparecer").
   miMeasureSel=[];
   miRender();
+}
+// Compatibilidad: avanza al estado siguiente, como hacía el botón antiguo.
+function miToggleIvTags(){
+  miSetIvTags({up:'both',both:'off',off:'nostrip',nostrip:'up'}[miIvTagsMode]||'up');
 }
 // La tabla aparece subiendo desde abajo (y se va bajando) en vez de aparecer/desaparecer de golpe
 // — pedido de Alberto. Clases mi-in/mi-out = las animaciones del CSS (miLegendRise/miLegendFade).
