@@ -9,6 +9,7 @@
  * Cada GRUPO ocupa un pulso: terceras = corcheas, triadas = tresillos, cuatriadas = semicorcheas
  * (en el modo progresivo las cuatriadas van en corcheas, 2 pulsos por acorde, como en el ejemplo 6 de
  * "Everything You Need To Learn For Jazz Guitar").
+ *   grupos3     C-D-E, D-E-F…  (tresillos)      grupos4   C-D-E-F, D-E-F-G…  (semicorcheas)
  *   terceras    C-E, D-F, E-G…            (grados i, i+2)
  *   triadas     C-E-G, D-F-A…  + acorde   (i, i+2, i+4)
  *   cuatriadas  C-E-G-B, D-F-A-C… + acorde (i, i+2, i+4, i+6)
@@ -38,6 +39,8 @@ const { renderToneTrackInPage } = require('./lib/pluck-audio');
 const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
 const POS_LABELS = ['E', 'D', 'C', 'A', 'G'];
 const SEQS = {
+  grupos3:    { name: 'Grupos de 3 notas',     span: [0, 1, 2], file: 'EscalasPorGruposDe3' },       // 1-2-3, 2-3-4… en tresillos (un grupo por pulso)
+  grupos4:    { name: 'Grupos de 4 notas',     span: [0, 1, 2, 3], file: 'EscalasPorGruposDe4' },    // 1-2-3-4, 2-3-4-5… en semicorcheas (un grupo por pulso)
   terceras:   { name: 'Terceras',              span: [0, 2], file: 'EscalasPorTerceras' },
   triadas:    { name: 'Triadas diatónicas',    span: [0, 2, 4], file: 'EscalasPorTriadas',   suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },
   cuatriadas: { name: 'Arpegios de 7ª diatónicos', span: [0, 2, 4, 6], file: 'EscalasPorSeptimas', progBeats: 2, suffix: ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'] },
@@ -199,7 +202,7 @@ function parseArgs(argv) {
     if (!cache.has(sig)) {
       const data = { title: `Escala de ${root} mayor · Forma ${posLabel}${args.closed ? ' cerrada' : ''}`, subtitle: tempos ? `Patrones melódicos · ${SEQS[seqKeys[0]].name}` : 'Secuencias dentro de la posición', caption: s.caption, metro: s.metro,
         ladder: tempos && s.lap !== undefined ? { tempos: ladderTempos, cur: ladderTempos.indexOf(tempos[s.lap]) } : undefined,
-        strip: s.strip && tempos ? { items: stripItems(seqKeys[0]), on: s.strip.on, q: s.strip.q, pill: !SEQS[seqKeys[0]].suffix } : undefined, fretMin, fretMax,
+        strip: s.strip && tempos ? { items: stripItems(seqKeys[0]), on: s.strip.on, q: s.strip.q, pill: seqKeys[0] === 'terceras' } : undefined, fretMin, fretMax,
         notes: notes.map(n => ({ string: n.string, fret: n.fret, label: n.label, isRoot: n.isRoot, state: s.state.get(key(n)), ring: s.ring === key(n) })) };
       if (!framePage) { framePage = await browser.newPage({ viewport: { width: 1600, height: 900 } }); await framePage.goto(frameUrl); }
       await framePage.evaluate(d => render(d), data);                               // una sola página para todos los fotogramas
