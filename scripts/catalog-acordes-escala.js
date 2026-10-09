@@ -17,6 +17,10 @@
  * --series acordes7 | arpegios7: las mismas dos series con acordes de 7ª (ficheros EscalaCCambiosaTodosGradosCon7 …,
  * miniaturas en ~/Downloads/SUBIREscalaCCambiosaTodosGradosCon7/<acordes|arpegios>/thumbnails). Su lista pública
  * ("Acordes de 7ª en la escala" / "Arpegios de 7ª") se busca por nombre y se crea si no existe.
+ * --series maraton: los vídeos largos "Explora la posición" (ficheros <K> Forma<X>[ Cerrada] ExploraLaPosicion) como
+ * "Maratón de la escala de <Tono> mayor en la Forma <X> (CAGED) | 9 ejercicios sin mover la mano izquierda": lista pública
+ * "Maratón de la escala mayor (CAGED)", capítulos de cada vídeo en la descripción (--chapters <dir>, por defecto
+ * ~/guitar-visualizer-assets/fuentes-descargas/PosicionEscala) y enlaces a las listas de cada ejercicio suelto.
  * --thumbs <dir>: carpeta de miniaturas alternativa (p.ej. si macOS no deja leer ~/Downloads).
  *
  * Uso: node scripts/catalog-acordes-escala.js --key C --publish-at 2026-10-05T10:00:00Z [--series arpegios] [--dry-run]
@@ -31,11 +35,14 @@ const a = {};
 for (let i = 2; i < process.argv.length; i++) { const k = process.argv[i]; if (k.startsWith('--')) { const n = process.argv[i + 1]; if (n === undefined || n.startsWith('--')) a[k.slice(2)] = true; else { a[k.slice(2)] = n; i++; } } }
 const KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'Fs', 'Db', 'Ab', 'Eb', 'Bb', 'F']; // círculo de quintas
 const SERIE = a.series || 'acordes'; // acordes | arpegios | acordes7 | arpegios7
-if (!a['publish-at'] || !KEYS.includes(a.key) || !['acordes', 'arpegios', 'acordes7', 'arpegios7'].includes(SERIE)) { console.error(`Uso: --key <${KEYS.join('|')}> --publish-at <ISO> [--series acordes|arpegios|acordes7|arpegios7]`); process.exit(1); }
+if (!a['publish-at'] || !KEYS.includes(a.key) || !['acordes', 'arpegios', 'acordes7', 'arpegios7', 'maraton'].includes(SERIE)) { console.error(`Uso: --key <${KEYS.join('|')}> --publish-at <ISO> [--series acordes|arpegios|acordes7|arpegios7|maraton]`); process.exit(1); }
 const DRY = !!a['dry-run'], K = a.key, ARP = SERIE.startsWith('arpegios'), SEV = SERIE.endsWith('7');
+const MAR = SERIE === 'maraton', NEW = SEV || MAR;   // NEW: la lista pública se busca por nombre y se crea si no existe
 const KIND = ARP ? 'arpegios' : 'acordes', FILE = SEV ? 'EscalaCCambiosaTodosGradosCon7' : 'EscalaCTriadasEscala';
 const ROOT = path.resolve(__dirname, '..');
-const THUMBS = a.thumbs ? path.resolve(a.thumbs) : path.join(os.homedir(), 'Downloads', a.dir || `SUBIR${FILE}`, KIND, 'thumbnails');
+const ASSETS = path.join(os.homedir(), 'guitar-visualizer-assets');
+const CHAPS = path.resolve(a.chapters || path.join(ASSETS, 'fuentes-descargas', 'PosicionEscala'));   // maraton: <K>_Forma<X>[_Cerrada]_ExploraLaPosicion_capitulos.txt
+const THUMBS = a.thumbs ? path.resolve(a.thumbs) : MAR ? path.join(ASSETS, 'miniaturas-maraton') : path.join(os.homedir(), 'Downloads', a.dir || `SUBIR${FILE}`, KIND, 'thumbnails');
 const DONE = path.resolve(a.done || path.join(__dirname, `.catalog-${SERIE}-done.txt`));
 const done = new Set(fs.existsSync(DONE) ? fs.readFileSync(DONE, 'utf8').split('\n').filter(Boolean) : []);
 
@@ -57,9 +64,11 @@ const DEG7 = ['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viiø'];
 // acordes: la antigua "Acordes en acción" (se renombra si aún tiene el nombre viejo); arpegios: la lista
 // pública "Arpegios de triadas" que ya existía (no se renombra).
 // Séptimas: lista pública propia, buscada por nombre y creada si no existe (el ID se resuelve en main).
-let PL_SERIE_ID = SEV ? null : ARP ? 'PLtLRU6jwtF902134G2SGUo30f3nn6emr5' : 'PLtLRU6jwtF92QqPYkiNgIkAriC5lG8997';
-const PL_SERIE = SEV ? (ARP ? 'Arpegios de 7ª' : 'Acordes de 7ª en la escala') : ARP ? null : 'Acordes de la escala en cada posición (CAGED)';
-const PL_SERIE_DESC = ARP
+let PL_SERIE_ID = NEW ? null : ARP ? 'PLtLRU6jwtF902134G2SGUo30f3nn6emr5' : 'PLtLRU6jwtF92QqPYkiNgIkAriC5lG8997';
+const PL_SERIE = MAR ? 'Maratón de la escala mayor (CAGED)' : SEV ? (ARP ? 'Arpegios de 7ª' : 'Acordes de 7ª en la escala') : ARP ? null : 'Acordes de la escala en cada posición (CAGED)';
+const PL_SERIE_DESC = MAR
+  ? 'Todo lo que se puede tocar con la escala mayor sin salir de una posición del sistema CAGED: nueve ejercicios encadenados, de la escala a los arpegios de 7ª, en las 12 tonalidades y forma a forma. El resumen de las series del canal sobre la escala mayor.'
+  : ARP
   ? 'El arpegio de 7ª de cada acorde de la escala mayor (maj7, m7, 7 y m7b5) sin salir de una posición del sistema CAGED. Las 12 tonalidades, forma a forma, con la progresión de acordes sonando de fondo.'
   : 'Los acordes de 7ª de la escala mayor (maj7, m7, 7 y m7b5) sin salir de una posición del sistema CAGED. Las 12 tonalidades, forma a forma, con la progresión de acordes sonando de fondo.';
 // Los arpegios se subieron con el MISMO nombre de fichero que tuvieron las tónicas ("… <Tono> Notas forma<X>"):
@@ -67,8 +76,48 @@ const PL_SERIE_DESC = ARP
 const ARP_SINCE = '2026-10-02';
 const PL_KEY = (k) => `Ejercicios en ${NAME(k)} mayor`;
 const TITLE_HEAD = SEV ? (ARP ? 'Arpegios de 7ª de los acordes de' : 'Acordes de 7ª de la escala de') : ARP ? 'Arpegios de los acordes de' : 'Acordes de la escala de';
-const titleFor = (k, f, cerrada) => `${TITLE_HEAD} ${NAME(k)} mayor sin mover la mano izquierda | Forma ${f}${cerrada ? ' cerrada' : ''} (CAGED)`;
+// Maratón (vídeos largos "Explora la posición"): título aprobado por Alberto 2026-10-09; las cerradas pasan de 100 caracteres → coletilla corta.
+const maratonTitle = (k, f, cerrada) => { const h = `Maratón de la escala de ${NAME(k)} mayor en la Forma ${f}${cerrada ? ' cerrada' : ''} (CAGED) | `, t = h + '9 ejercicios sin mover la mano izquierda'; return t.length <= 100 ? t : h + '9 ejercicios en una posición'; };
+// Listas del canal a las que enlaza cada maratón (capítulo → ejercicio suelto); los IDs se resuelven por nombre en main.
+const MAR_LINKS = [['La escala mayor (modo jónico)', 'Modo Jónico'], ['Tónicas de los acordes', 'Localiza las notas en el mástil'], ['Tríadas en la escala', 'Triadas en la escala'],
+  ['Acordes de la escala', 'Acordes de la escala en cada posición (CAGED)'], ['Arpegios de las tríadas', 'Arpegios de triadas'], ['Pentatónica menor', 'Pentatónica menor'],
+  ['Pentatónica mayor', 'Pentatónica Mayor'], ['Acordes de 7ª', 'Acordes de 7ª en la escala'], ['Arpegios de 7ª', 'Arpegios de 7ª']];
+let LISTS = {};
+const plUrl = (id) => `https://www.youtube.com/playlist?list=${id}`;
+function maratonDescription(k, f, cerrada) {
+  const n = NAME(k), forma = `Forma ${f}${cerrada ? ' cerrada' : ''}`;
+  const chFile = path.join(CHAPS, `${k}_Forma${f}${cerrada ? '_Cerrada' : ''}_ExploraLaPosicion_capitulos.txt`);
+  const caps = fs.readFileSync(chFile, 'utf8').trim();
+  if (!/^0:00 /.test(caps) || caps.split('\n').length !== 9) throw new Error(`capítulos inesperados en ${chFile}`);
+  const ch = CHORDS[k].split(' ').map((c, i) => `${DEG[i]} ${c}`).join(' · '), ch7 = CHORDS7(k).map((c, i) => `${DEG7[i]} ${c}`).join(' · ');
+  return `Todo lo que se puede tocar con la escala de ${n} mayor sin salir de una sola posición: la ${forma} del sistema CAGED. Nueve ejercicios encadenados, de la escala a los arpegios de 7ª, sin mover la mano izquierda por el mástil.
+
+Es el resumen de las series del canal sobre la escala mayor: si ya has practicado los ejercicios por separado, aquí los tienes todos seguidos para repasar la posición de una sentada.${cerrada ? `
+
+🔒 Versión cerrada: la misma Forma ${f}, 12 trastes más arriba y sin cuerdas al aire.` : ''}
+
+⏱️ Capítulos
+${caps}
+
+🎸 Los acordes de ${n} mayor
+${ch}
+${ch7}
+
+🎯 Cómo practicarlo
+1. Toca encima desde el principio, capítulo a capítulo: todo sale de las mismas notas de la escala.
+2. Si un ejercicio se te resiste, trabájalo aparte: cada uno tiene su propia lista (abajo), en las 12 tonalidades y a su ritmo.
+3. Cuando sigas el maratón entero sin perderte, cambia de forma: las 5 formas juntas cubren todo el mástil.
+
+📚 Cada ejercicio por separado
+${MAR_LINKS.map(([label, list]) => `· ${label}: ${plUrl(LISTS[list])}`).join('\n')}
+
+🏃 Todos los maratones: ${plUrl(PL_SERIE_ID)}
+
+#guitarra #CAGED #escalamayor #tríadas #arpegios #pentatónica`;
+}
+const titleFor = (k, f, cerrada) => MAR ? maratonTitle(k, f, cerrada) : `${TITLE_HEAD} ${NAME(k)} mayor sin mover la mano izquierda | Forma ${f}${cerrada ? ' cerrada' : ''} (CAGED)`;
 function description(k, f, cerrada) {
+  if (MAR) return maratonDescription(k, f, cerrada);
   const serieUrl = `https://www.youtube.com/playlist?list=${PL_SERIE_ID}`;
   const n = NAME(k), ch = CHORDS[k].split(' ').map((c, i) => `${DEG[i]} ${c}`).join(' · ');
   const ch7 = CHORDS7(k).map((c, i) => `${DEG7[i]} ${c}`).join(' · ');
@@ -154,6 +203,9 @@ ${ch}
 }
 const tagsFor = (k, f) => {
   const n = NAME(k);
+  if (MAR) return ['guitarra', 'escala mayor', `escala de ${n} mayor`, `${n} mayor`, 'CAGED', 'sistema CAGED', `forma ${f}`, `forma ${f} CAGED`, 'posiciones de la escala mayor',
+    'tríadas', 'acordes de la escala', 'arpegios', 'pentatónica', 'acordes de séptima', 'arpegios de séptima', 'relación acorde-escala', 'armonía', 'mástil de guitarra',
+    'improvisación', 'ejercicios de guitarra', 'rutina de guitarra', 'backing track', 'guitar', 'CAGED system', 'major scale', 'fretboard'];
   if (SEV && ARP) return ['guitarra', 'arpegios', 'arpegios de séptima', 'arpegios de 7ª', 'arpegios de guitarra', `arpegios en ${n} mayor`, `escala de ${n} mayor`, `${n} mayor`,
     'CAGED', 'sistema CAGED', `forma ${f}`, `forma ${f} CAGED`, 'escala mayor', 'acordes de séptima', 'maj7 m7 7 m7b5', 'notas del acorde',
     'relación acorde-escala', 'armonía', 'mástil de guitarra', 'improvisación', 'ejercicios de guitarra', 'backing track',
@@ -171,7 +223,7 @@ const tagsFor = (k, f) => {
     'relación acorde-escala', 'armonía', 'mástil de guitarra', 'improvisación', 'ejercicios de guitarra', 'backing track',
     'guitar', 'CAGED system', 'major scale chords', 'chord shapes', 'fretboard'];
 };
-const thumbFor = (k, f, cerrada) => path.join(THUMBS, `${FILE}-${k}${ARP ? '' : '_FormasAcorde'}_Notas_forma${f}${cerrada ? '_cerrada' : ''}.jpg`);
+const thumbFor = (k, f, cerrada) => MAR ? path.join(THUMBS, `${k}_Forma${f}${cerrada ? '_Cerrada' : ''}_ExploraLaPosicion.jpg`) : path.join(THUMBS, `${FILE}-${k}${ARP ? '' : '_FormasAcorde'}_Notas_forma${f}${cerrada ? '_cerrada' : ''}.jpg`);
 const idOf = (k, f, cerrada) => `${k}-${f}${cerrada ? '-cerrada' : ''}`;
 
 (async () => {
@@ -193,7 +245,10 @@ const idOf = (k, f, cerrada) => `${k}-${f}${cerrada ? '-cerrada' : ''}`;
     for (const v of r.data.items) {
       const t = v.snippet.title;
       let m;
-      if (SEV) {
+      if (MAR) {
+        if ((m = t.match(/^([A-G](?:s|b)?)[ _-]Forma([CAGED])([ _-]Cerrada)?[ _-]ExploraLaPosicion$/))) vids[idOf(m[1], m[2], m[3])] = v;
+        else if ((m = t.match(/^Maratón de la escala de ([A-G][#b]?) mayor en la Forma ([CAGED])( cerrada)? \(CAGED\) \| /))) vids[idOf(m[1].replace('#', 's'), m[2], m[3])] = v;
+      } else if (SEV) {
         const raw = new RegExp(`^${FILE}[ _-]([A-G](?:s|b)?)[ _-]${ARP ? '' : 'FormasAcorde[ _-]'}Notas[ _-]forma([CAGED])([ _-]cerrada)?$`);
         const fin = new RegExp(`^${TITLE_HEAD} ([A-G][#b]?) mayor sin mover la mano izquierda \\| Forma ([CAGED])( cerrada)? \\(CAGED\\)$`);
         if ((m = t.match(raw))) vids[idOf(m[1], m[2], m[3])] = v;
@@ -212,8 +267,8 @@ const idOf = (k, f, cerrada) => `${k}-${f}${cerrada ? '-cerrada' : ''}`;
   if (sinForma.length) console.log(`⚠ no encuentro subidas las formas: ${sinForma.join(', ')}`);
 
   // Lista de la serie: mismo ID de siempre, nombre nuevo (playlists.update reemplaza el snippet entero).
-  const serie = SEV ? null : (await yt.playlists.list({ part: ['snippet'], id: [PL_SERIE_ID] })).data.items[0];
-  if (!SEV && PL_SERIE && serie.snippet.title !== PL_SERIE) {
+  const serie = NEW ? null : (await yt.playlists.list({ part: ['snippet'], id: [PL_SERIE_ID] })).data.items[0];
+  if (!NEW && PL_SERIE && serie.snippet.title !== PL_SERIE) {
     if (DRY) console.log(`[dry] renombraría la lista "${serie.snippet.title}" → "${PL_SERIE}"`);
     else {
       await yt.playlists.update({ part: ['snippet'], requestBody: { id: PL_SERIE_ID, snippet: { title: PL_SERIE, description: serie.snippet.description, defaultLanguage: serie.snippet.defaultLanguage || 'es' } } });
@@ -222,7 +277,9 @@ const idOf = (k, f, cerrada) => `${k}-${f}${cerrada ? '-cerrada' : ''}`;
   }
   const lists = {}; pt = undefined;
   do { const r = await yt.playlists.list({ part: ['snippet'], mine: true, maxResults: 50, pageToken: pt }); for (const p of r.data.items) lists[p.snippet.title] = p.id; pt = r.data.nextPageToken; } while (pt);
-  if (SEV) {
+  LISTS = lists;
+  if (MAR) { const faltan = MAR_LINKS.map(([, l]) => l).filter((l) => !lists[l]); if (faltan.length) throw new Error(`no encuentro las listas: ${faltan.join(', ')}`); }
+  if (NEW) {
     PL_SERIE_ID = lists[PL_SERIE];
     if (!PL_SERIE_ID && DRY) console.log(`[dry] crearía la lista pública "${PL_SERIE}"`);
     else if (!PL_SERIE_ID) {
