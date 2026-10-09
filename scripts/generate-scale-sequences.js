@@ -83,6 +83,7 @@ function parseArgs(argv) {
   const root = args.root || 'C', posLabel = (args.position || 'E').toUpperCase(), bpm = parseFloat(args.bpm || 60);
   const posIdx = POS_LABELS.indexOf(posLabel);
   const seqKeys = (args.seqs || 'terceras,triadas,cuatriadas').split(',').map(s => s.trim()).filter(s => SEQS[s]);
+  if (args['seq-name'] && seqKeys.length) SEQS[seqKeys[0]] = { ...SEQS[seqKeys[0]], name: String(args['seq-name']) };   // rótulo en pantalla alternativo (p.ej. "Tríadas diatónicas" con tilde)
   const beat = 60 / bpm;
   const tempos = args.tempos ? String(args.tempos).split(',').map(Number).filter(n => n > 0) : null;
   const ruta = args.ruta === 'caja' || args.ruta === 'tonica' ? args.ruta : (tempos ? 'caja' : 'tonica');   // progresivo: posición entera por defecto
