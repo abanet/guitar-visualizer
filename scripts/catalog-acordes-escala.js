@@ -56,7 +56,7 @@ const CHORDS = {
   Bb: 'Bb Cm Dm Eb F Gm Adim', F: 'F Gm Am Bb C Dm Edim',
 };
 const DEG = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
-// Séptimas diatónicas: misma fundamental que la tríada, con su 7ª (maj7, m7, m7, maj7, 7, m7, m7b5).
+// Séptimas diatónicas: misma fundamental que la triada, con su 7ª (maj7, m7, m7, maj7, 7, m7, m7b5).
 const SUF7 = ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'];
 const CHORDS7 = (k) => CHORDS[k].split(' ').map((c, i) => c.replace(/(m|dim)$/, '') + SUF7[i]);
 const DEG7 = ['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viiø'];
@@ -79,15 +79,15 @@ const TITLE_HEAD = SEV ? (ARP ? 'Arpegios de 7ª de los acordes de' : 'Acordes d
 // Maratón (vídeos largos "Explora la posición"): título aprobado por Alberto 2026-10-09; las cerradas pasan de 100 caracteres → coletilla corta.
 const maratonTitle = (k, f, cerrada) => { const h = `Maratón de la escala de ${NAME(k)} mayor en la Forma ${f}${cerrada ? ' cerrada' : ''} (CAGED) | `, t = h + '9 ejercicios sin mover la mano izquierda'; return t.length <= 100 ? t : h + '9 ejercicios en una posición'; };
 // Listas del canal a las que enlaza cada maratón (capítulo → ejercicio suelto); los IDs se resuelven por nombre en main.
-const MAR_LINKS = [['La escala mayor (modo jónico)', 'Modo Jónico'], ['Tónicas de los acordes', 'Localiza las notas en el mástil'], ['Tríadas en la escala', 'Triadas en la escala'],
-  ['Acordes de la escala', 'Acordes de la escala en cada posición (CAGED)'], ['Arpegios de las tríadas', 'Arpegios de triadas'], ['Pentatónica menor', 'Pentatónica menor'],
+const MAR_LINKS = [['La escala mayor (modo jónico)', 'Modo Jónico'], ['Tónicas de los acordes', 'Localiza las notas en el mástil'], ['Triadas en la escala', 'Triadas en la escala'],
+  ['Acordes de la escala', 'Acordes de la escala en cada posición (CAGED)'], ['Arpegios de las triadas', 'Arpegios de triadas'], ['Pentatónica menor', 'Pentatónica menor'],
   ['Pentatónica mayor', 'Pentatónica Mayor'], ['Acordes de 7ª', 'Acordes de 7ª en la escala'], ['Arpegios de 7ª', 'Arpegios de 7ª']];
 let LISTS = {};
 const plUrl = (id) => `https://www.youtube.com/playlist?list=${id}`;
 function maratonDescription(k, f, cerrada) {
   const n = NAME(k), forma = `Forma ${f}${cerrada ? ' cerrada' : ''}`;
   const chFile = path.join(CHAPS, `${k}_Forma${f}${cerrada ? '_Cerrada' : ''}_ExploraLaPosicion_capitulos.txt`);
-  const caps = fs.readFileSync(chFile, 'utf8').trim();
+  const caps = fs.readFileSync(chFile, 'utf8').trim().replace(/tríada/g, 'triada').replace(/Tríada/g, 'Triada');   // Alberto escribe "triada" sin tilde
   if (!/^0:00 /.test(caps) || caps.split('\n').length !== 9) throw new Error(`capítulos inesperados en ${chFile}`);
   const ch = CHORDS[k].split(' ').map((c, i) => `${DEG[i]} ${c}`).join(' · '), ch7 = CHORDS7(k).map((c, i) => `${DEG7[i]} ${c}`).join(' · ');
   return `Todo lo que se puede tocar con la escala de ${n} mayor sin salir de una sola posición: la ${forma} del sistema CAGED. Nueve ejercicios encadenados, de la escala a los arpegios de 7ª, sin mover la mano izquierda por el mástil.
@@ -113,7 +113,7 @@ ${MAR_LINKS.map(([label, list]) => `· ${label}: ${plUrl(LISTS[list])}`).join('\
 
 🏃 Todos los maratones: ${plUrl(PL_SERIE_ID)}
 
-#guitarra #CAGED #escalamayor #tríadas #arpegios #pentatónica`;
+#guitarra #CAGED #escalamayor #triadas #arpegios #pentatónica`;
 }
 const titleFor = (k, f, cerrada) => MAR ? maratonTitle(k, f, cerrada) : `${TITLE_HEAD} ${NAME(k)} mayor sin mover la mano izquierda | Forma ${f}${cerrada ? ' cerrada' : ''} (CAGED)`;
 function description(k, f, cerrada) {
@@ -133,7 +133,7 @@ ${ch7}
 
 🎯 Cómo practicarlo
 1. Toca cada arpegio despacio, de la nota más grave a la más aguda y vuelta, mientras suena su acorde.
-2. Compáralo con la tríada: solo añades una nota, la 7ª. Localízala y fíjate en cómo cambia el color del acorde.
+2. Compáralo con la triada: solo añades una nota, la 7ª. Localízala y fíjate en cómo cambia el color del acorde.
 3. Empieza cada arpegio por la nota más cercana a donde acabaste el anterior, sin volver siempre a la tónica.
 4. Improvisa con la escala apoyándote en la 3ª y la 7ª de cada acorde: son las dos notas que mejor lo definen.
 
@@ -151,18 +151,18 @@ ${ch7}
 
 🎯 Cómo practicarlo
 1. Primero toca solo los acordes, siguiendo el vídeo. Si alguna forma te resulta incómoda quita notas: con la 3ª y la 7ª ya suena el acorde.
-2. Compara cada acorde con su tríada: solo cambia una nota, la 7ª.
+2. Compara cada acorde con su triada: solo cambia una nota, la 7ª.
 3. Improvisa con la escala y, cuando cambie el acorde, pasa más a menudo por sus notas.
 4. Termina tus frases en la 3ª o en la 7ª del acorde que suena.
 
-💡 Los acordes de 7ª son los de las tríadas con una nota más, y son los que se usan en jazz, blues, soul y bossa. Verlos dentro de la escala te permite acompañar e improvisar en la misma zona del mástil. Cuando domines una forma pasa a la siguiente: las 5 formas juntas cubren todo el mástil.
+💡 Los acordes de 7ª son los de las triadas con una nota más, y son los que se usan en jazz, blues, soul y bossa. Verlos dentro de la escala te permite acompañar e improvisar en la misma zona del mástil. Cuando domines una forma pasa a la siguiente: las 5 formas juntas cubren todo el mástil.
 
 📚 La serie completa (12 tonalidades × 5 formas): ${serieUrl}
 
 #guitarra #CAGED #acordes #acordesde7 #escalamayor #improvisación`;
   if (ARP) return `El arpegio de cada acorde de la escala de ${n} mayor sin salir de una sola posición: la Forma ${f}${cerrada ? ' cerrada' : ''} del sistema CAGED. Sigues los cambios de acorde sin mover la mano izquierda por el mástil.
 
-Suena la progresión de los acordes de ${n} mayor y, en cada uno, se iluminan las notas de su tríada (tónica, 3ª y 5ª) dentro de la posición, con el nombre de cada nota. La escala queda de fondo como referencia.${cerrada ? `
+Suena la progresión de los acordes de ${n} mayor y, en cada uno, se iluminan las notas de su triada (tónica, 3ª y 5ª) dentro de la posición, con el nombre de cada nota. La escala queda de fondo como referencia.${cerrada ? `
 
 🔒 Versión cerrada: la misma Forma ${f}, 12 trastes más arriba y sin cuerdas al aire.` : ''}
 
@@ -177,9 +177,9 @@ ${ch}
 
 💡 Los arpegios son el puente entre los acordes y la escala: te dicen qué notas suenan "dentro" en cada momento. Cuando domines una forma pasa a la siguiente: las 5 formas juntas cubren todo el mástil.
 
-📚 Más ejercicios de arpegios de tríadas: ${serieUrl}
+📚 Más ejercicios de arpegios de triadas: ${serieUrl}
 
-#guitarra #CAGED #arpegios #tríadas #escalamayor #improvisación`;
+#guitarra #CAGED #arpegios #triadas #escalamayor #improvisación`;
   return `Los 7 acordes de la escala de ${n} mayor sin salir de una sola posición: la Forma ${f}${cerrada ? ' cerrada' : ''} del sistema CAGED. Cambias de acorde sin mover la mano izquierda por el mástil.
 
 Suena la progresión de los acordes de ${n} mayor y, en cada uno, se ilumina una forma de ese acorde dentro de la posición, con el nombre de cada nota. La escala queda de fondo como referencia, para que veas de qué notas de la escala está hecho cada acorde.${cerrada ? `
@@ -190,7 +190,7 @@ Suena la progresión de los acordes de ${n} mayor y, en cada uno, se ilumina una
 ${ch}
 
 🎯 Cómo practicarlo
-1. Primero toca solo los acordes, siguiendo el vídeo. Si alguna forma te resulta incómoda quita notas: con la tríada basta.
+1. Primero toca solo los acordes, siguiendo el vídeo. Si alguna forma te resulta incómoda quita notas: con la triada basta.
 2. Improvisa con la escala y, cuando cambie el acorde, pasa más a menudo por sus notas.
 3. Termina tus frases en una nota del acorde que suena: notas del acorde en los tiempos fuertes, el resto de paso.
 4. Alterna frases con golpes del acorde, sin salir de la posición.
@@ -204,7 +204,7 @@ ${ch}
 const tagsFor = (k, f) => {
   const n = NAME(k);
   if (MAR) return ['guitarra', 'escala mayor', `escala de ${n} mayor`, `${n} mayor`, 'CAGED', 'sistema CAGED', `forma ${f}`, `forma ${f} CAGED`, 'posiciones de la escala mayor',
-    'tríadas', 'acordes de la escala', 'arpegios', 'pentatónica', 'acordes de séptima', 'arpegios de séptima', 'relación acorde-escala', 'armonía', 'mástil de guitarra',
+    'triadas', 'acordes de la escala', 'arpegios', 'pentatónica', 'acordes de séptima', 'arpegios de séptima', 'relación acorde-escala', 'armonía', 'mástil de guitarra',
     'improvisación', 'ejercicios de guitarra', 'rutina de guitarra', 'backing track', 'guitar', 'CAGED system', 'major scale', 'fretboard'];
   if (SEV && ARP) return ['guitarra', 'arpegios', 'arpegios de séptima', 'arpegios de 7ª', 'arpegios de guitarra', `arpegios en ${n} mayor`, `escala de ${n} mayor`, `${n} mayor`,
     'CAGED', 'sistema CAGED', `forma ${f}`, `forma ${f} CAGED`, 'escala mayor', 'acordes de séptima', 'maj7 m7 7 m7b5', 'notas del acorde',
@@ -214,8 +214,8 @@ const tagsFor = (k, f) => {
     'CAGED', 'sistema CAGED', `forma ${f}`, `forma ${f} CAGED`, 'escala mayor', 'maj7 m7 7 m7b5', 'acordes dentro de la escala',
     'relación acorde-escala', 'armonía', 'mástil de guitarra', 'improvisación', 'ejercicios de guitarra', 'backing track',
     'guitar', 'CAGED system', 'seventh chords', 'chord shapes', 'fretboard'];
-  if (ARP) return ['guitarra', 'arpegios', 'arpegios de tríadas', 'arpegios de guitarra', `arpegios en ${n} mayor`, `escala de ${n} mayor`, `${n} mayor`,
-    'CAGED', 'sistema CAGED', `forma ${f}`, `forma ${f} CAGED`, 'escala mayor', 'acordes de la escala', 'tríadas', 'notas del acorde',
+  if (ARP) return ['guitarra', 'arpegios', 'arpegios de triadas', 'arpegios de guitarra', `arpegios en ${n} mayor`, `escala de ${n} mayor`, `${n} mayor`,
+    'CAGED', 'sistema CAGED', `forma ${f}`, `forma ${f} CAGED`, 'escala mayor', 'acordes de la escala', 'triadas', 'notas del acorde',
     'relación acorde-escala', 'armonía', 'mástil de guitarra', 'improvisación', 'ejercicios de guitarra', 'backing track',
     'guitar', 'CAGED system', 'triad arpeggios', 'chord tones', 'fretboard'];
   return ['guitarra', 'acordes de la escala', 'acordes de la escala mayor', `acordes de ${n} mayor`, `escala de ${n} mayor`, `${n} mayor`,

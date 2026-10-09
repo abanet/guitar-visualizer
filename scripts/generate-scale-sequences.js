@@ -6,7 +6,7 @@
  * (pluck del Mástil interactivo); el grupo se queda encendido hasta que empieza el siguiente, para ver
  * su forma. Cada secuencia sube por toda la posición y vuelve a bajar.
  *
- * Cada GRUPO ocupa un pulso: terceras = corcheas, tríadas = tresillos, cuatriadas = semicorcheas
+ * Cada GRUPO ocupa un pulso: terceras = corcheas, triadas = tresillos, cuatriadas = semicorcheas
  * (en el modo progresivo las cuatriadas van en corcheas, 2 pulsos por acorde, como en el ejemplo 6 de
  * "Everything You Need To Learn For Jazz Guitar").
  *   terceras    C-E, D-F, E-G…            (grados i, i+2)
@@ -39,7 +39,7 @@ const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
 const POS_LABELS = ['E', 'D', 'C', 'A', 'G'];
 const SEQS = {
   terceras:   { name: 'Terceras',              span: [0, 2], file: 'EscalasPorTerceras' },
-  triadas:    { name: 'Tríadas diatónicas',    span: [0, 2, 4], file: 'EscalasPorTriadas',   suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },
+  triadas:    { name: 'Triadas diatónicas',    span: [0, 2, 4], file: 'EscalasPorTriadas',   suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },
   cuatriadas: { name: 'Arpegios de 7ª diatónicos', span: [0, 2, 4, 6], file: 'EscalasPorSeptimas', progBeats: 2, suffix: ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'] },
 };
 
@@ -116,7 +116,7 @@ function parseArgs(argv) {
   const baseState = () => new Map(notes.map(n => [key(n), 'ghost']));
   const first = notes.findIndex(n => n.isRoot);
   // Grupos de una vuelta (cada grupo = un pulso). Ruta 'tonica': desde la TÓNICA más grave (no desde la
-  // nota más grave de la caja: la 1ª tríada sería el vii°), subiendo hasta donde quepa el grupo, y de
+  // nota más grave de la caja: la 1ª triada sería el vii°), subiendo hasta donde quepa el grupo, y de
   // vuelta hasta la tónica. Ruta 'caja': tónica grave → arriba → nota más grave de la caja → tónica
   // (recorre la posición entera y dura lo mismo en todas las formas).
   const buildGroups = (sq) => {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera una miniatura por cada vídeo "<Acorde>Drop2.mp4" (tríadas Drop 2) estampando el nombre del
+"""Genera una miniatura por cada vídeo "<Acorde>Drop2.mp4" (triadas Drop 2) estampando el nombre del
 acorde (C, Cm, F#dim, Bbaug...) sobre la pincelada amarilla vacía de la plantilla. Mismo método que
 generate-triad-thumbnails.py: solo se estampa el nombre, tamaño uniforme para todo el lote y centrado
 por tinta real (helpers de generate-bpm-thumbnails.py).
@@ -34,7 +34,7 @@ DEFAULT_TEMPLATE = '~/guitar-visualizer-assets/miniaturas-drop2-prototipo/planti
 
 
 def main():
-    p = argparse.ArgumentParser(description='Miniaturas de tríadas Drop 2: nombre del acorde sobre la plantilla.')
+    p = argparse.ArgumentParser(description='Miniaturas de triadas Drop 2: nombre del acorde sobre la plantilla.')
     p.add_argument('--videos-dir', required=True, help='Carpeta con los <Acorde>Drop2.mp4')
     p.add_argument('--template', default=DEFAULT_TEMPLATE)
     p.add_argument('--font', default='~/Library/Fonts/Anton-Regular.ttf')
