@@ -1,0 +1,175 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!--
+  Fotograma del capítulo 1 del vídeo largo de una posición (scripts/generate-scale-position-intro.js):
+  la posición CAGED de la escala se va construyendo nota a nota. window.__DATA__ =
+    { title, subtitle, caption, fretMin, fretMax, metro?: { bpm, beat 0..3, next? } (metrónomo visual arriba a la derecha, secuencias progresivas),
+      strip?: { items: [{label, sub}], on: [índices encendidos], q?: 'may'|'men' (calidad del intervalo), pill, iv?: '3ª'|'6ª' } (fila de notas/acordes de la escala),
+      ladder?: { tempos: [...], cur } (escalera de tempos abajo),
+      notes: [{string, fret, label, isRoot, state: 'hidden'|'active'|'flash'|'ghost'|'next'|'soon'}] }
+  'next' / 'soon' = fantasma con aro ámbar (fuerte / tenue): las notas que vienen a continuación.
+  'pend' = nota del grupo en curso que aún no ha sonado: mismo color que la activa, muy tenue.
+  ring: true = pista de la 1ª nota del grupo siguiente: borde discontinuo y letra en blanco pleno.
+  Estilo de nota = el de los vídeos (forceOwnNoteStyle): tónica rgba(229,57,53,.45), resto
+  rgba(38,198,218,.5), borde blanco fino; fantasma = discontinuo blanco tenue, como el fondo de
+  escala de los ejercicios de arpegios.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1600px; height: 900px; background: #0d0d0d; overflow: hidden; font-family: Arial, Helvetica, sans-serif; }
+  #title { position: absolute; top: 46px; left: 0; right: 0; text-align: center; font: 700 52px Arial; color: #8ab4ff; text-shadow: 0 0 18px rgba(120,160,255,.45); }
+  #subtitle { position: absolute; top: 112px; left: 0; right: 0; text-align: center; font: 700 22px Arial; color: rgba(255,255,255,.6); letter-spacing: .04em; }
+  #caption { position: absolute; top: 52px; left: 60px; font: 700 30px Arial; color: #111; background: #e2b34f; border-radius: 10px; padding: 8px 18px; letter-spacing: 1px; } #caption:empty { display: none; }
+  #big { position: absolute; top: 150px; left: 0; right: 0; text-align: center; font: 700 64px Arial; color: #8ab4ff; text-shadow: 0 0 20px rgba(120,160,255,.5); }
+  #metro { position: absolute; right: 44px; top: 34px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  #metro .bpm { font: 700 46px Arial; color: #e2b34f; line-height: 46px; }
+  #metro .bpm small { font: 700 22px Arial; color: rgba(226,179,79,.75); margin-left: 8px; }
+  #metro .dots { display: flex; gap: 12px; }
+  #metro .dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,.45); background: rgba(255,255,255,.08); }
+  #metro .dot.on { background: #26c6da; border-color: #fff; box-shadow: 0 0 16px rgba(38,198,218,.8); }
+  #metro .dot.on.one { background: #e53935; box-shadow: 0 0 16px rgba(229,57,53,.8); }
+  #metro .next { font: 700 17px Arial; color: rgba(226,179,79,.95); white-space: nowrap; margin-top: 2px; }
+  #strip { position: absolute; top: 168px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 10px; }
+  #strip .it { min-width: 84px; height: 58px; padding: 0 10px; border-radius: 10px; border: 2px solid rgba(255,255,255,.28); background: rgba(255,255,255,.06); display: flex; flex-direction: column; justify-content: center; align-items: center; }
+  #strip .it b { font: 700 24px Arial; color: rgba(255,255,255,.72); line-height: 26px; }
+  #strip .it small { font: 700 13px Arial; color: rgba(255,255,255,.42); line-height: 15px; }
+  #strip .it.on { background: #e2b34f; border-color: #fff; box-shadow: 0 0 18px rgba(226,179,79,.7); }
+  #strip .it.on b { color: #111; } #strip .it.on small { color: rgba(0,0,0,.6); }
+  #strip .it.on.may { background: #ffa726; box-shadow: 0 0 18px rgba(255,167,38,.75); }
+  #strip .it.on.men { background: #7e9bff; box-shadow: 0 0 18px rgba(126,155,255,.75); }
+  #strip .q { width: 150px; margin-left: 14px; height: 44px; border-radius: 22px; font: 700 21px Arial; color: #111; display: flex; justify-content: center; align-items: center; visibility: hidden; }
+  #strip .q.may { visibility: visible; background: #ffa726; } #strip .q.men { visibility: visible; background: #7e9bff; }
+  #ladder { position: absolute; left: 0; right: 0; bottom: 44px; display: flex; justify-content: center; align-items: center; gap: 6px; }
+  #ladder .t { width: 58px; height: 34px; border-radius: 8px; border: 2px solid rgba(255,255,255,.22); font: 700 17px Arial; color: rgba(255,255,255,.45); display: flex; justify-content: center; align-items: center; }
+  #ladder .t.done { background: rgba(38,198,218,.28); border-color: rgba(38,198,218,.55); color: rgba(255,255,255,.8); }
+  #ladder .t.cur { background: #e2b34f; border-color: #fff; color: #111; box-shadow: 0 0 16px rgba(226,179,79,.7); }
+  #ladder .lbl { font: 700 15px Arial; color: rgba(255,255,255,.45); margin: 0 8px; letter-spacing: .04em; }
+  #brand { position: absolute; right: 26px; bottom: 18px; font: 700 15px Arial; color: #fff; }
+  svg { position: absolute; left: 0; top: 0; }
+</style></head>
+<body>
+<div id="title"></div><div id="subtitle"></div><div id="caption"></div><div id="strip"></div><div id="big"></div>
+<svg id="neck" width="1600" height="900"></svg>
+<div id="metro"></div><div id="ladder"></div>
+<div id="brand">@banetmasa</div>
+<script>
+// render(D) se puede volver a llamar con otros datos sobre la misma página (los generadores con muchos
+// fotogramas reutilizan la página en vez de abrir una por fotograma).
+function render(D) {
+document.getElementById('title').textContent = D.title;
+document.getElementById('subtitle').textContent = D.subtitle;
+document.getElementById('caption').textContent = D.caption || '';
+document.getElementById('big').textContent = D.big || '';
+document.getElementById('metro').innerHTML = !D.metro ? '' : `<span class="bpm">${D.metro.bpm}<small>bpm</small></span><span class="dots">`
+  + [0, 1, 2, 3].map(i => `<span class="dot${i === D.metro.beat ? ' on' + (i === 0 ? ' one' : '') : ''}"></span>`).join('') + '</span>'
+  + (D.metro.next ? `<span class="next">siguiente vuelta: ${D.metro.next} bpm</span>` : '');
+const L = D.ladder;
+document.getElementById('ladder').innerHTML = !L ? '' : '<span class="lbl">bpm</span>' + L.tempos.map((t, i) => `<span class="t${i < L.cur ? ' done' : i === L.cur ? ' cur' : ''}">${t}</span>`).join('');
+const S = D.strip;
+document.getElementById('strip').innerHTML = !S ? '' : S.items.map((it, i) => `<span class="it${S.on.includes(i) ? ' on' + (S.q ? ' ' + S.q : '') : ''}"><b>${it.label}</b><small>${it.sub}</small></span>`).join('')
+  + (S.pill ? `<span class="q ${S.q || ''}">${S.q ? (S.iv || '3ª') + ' ' + (S.q === 'may' ? 'mayor' : 'menor') : ''}</span>` : '');
+// Placa pequeña con el intervalo (como appendIntervalBadge del reproductor / el dedo de los Drop2): círculo arriba a la derecha.
+const badge = (x, y, iv, dim) => iv ? `<circle cx="${x + 22}" cy="${y - 22}" r="13" fill="rgba(20,20,20,.75)" stroke="rgba(255,255,255,.4)" stroke-width="1" opacity="${dim ? .55 : 1}"/><text x="${x + 22}" y="${y - 22 + 5}" text-anchor="middle" font-size="${iv.length > 1 ? 12 : 15}" font-weight="700" fill="#ffd640" opacity="${dim ? .55 : 1}" font-family="Helvetica,Arial,sans-serif">${iv}</text>` : '';
+const LEFT = 150, RIGHT = 1450, TOP = 212, STR_GAP = 58;
+const lo = D.fretMin, hi = D.fretMax, n = hi - lo + 1;
+const fretW = (RIGHT - LEFT) / n;
+const xOf = f => f === 0 ? LEFT - 30 : LEFT + (f - lo + 0.5) * fretW;   // lo..hi = casillas visibles
+const yOf = s => TOP + (5 - s) * STR_GAP;                                 // s: 0 = 6ª (abajo) … 5 = 1ª (arriba)
+let h = '';
+const bot = yOf(0);
+if (lo <= 1) h += `<line x1="${LEFT}" y1="${TOP - 10}" x2="${LEFT}" y2="${bot + 10}" stroke="rgba(255,255,255,.85)" stroke-width="7"/>`;
+for (let i = (lo <= 1 ? 1 : 0); i <= n; i++) h += `<line x1="${LEFT + i * fretW}" y1="${TOP - 10}" x2="${LEFT + i * fretW}" y2="${bot + 10}" stroke="rgba(255,255,255,.35)" stroke-width="2"/>`;
+for (let s = 0; s < 6; s++) h += `<line x1="${LEFT - (lo <= 1 ? 0 : 20)}" y1="${yOf(s)}" x2="${RIGHT + 20}" y2="${yOf(s)}" stroke="rgba(255,255,255,${0.3 + (5 - s) * 0.03})" stroke-width="${3.6 - s * 0.45}"/>`;
+const inlay = (f, y) => `<circle cx="${xOf(f)}" cy="${y}" r="8" fill="rgba(255,255,255,.16)"/>`;
+[3, 5, 7, 9, 15, 17].filter(f => f >= lo && f <= hi).forEach(f => h += inlay(f, (yOf(2) + yOf(3)) / 2));
+if (12 >= lo && 12 <= hi) h += inlay(12, (yOf(1) + yOf(2)) / 2) + inlay(12, (yOf(3) + yOf(4)) / 2);
+for (let f = Math.max(1, lo); f <= hi; f++) h += `<text x="${xOf(f)}" y="${bot + 56}" text-anchor="middle" font-size="22" fill="rgba(255,255,255,.45)">${f}</text>`;
+const R = 26;
+if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarillo, lo tocado en blanco, lo pendiente en gris
+  const T = D.tab, X0 = 250, X1 = 1490, Y0 = 628, G = 20, RY = Y0 + 5 * G + 12, RB = RY + 26, FY = RB + 32, EPS = 1e-6;
+  const tx = at => X0 + at / T.beats * (X1 - X0), ly = st => Y0 + (5 - st) * G, OFF = Math.min(30, (X1 - X0) / T.beats * 0.3);
+  const is = (d, v) => Math.abs(d - v) < 0.02, grey = 'rgba(255,255,255,.5)', colOf = i => i === T.cur ? '#ffd640' : T.cur >= 0 && i < T.cur ? '#fff' : grey;
+  for (let i = 0; i < 6; i++) h += `<line x1="${X0 - OFF}" y1="${Y0 + i * G}" x2="${X1 - OFF}" y2="${Y0 + i * G}" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>`;
+  for (let b = 0; b <= T.beats; b += 4) h += `<line x1="${tx(b) - OFF}" y1="${Y0}" x2="${tx(b) - OFF}" y2="${Y0 + 5 * G}" stroke="rgba(255,255,255,.45)" stroke-width="2"/>`;
+  h += `<text x="${X0 - OFF - 16}" y="${Y0 + 2.5 * G + 8}" text-anchor="end" font-size="22" font-weight="700" fill="rgba(255,255,255,.5)">TAB</text><text x="${X0 - OFF - 16}" y="${FY}" text-anchor="end" font-size="16" font-weight="700" fill="rgba(255,255,255,.4)">dedo</text>`;
+  const wave = (x, y, n, c, w) => `<path d="M ${x} ${y} ${Array(n).fill('q 6 -9 12 0 q 6 9 12 0').join(' ')}" fill="none" stroke="${c}" stroke-width="${w}"/>`;
+  T.items.forEach((it, i) => {
+    const x = tx(it.at), col = colOf(i), m = (RY + RB) / 2;
+    if (it.r) {   // silencios: blanca, negra (con o sin puntillo) o corchea
+      const rc = 'rgba(255,255,255,.6)';
+      if (it.d >= 2 - EPS) h += `<line x1="${x - 13}" y1="${m + 4}" x2="${x + 13}" y2="${m + 4}" stroke="${rc}" stroke-width="2"/><rect x="${x - 8}" y="${m - 4}" width="16" height="8" fill="${rc}"/>`;
+      else if (it.d >= 1 - EPS) h += `<path d="M ${x - 4} ${RY} l 8 9 l -8 7 l 8 9 q -10 -4 -5 6" fill="none" stroke="${rc}" stroke-width="3" stroke-linejoin="round"/>` + (is(it.d, 1.5) ? `<circle cx="${x + 12}" cy="${m}" r="3" fill="${rc}"/>` : '');
+      else h += `<circle cx="${x - 4}" cy="${m - 4}" r="3.5" fill="${rc}"/><path d="M ${x - 4} ${m - 2} q 6 2 9 -4 l -7 20" fill="none" stroke="${rc}" stroke-width="2.5"/>`;
+      return;
+    }
+    const y = ly(it.notes[0].s), pv = it.prev === undefined ? null : T.items[it.prev];
+    it.notes.forEach(nt => { const yy = ly(nt.s), w = String(nt.f).length > 1 ? 34 : 26;
+      h += `<rect x="${x - w / 2}" y="${yy - 10}" width="${w}" height="20" fill="#0d0d0d"/>` + (i === T.cur ? `<rect x="${x - w / 2 - 3}" y="${yy - 13}" width="${w + 6}" height="26" rx="6" fill="rgba(255,214,64,.16)" stroke="#ffd640" stroke-width="2"/>` : '');
+      h += `<text x="${x}" y="${yy + 8}" text-anchor="middle" font-size="22" font-weight="700" fill="${col}">${nt.f}</text>`; });
+    h += `<text x="${x}" y="${FY}" text-anchor="middle" font-size="18" font-weight="700" fill="${i === T.cur ? '#ffd640' : grey}">${it.fg || ''}</text>`;
+    // Figuras: plica = negra, plica corta = blanca, puntillo, y barras/corchetes para corcheas, semicorcheas y tresillos.
+    if (it.d < 4 - EPS) h += `<line x1="${x}" y1="${it.d >= 2 - EPS ? RY + 13 : RY}" x2="${x}" y2="${RB}" stroke="${col}" stroke-width="2.5"/>`;
+    if (is(it.d, 0.75) || is(it.d, 1.5) || is(it.d, 3)) h += `<circle cx="${x + 9}" cy="${RB - 4}" r="3.2" fill="${col}"/>`;
+    if (it.lig && pv) { const xa = tx(pv.at) + 10, xb = x - 10, yy = y + 14; const tight = xb - xa < 24; h += `<path d="M ${xa - (tight ? 4 : 0)} ${yy} Q ${(xa + xb) / 2} ${yy + (tight ? 9 : 15)} ${xb + (tight ? 4 : 0)} ${yy}" fill="none" stroke="${col}" stroke-width="2.5"/>` + (tight ? '' : `<text x="${(xa + xb) / 2}" y="${yy + 3}" text-anchor="middle" font-size="13" font-weight="700" fill="${col}">${it.lig}</text>`); }
+    if (it.slide && pv) h += `<line x1="${tx(pv.at) + 13}" y1="${y + (pv.notes[0].f < it.notes[0].f ? 6 : -6)}" x2="${x - 13}" y2="${y + (pv.notes[0].f < it.notes[0].f ? -6 : 6)}" stroke="${col}" stroke-width="2.5"/>`;
+    if (it.vib) h += wave(x + (it.bend ? 46 : -10), Y0 - 16, 4, col, 2.5);
+    if (it.bend) {
+      const top = Y0 - 22, ax = x + 32;
+      h += `<path d="M ${x + 15} ${y - 4} Q ${ax} ${y - 4} ${ax} ${top + 10}" fill="none" stroke="${col}" stroke-width="2.5"/><polygon points="${ax - 6},${top + 11} ${ax + 6},${top + 11} ${ax},${top - 1}" fill="${col}"/>`;
+      h += `<text x="${ax}" y="${top - 8}" text-anchor="middle" font-size="18" font-weight="700" fill="${col}">${it.txt}</text>`;
+      if (it.bend === 'updown') h += `<path d="M ${ax + 6} ${top + 2} Q ${ax + 30} ${top + 2} ${ax + 30} ${y - 14}" fill="none" stroke="${col}" stroke-width="2.5"/><polygon points="${ax + 24},${y - 16} ${ax + 36},${y - 16} ${ax + 30},${y - 4}" fill="${col}"/>`;
+    }
+  });
+  // Barras: las notas de menos de una negra que comparten pulso van unidas; sueltas llevan corchete.
+  const groups = []; let g = null;
+  T.items.forEach((it, i) => { const bt = Math.floor(it.at + EPS); if (!it.r && it.d < 1 - EPS) { if (g && g.bt === bt) g.ix.push(i); else groups.push(g = { bt, ix: [i] }); } else g = null; });
+  groups.forEach(gr => { const A = T.items[gr.ix[0]], Z = T.items[gr.ix[gr.ix.length - 1]], c = T.cur >= 0 && gr.ix[gr.ix.length - 1] < T.cur ? '#fff' : grey, six = d => d <= 0.25 + EPS;
+    if (gr.ix.length === 1) { const x = tx(A.at), cc = colOf(gr.ix[0]); h += `<path d="M ${x} ${RB} q 11 -3 9 -16" fill="none" stroke="${cc}" stroke-width="2.5"/>` + (six(A.d) ? `<path d="M ${x} ${RB - 8} q 11 -3 9 -16" fill="none" stroke="${cc}" stroke-width="2.5"/>` : ''); return; }
+    h += `<line x1="${tx(A.at) - 1}" y1="${RB - 2}" x2="${tx(Z.at) + 1}" y2="${RB - 2}" stroke="${c}" stroke-width="5"/>`;
+    gr.ix.forEach((ix, k) => { const it = T.items[ix], nx = T.items[gr.ix[k + 1]], x = tx(it.at); if (!six(it.d)) return;
+      if (nx && six(nx.d)) h += `<line x1="${x - 1}" y1="${RB - 10}" x2="${tx(nx.at) + 1}" y2="${RB - 10}" stroke="${c}" stroke-width="4"/>`;
+      else if (!(k && six(T.items[gr.ix[k - 1]].d))) h += `<line x1="${k ? x - 10 : x}" y1="${RB - 10}" x2="${k ? x : x + 10}" y2="${RB - 10}" stroke="${c}" stroke-width="4"/>`; });
+    if (is(A.d, 1 / 6)) h += `<text x="${(tx(A.at) + tx(Z.at)) / 2}" y="${RB + 13}" text-anchor="middle" font-size="13" font-style="italic" font-weight="700" fill="${c}">6</text>`;
+    if (is(A.d, 1 / 3)) h += `<text x="${(tx(A.at) + tx(Z.at)) / 2 + 9}" y="${RY + 12}" text-anchor="middle" font-size="14" font-style="italic" font-weight="700" fill="${c}">3</text>`;
+  });
+}
+(D.slides || []).forEach(s => { h += `<line x1="${xOf(s.a)}" y1="${yOf(s.string)}" x2="${xOf(s.b)}" y2="${yOf(s.string)}" stroke="rgba(226,179,79,.75)" stroke-width="12" stroke-linecap="round"/>`; });
+const ringOf = (nt, x, y) => nt.ring ? `<circle cx="${x}" cy="${y}" r="${R}" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="6 4"/>` : '';   // pista discreta: el borde discontinuo del fantasma, en blanco
+D.notes.forEach(nt => {
+  if (nt.state === 'hidden') return;
+  const x = xOf(nt.fret), y0 = yOf(nt.string), B = nt.bend, y = y0 - (B ? B.p * (B.full ? 44 : 16) : 0);
+  if (nt.state === 'ghost' || nt.state === 'next' || nt.state === 'soon') {
+    h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="${nt.isRoot ? 'rgba(229,57,53,.3)' : 'rgba(255,255,255,.1)'}" stroke="${nt.isRoot ? 'rgba(255,120,110,.8)' : 'rgba(255,255,255,.5)'}" stroke-width="2" stroke-dasharray="6 4"/>`;
+    h += `<text x="${x}" y="${y + 8}" text-anchor="middle" font-size="22" font-weight="700" fill="rgba(255,255,255,${nt.ring ? 1 : .6})">${nt.label}</text>`;
+    if (nt.state !== 'ghost') h += `<circle cx="${x}" cy="${y}" r="${R + 6}" fill="none" stroke="#e2b34f" stroke-width="${nt.state === 'next' ? 4 : 2.5}" opacity="${nt.state === 'next' ? .95 : .5}"/>`;
+    h += ringOf(nt, x, y);
+    if (D.badges) h += badge(x, y, nt.iv, true);
+    return;
+  }
+  const flash = nt.state === 'flash', pend = nt.state === 'pend';
+  if (nt.slide) h += `<line x1="${xOf(nt.slide.from)}" y1="${y}" x2="${x}" y2="${y}" stroke="rgba(226,179,79,.85)" stroke-width="12" stroke-linecap="round"/>`;   // deslizamiento
+  if (B) {   // bending: la cuerda se dobla junto a la nota, la nota sube y un círculo naranja viaja por la cuerda hasta el traste de la nota que suena
+    const xT = xOf(B.toFret), op = flash ? 1 : .5;
+    if (B.p > 0) h += `<path d="M ${x - 330} ${y0} Q ${x - 90} ${y0} ${x} ${y} Q ${x + 90} ${y0} ${x + 330} ${y0}" fill="none" stroke="#ffd640" stroke-width="3.5" opacity=".9"/>`;
+    const ax = x - R - 26, ay = y0 - 44;
+    h += `<path d="M ${ax + 16} ${y0 + 14} Q ${ax} ${y0 + 14} ${ax} ${ay + 12}" fill="none" stroke="#ffd640" stroke-width="4" opacity="${op}"/><polygon points="${ax - 9},${ay + 14} ${ax + 9},${ay + 14} ${ax},${ay - 4}" fill="#ffd640" opacity="${op}"/>`;
+    h += `<text x="${ax - 16}" y="${y0 + 30}" text-anchor="end" font-size="19" font-weight="700" fill="#ffd640" opacity="${op}">${B.txt}</text>`;
+    if (B.full) h += `<circle cx="${xT}" cy="${y0}" r="${R}" fill="#0d0d0d"/><circle cx="${xT}" cy="${y0}" r="${R}" fill="rgba(255,138,48,.08)" stroke="#ff8a30" stroke-width="2.5" stroke-dasharray="6 4" opacity="${op}"/><text x="${xT}" y="${y0 + 8}" text-anchor="middle" font-size="22" font-weight="700" fill="#ff8a30" opacity="${op * .8}">${B.to}</text>`;
+    if (B.full && B.p > 0) { const cx = x + (xT - x) * B.p, on = B.p > 0.97;
+      h += `<circle cx="${cx}" cy="${y0}" r="${R + (on ? 12 : 0)}" fill="rgba(255,138,48,${on ? .28 : 0})"/><circle cx="${cx}" cy="${y0}" r="${R}" fill="rgba(255,138,48,${(.45 + .5 * B.p).toFixed(2)})" stroke="#fff" stroke-width="${on ? 3 : 1.5}"/>`;
+      if (on) h += `<text x="${cx}" y="${y0 + 8}" text-anchor="middle" font-size="24" font-weight="700" fill="#111">${B.to}</text>`; }
+  }
+  const fill = nt.isRoot ? `rgba(229,57,53,${flash ? .95 : pend ? .12 : .45})` : `rgba(38,198,218,${flash ? .95 : pend ? .12 : .5})`;
+  if (flash) h += `<circle cx="${x}" cy="${y}" r="${R + 14}" fill="${nt.isRoot ? 'rgba(229,57,53,.25)' : 'rgba(38,198,218,.25)'}"/>`;
+  h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="${fill}" stroke="${flash ? '#fff' : 'rgba(255,255,255,.25)'}" stroke-width="${flash ? 3 : 1.2}"/>`;
+  h += `<text x="${x}" y="${y + 8}" text-anchor="middle" font-size="24" font-weight="700" font-family="Helvetica,Arial,sans-serif" fill="${pend ? 'rgba(255,255,255,.6)' : '#fff'}">${nt.label}</text>`;
+  if (nt.lig) { const xa = xOf(nt.lig.from), my = y + R + 6; h += `<path d="M ${xa} ${my} Q ${(xa + x) / 2} ${my + 26} ${x} ${my}" fill="none" stroke="#ffd640" stroke-width="4"/><text x="${(xa + x) / 2}" y="${my + 8}" text-anchor="middle" font-size="18" font-weight="700" fill="#ffd640">${nt.lig.t === 'P' ? 'pull-off' : 'hammer-on'}</text>`; }   // ligado
+  if (nt.vib) h += `<path d="M ${x + R + 12} ${y} q 6 -9 12 0 q 6 9 12 0 q 6 -9 12 0 q 6 9 12 0 q 6 -9 12 0 q 6 9 12 0" fill="none" stroke="#ffd640" stroke-width="4"/>`;   // vibrato
+  h += ringOf(nt, x, y);
+  if (D.badges) h += badge(x, y, nt.iv, false);
+});
+document.getElementById('neck').innerHTML = h;
+}
+if (window.__DATA__) render(window.__DATA__);
+</script>
+</body></html>
