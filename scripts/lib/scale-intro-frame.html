@@ -4,7 +4,7 @@
   Fotograma del capítulo 1 del vídeo largo de una posición (scripts/generate-scale-position-intro.js):
   la posición CAGED de la escala se va construyendo nota a nota. window.__DATA__ =
     { title, subtitle, caption, fretMin, fretMax, metro?: { bpm, beat 0..3, next? } (metrónomo visual arriba a la derecha, secuencias progresivas),
-      strip?: { items: [{label, sub}], on: [índices encendidos], q?: 'may'|'men' (calidad de la tercera), pill } (fila de notas/acordes de la escala),
+      strip?: { items: [{label, sub}], on: [índices encendidos], q?: 'may'|'men' (calidad del intervalo), pill, iv?: '3ª'|'6ª' } (fila de notas/acordes de la escala),
       ladder?: { tempos: [...], cur } (escalera de tempos abajo),
       notes: [{string, fret, label, isRoot, state: 'hidden'|'active'|'flash'|'ghost'|'next'|'soon'}] }
   'next' / 'soon' = fantasma con aro ámbar (fuerte / tenue): las notas que vienen a continuación.
@@ -67,7 +67,7 @@ const L = D.ladder;
 document.getElementById('ladder').innerHTML = !L ? '' : '<span class="lbl">bpm</span>' + L.tempos.map((t, i) => `<span class="t${i < L.cur ? ' done' : i === L.cur ? ' cur' : ''}">${t}</span>`).join('');
 const S = D.strip;
 document.getElementById('strip').innerHTML = !S ? '' : S.items.map((it, i) => `<span class="it${S.on.includes(i) ? ' on' + (S.q ? ' ' + S.q : '') : ''}"><b>${it.label}</b><small>${it.sub}</small></span>`).join('')
-  + (S.pill ? `<span class="q ${S.q || ''}">${S.q ? '3ª ' + (S.q === 'may' ? 'mayor' : 'menor') : ''}</span>` : '');
+  + (S.pill ? `<span class="q ${S.q || ''}">${S.q ? (S.iv || '3ª') + ' ' + (S.q === 'may' ? 'mayor' : 'menor') : ''}</span>` : '');
 // Placa pequeña con el intervalo (como appendIntervalBadge del reproductor / el dedo de los Drop2): círculo arriba a la derecha.
 const badge = (x, y, iv, dim) => iv ? `<circle cx="${x + 22}" cy="${y - 22}" r="13" fill="rgba(20,20,20,.75)" stroke="rgba(255,255,255,.4)" stroke-width="1" opacity="${dim ? .55 : 1}"/><text x="${x + 22}" y="${y - 22 + 5}" text-anchor="middle" font-size="${iv.length > 1 ? 12 : 15}" font-weight="700" fill="#ffd640" opacity="${dim ? .55 : 1}" font-family="Helvetica,Arial,sans-serif">${iv}</text>` : '';
 const LEFT = 150, RIGHT = 1450, TOP = 300, STR_GAP = 78;

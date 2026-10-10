@@ -41,6 +41,9 @@ const POS_LABELS = ['E', 'D', 'C', 'A', 'G'];
 const SEQS = {
   grupos3:    { name: 'Grupos de 3 notas',     span: [0, 1, 2], file: 'EscalasPorGruposDe3' },       // 1-2-3, 2-3-4… en tresillos (un grupo por pulso)
   grupos4:    { name: 'Grupos de 4 notas',     span: [0, 1, 2, 3], file: 'EscalasPorGruposDe4' },    // 1-2-3-4, 2-3-4-5… en semicorcheas (un grupo por pulso)
+  alternas:   { name: 'Terceras alternas',     span: [0, 2], alt: true, file: 'EscalasPorTercerasAlternas' },   // una sube y la siguiente baja: C-E, F-D, E-G, A-F…
+  sextas:     { name: 'Sextas',                span: [0, 5], file: 'EscalasPorSextas' },                       // C-A, D-B, E-C…
+  zigzag:     { name: 'Triadas en zigzag',     span: [0, 2, 4], alt: true, roman: 'triadas', file: 'EscalasPorTriadasZigzag', suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },   // C-E-G, A-F-D, E-G-B…
   terceras:   { name: 'Terceras',              span: [0, 2], file: 'EscalasPorTerceras' },
   triadas:    { name: 'Triadas diatónicas',    span: [0, 2, 4], file: 'EscalasPorTriadas',   suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },
   cuatriadas: { name: 'Arpegios de 7ª diatónicos', span: [0, 2, 4, 6], file: 'EscalasPorSeptimas', progBeats: 2, suffix: ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'] },
@@ -131,12 +134,14 @@ function parseArgs(argv) {
     const remonte = []; for (let i = 1; i < first; i++) remonte.push(up(i));
     return [...starts.map(up), ...bajada, ...remonte, { idx: [first] }];
   };
+  // alt: cada segundo grupo va en sentido contrario (terceras alternas, triadas en zigzag).
+  const buildSeq = (sq) => { const gs = buildGroups(sq); return sq.alt ? gs.map((g, i) => (i % 2 && g.idx.length > 1 ? { idx: [...g.idx].reverse() } : g)) : gs; };
   // gb = pulsos por grupo (1; en progresivo las cuatriadas van en corcheas = 2 pulsos por acorde).
   // Fila de la escala (modo progresivo): los 7 acordes diatónicos con su grado, o las 7 notas en las
   // terceras (con la calidad de cada tercera, mayor/menor, para ir asociando el sonido).
   const ROMAN = { triadas: ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'], cuatriadas: ['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viiø'] };
   const degLabel = d => notes.find(n => n.degree === d).label;
-  const stripItems = sk => [0, 1, 2, 3, 4, 5, 6].map(d => SEQS[sk].suffix ? { label: degLabel(d) + SEQS[sk].suffix[d], sub: ROMAN[sk][d] } : { label: degLabel(d), sub: String(d + 1) });
+  const stripItems = sk => [0, 1, 2, 3, 4, 5, 6].map(d => SEQS[sk].suffix ? { label: degLabel(d) + SEQS[sk].suffix[d], sub: ROMAN[SEQS[sk].roman || sk][d] } : { label: degLabel(d), sub: String(d + 1) });
   const pushGroups = (sq, groups, b, base, bpm, gb = 1, lap) => {
     groups.forEach((g, gi) => {
       const chordRoot = notes[Math.min(...g.idx)];
@@ -154,7 +159,7 @@ function parseArgs(argv) {
         const nextIx = groups[gi + 1] ? groups[gi + 1].idx[0] : undefined;                // 1ª nota del grupo SIGUIENTE, durante todo el grupo
         const ring = bpm && antic === 'grupo' && args.pista && nextIx !== undefined && j * (gb / g.idx.length) >= gb - 1 - 1e-9 ? key(notes[nextIx]) : undefined;   // solo en el último pulso del grupo
         const strip = !bpm ? undefined : sq.suffix ? { on: [g.idx.length > 1 ? chordRoot.degree : notes[ix].degree] }
-          : { on: g.idx.slice(0, j + 1).map(i => notes[i].degree), q: g.idx.length === 2 ? (Math.abs(notes[g.idx[0]].midi - notes[g.idx[1]].midi) === 4 ? 'may' : 'men') : undefined };
+          : { on: g.idx.slice(0, j + 1).map(i => notes[i].degree), q: g.idx.length === 2 ? ([4, 9].includes(Math.abs(notes[g.idx[0]].midi - notes[g.idx[1]].midi)) ? 'may' : 'men') : undefined };   // 3ª/6ª mayor (4/9 semitonos) o menor (3/8)
         const snap = new Map(st); if (bpm && antic === 'grupo') snap.set(key(notes[ix]), 'flash');   // tres niveles: AHORA (brillo + halo) / ya tocada / pendiente (tenue)
         if (nb <= 1) steps.push({ state: snap, dur: b * nb, caption, sound: notes[ix], metro: metro(0), strip, lap, ring });
         else for (let k = 0; k < nb; k++) steps.push({ state: new Map(snap), dur: b, caption, sound: k ? undefined : notes[ix], metro: metro(k), strip, lap, ring });   // nota larga: un paso por pulso (metrónomo)
@@ -165,7 +170,7 @@ function parseArgs(argv) {
   if (tempos) {
     // Progresivo: UNA secuencia, una vuelta entera por tempo; el tempo sube al volver a empezar en graves.
     // La vuelta se redondea a compases de 4/4 con al menos 2 pulsos de respiro (aviso del tempo siguiente).
-    const sq = SEQS[seqKeys[0]], groups = buildGroups(sq), gb = sq.progBeats || 1, seqBeats = groups.length * gb;
+    const sq = SEQS[seqKeys[0]], groups = buildSeq(sq), gb = sq.progBeats || 1, seqBeats = groups.length * gb;
     lapBeats = Math.ceil((seqBeats + 2) / 4) * 4;
     let tt = 0;
     const tick = (n, b, from) => { if (!backingDir) for (let k = 0; k < n; k++) clicks.push({ t: tt + k * b, accent: (from + k) % 4 === 0 }); tt += n * b; };
@@ -186,7 +191,7 @@ function parseArgs(argv) {
     for (const sk of seqKeys) {
       const sq = SEQS[sk];
       steps.push({ state: baseState(), dur: 2 * beat, caption: sq.name });          // 2 pulsos de respiro + título
-      pushGroups(sq, buildGroups(sq), beat, sq.name);
+      pushGroups(sq, buildSeq(sq), beat, sq.name);
     }
     steps.push({ state: baseState(), dur: 3 * beat, caption: '' });
   }
@@ -202,7 +207,7 @@ function parseArgs(argv) {
     if (!cache.has(sig)) {
       const data = { title: `Escala de ${root} mayor · Forma ${posLabel}${args.closed ? ' cerrada' : ''}`, subtitle: tempos ? `Patrones melódicos · ${SEQS[seqKeys[0]].name}` : 'Secuencias dentro de la posición', caption: s.caption, metro: s.metro,
         ladder: tempos && s.lap !== undefined ? { tempos: ladderTempos, cur: ladderTempos.indexOf(tempos[s.lap]) } : undefined,
-        strip: s.strip && tempos ? { items: stripItems(seqKeys[0]), on: s.strip.on, q: s.strip.q, pill: seqKeys[0] === 'terceras' } : undefined, fretMin, fretMax,
+        strip: s.strip && tempos ? { items: stripItems(seqKeys[0]), on: s.strip.on, q: s.strip.q, pill: SEQS[seqKeys[0]].span.length === 2, iv: SEQS[seqKeys[0]].span[1] === 5 ? '6ª' : '3ª' } : undefined, fretMin, fretMax,
         notes: notes.map(n => ({ string: n.string, fret: n.fret, label: n.label, isRoot: n.isRoot, state: s.state.get(key(n)), ring: s.ring === key(n) })) };
       if (!framePage) { framePage = await browser.newPage({ viewport: { width: 1600, height: 900 } }); await framePage.goto(frameUrl); }
       await framePage.evaluate(d => render(d), data);                               // una sola página para todos los fotogramas
