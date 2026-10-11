@@ -4,7 +4,7 @@
  * ya subida con el nombre de fichero como título (p.ej. "EscalasPorTerceras C FormaE 40-120bpm"), UNA TONALIDAD
  * y UN EJERCICIO por llamada. Para cada vídeo: título, descripción con los CAPÍTULOS por tempo, tags, categoría
  * 27, idioma es, no infantil, miniatura, programado (--publish-at) y listas:
- *   - pública "Patrones melódicos de la escala mayor" (se crea si no existe)
+ *   - pública "Recorre la escala mayor <patrón>" (una por patrón; se crea si no existe)
  *   - oculta "Ejercicios en <Tono> mayor"
  * Reanudable: scripts/.catalog-patrones-<serie>-done.txt. IDs extra: scripts/.catalog-patrones-ids.txt o --extra-ids.
  *
@@ -58,8 +58,9 @@ const DONE = path.join(__dirname, `.catalog-patrones-${SERIE}-done.txt`);
 const done = new Set(fs.existsSync(DONE) ? fs.readFileSync(DONE, 'utf8').split('\n').filter(Boolean) : []);
 const FORMS = ['C', 'A', 'G', 'E', 'D'];
 const T0 = S.tempos[0], T1 = S.tempos[S.tempos.length - 1];
-const PL_SERIE = 'Patrones melódicos de la escala mayor';
-const PL_SERIE_DESC = 'La escala mayor recorrida con los patrones melódicos de siempre (terceras, triadas, arpegios de 7ª, grupos de 3 y de 4 notas…) dentro de cada posición CAGED, con una base rítmica que sube el tempo en cada vuelta: empiezas despacio y acabas rápido.';
+// Una lista pública POR PATRÓN (la sección del canal es la que se llama "Patrones melódicos de la escala mayor").
+const PL_SERIE = `Recorre la escala mayor ${S.como}`;
+const PL_SERIE_DESC = `La escala mayor recorrida ${S.como} dentro de cada posición CAGED, con una base rítmica que sube el tempo en cada vuelta: empiezas despacio y acabas rápido.`;
 const PL_KEY = `Ejercicios en ${NAME} mayor`;
 let PL_SERIE_ID = null;
 const plUrl = (id) => `https://www.youtube.com/playlist?list=${id}`;
@@ -91,7 +92,7 @@ ${chapters(f)}
 
 💡 El patrón es el mismo en cualquier tonalidad: desplaza la posición los trastes que haga falta.` : ''}
 
-📚 Todos los patrones melódicos: ${plUrl(PL_SERIE_ID)}
+📚 Toda la serie ${S.como}: ${plUrl(PL_SERIE_ID)}
 
 #guitarra #CAGED #escalamayor #técnica #velocidad #ejerciciosdeguitarra`;
 }
