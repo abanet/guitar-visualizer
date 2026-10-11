@@ -16120,11 +16120,9 @@ function miInitEditableFields(){
   const t=document.getElementById('miTitle'),d=document.getElementById('miDesc');
   if(t){
     // Texto de partida (no un placeholder que desaparece al enfocar): pensado para seguir
-    // escribiendo justo detrás ("Hoy vamos a hablar de..." + el tema). Solo la primera vez que
-    // se usa (localStorage null) — si el usuario ya lo borró a propósito, se respeta vacío.
-    const savedT=localStorage.getItem('gv_mi_title_v2');
-    t.textContent=savedT||'Hoy vamos a hablar de...';
-    t.addEventListener('input',()=>localStorage.setItem('gv_mi_title_v2',t.textContent));
+    // escribiendo justo detrás ("Hoy vamos a ver..." + el tema). Arranca SIEMPRE con este texto
+    // (pedido de Alberto): no se recuerda el título de la sesión anterior.
+    t.textContent='Hoy vamos a ver...';
     // stopPropagation: SIN esto, el atajo global de la barra espaciadora (Play/Pausa, ver
     // document.addEventListener('keydown',...) al final del archivo) intercepta cada espacio
     // que se escribe aquí — ese atajo solo descarta INPUT/SELECT, no contenteditable — y
