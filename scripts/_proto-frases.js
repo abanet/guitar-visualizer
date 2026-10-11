@@ -20,8 +20,8 @@ const { renderToneTrackInPage } = require('./lib/_proto-pluck-audio');
 const PHRASES = require('./_proto-frases-data');
 
 const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
-const NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
-const ROOT_PC = 9, PENTA = [9, 0, 2, 4, 7];
+const NAMES_STD = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'], NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+const PENTA = [9, 0, 2, 4, 7];
 
 // Base: trozos de los renders a tempo fijo (2 compases de cuenta + música), uno por tempo.
 async function buildBacking(dir, tempos, lapBeats, tailBeats, out) {
@@ -45,6 +45,7 @@ function parseArgs(argv) {
 (async () => {
   const args = parseArgs(process.argv), P = PHRASES[args.frase];
   if (!P) { console.error(`--frase: ${Object.keys(PHRASES).join(' | ')}`); process.exit(1); }
+  const NAMES = P.flats ? NAMES_FLAT : NAMES_STD, ROOT_PC = P.rootPc === undefined ? 9 : P.rootPc;
   const tempos = String(args.tempos || '80,90').split(',').map(Number).filter(x => x > 0);
   const backingDir = path.resolve(String(args.backing || '~/guitar-visualizer-assets/FrasesAm/biblioteca').replace(/^~/, os.homedir()));
   const outDir = path.resolve(String(args.out || '~/Downloads/Bendings-prueba/demos').replace(/^~/, os.homedir()));
@@ -56,16 +57,16 @@ function parseArgs(argv) {
   const items = P.items.map(it => ({ ...it }));
   let at = 0, lastNote;
   items.forEach((it, i) => { it.at = at; at += it.d; if (!it.r) { it.prev = lastNote; lastNote = i; if ((it.lig || it.slide) && (it.prev === undefined || items[it.prev].s !== it.s)) throw new Error(`nota ${i}: ligado o deslizamiento sin nota anterior en la misma cuerda`); } });
-  const seqBeats = Math.round(at * 1e6) / 1e6, lapBeats = Math.ceil((seqBeats + 2 - EPS) / 4) * 4;
+  const seqBeats = Math.round(at * 1e6) / 1e6, lapBeats = P.noRest ? seqBeats : Math.ceil((seqBeats + 2 - EPS) / 4) * 4;   // noRest: patrón en bucle, sin compás de respiro
   const bendTxt = s => (s === 2 ? '1' : s === 1 ? '½' : s === 0.5 ? '¼' : String(s / 2));
   const TAB = items.map(it => it.r ? { r: true, at: it.at, d: it.d } : { at: it.at, d: it.d, notes: [{ s: it.s, f: it.f }, ...(it.also || []).map(o => ({ s: o.s, f: o.f }))], fg: it.fg, prev: it.prev,
-    bend: it.bend ? (it.rel ? 'updown' : 'up') : undefined, txt: it.bend ? bendTxt(it.bend) : '', vib: it.vib, lig: it.lig, slide: it.slide });
+    x: it.x, pick: it.strum, acc: it.acc, pm: it.pm, bend: it.bend ? (it.rel ? 'updown' : 'up') : undefined, txt: it.bend ? bendTxt(it.bend) : '', vib: it.vib, lig: it.lig, slide: it.slide });
   for (let a = seqBeats; a < lapBeats - EPS;) { const whole = Math.abs(a - Math.round(a)) < EPS, len = whole && Math.round(a) % 2 === 0 && lapBeats - a >= 2 - EPS ? 2 : whole && lapBeats - a >= 1 - EPS ? 1 : Math.min(0.5, Math.ceil(a - EPS) - a || 0.5); TAB.push({ r: true, at: a, d: len }); a += len; }
 
   // Notas del mástil: la pentatónica dentro de la ventana de trastes (fondo) más las de la frase.
   const notes = new Map();
   const addNote = (s, f) => { const midi = OPEN_MIDI[s] + f, k = s + ':' + f; if (!notes.has(k)) notes.set(k, { s, f, midi, label: NAMES[midi % 12], isRoot: midi % 12 === ROOT_PC }); };
-  for (let s = 0; s < 6; s++) for (let f = P.win[0]; f <= P.win[1]; f++) if (PENTA.includes((OPEN_MIDI[s] + f) % 12)) addNote(s, f);
+  if (P.win) for (let s = 0; s < 6; s++) for (let f = P.win[0]; f <= P.win[1]; f++) if (PENTA.includes((OPEN_MIDI[s] + f) % 12)) addNote(s, f);
   const fingerOf = {};
   items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => { addNote(o.s, o.f); if (fingerOf[key(o)] === undefined) fingerOf[key(o)] = o.fg; }));
   const N = [...notes.values()];
@@ -82,7 +83,7 @@ function parseArgs(argv) {
   const pendState = () => { const st = new Map(N.map(n => [key(n), 'ghost'])); items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => st.set(key(o), 'pend'))); return st; };
   const first = items.find(it => !it.r);
   // Silencios pulso a pulso (el metrónomo visual sigue marcando); lead = avisa de la primera nota de la vuelta.
-  const rest = (beats, b, from, bpm, lap, next, cur) => { const n = Math.max(1, Math.round(beats / 0.5)); for (let k = 0; k < n; k++) steps.push({ state: pendState(), dur: b * beats / n, caption: '', metro: { bpm, beat: Math.floor(from + k * beats / n + EPS) % 4, next }, lap, cur, bend: first.bend ? { [key(first)]: bendMark(first, 0) } : {} }); };
+  const rest = (beats, b, from, bpm, lap, next, cur) => { if (beats < EPS) return; const n = Math.max(1, Math.round(beats / 0.5)); for (let k = 0; k < n; k++) steps.push({ state: pendState(), dur: b * beats / n, caption: '', metro: { bpm, beat: Math.floor(from + k * beats / n + EPS) % 4, next }, lap, cur, bend: first.bend ? { [key(first)]: bendMark(first, 0) } : {} }); };
   const pushLap = (b, bpm, lap, mute) => {
     const st = pendState();
     items.forEach((it, i) => {
@@ -91,12 +92,15 @@ function parseArgs(argv) {
       const keys = [it, ...(it.also || [])].map(key), n = Math.max(1, Math.round(it.bend ? it.d * 24 : it.d / 0.5)), slice = it.d / n, bd = it.bend ? bendOf(it, b) : null;
       const f = fq(OPEN_MIDI[it.s] + it.f), fT = f * Math.pow(2, (it.bend || 0) / 12);
       for (let k = 0; k < n; k++) {
-        const snap = new Map(st); keys.forEach(k2 => snap.set(k2, 'flash'));
-        const sounds = k || mute ? undefined : [{ main: true, freq: f, soft: !!it.lig, slide: !!it.slide,
+        const snap = new Map(st); keys.forEach(k2 => snap.set(k2, it.x ? 'active' : 'flash'));
+        // Rasgueo: las cuerdas entran escalonadas (abajo = de graves a agudas) y el acorde se corta en el golpe siguiente.
+        const strumSounds = () => { const ns = [it, ...(it.also || [])].sort((p, q) => (it.strum === 'u' ? q.s - p.s : p.s - q.s));
+          return it.x ? [{ mute: true }] : ns.map((o, oi) => ({ freq: fq(OPEN_MIDI[o.s] + o.f), off: oi * 0.008, cut: it.pm ? 0.09 : it.d * b * 0.9 })); };
+        const sounds = k || mute ? undefined : it.strum ? strumSounds() : [{ main: true, freq: f, soft: !!it.lig, slide: !!it.slide,
           bend: bd ? [[bd.up[0] * b, f], [bd.up[1] * b, fT], ...(bd.down ? [[bd.down[0] * b, fT], [bd.down[1] * b, f]] : [])] : undefined,
           vib: it.vib ? { from: bd ? bd.up[1] * b + 0.08 : Math.min(0.35, 0.4 * b), rate: 5.5, cents: 22 } : undefined },
           ...(it.also || []).map(o => ({ freq: fq(OPEN_MIDI[o.s] + o.f) }))];
-        steps.push({ state: snap, dur: b * slice, caption, metro: metroAt(k * slice), lap, cur: i, sounds, bend: bd ? { [key(it)]: bendMark(it, prog(bd, (k + 1) * slice)) } : {},
+        steps.push({ state: snap, dur: b * slice, caption, metro: metroAt(k * slice), lap, cur: i, sounds, mx: it.x ? keys : undefined, bend: bd ? { [key(it)]: bendMark(it, prog(bd, (k + 1) * slice)) } : {},
           vibKey: it.vib ? key(it) : undefined, lig: it.lig ? { key: key(it), t: it.lig, from: items[it.prev].f } : undefined, slide: it.slide ? { key: key(it), from: items[it.prev].f } : undefined });
       }
       keys.forEach(k2 => st.set(k2, 'active'));
@@ -118,9 +122,9 @@ function parseArgs(argv) {
   await page.goto('file://' + path.join(__dirname, 'lib', '_proto-frases-frame.html'));
   const cache = new Map(); let nPng = 0;
   for (const s of steps) {
-    const data = { title: 'Vocabulario pentatónico · La menor', subtitle: (args.num ? `Frase ${args.num} · ` : '') + P.name, caption: s.caption, metro: s.metro,
-      ladder: s.lap === undefined ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: { beats: lapBeats, items: TAB, cur: s.cur },
-      notes: N.map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, iv: fingerOf[key(n)], state: s.state.get(key(n)), bend: s.bend[key(n)], vib: s.vibKey === key(n),
+    const data = { title: P.title || 'Vocabulario pentatónico · La menor', subtitle: (args.num ? `Frase ${args.num} · ` : '') + P.name, caption: s.caption, metro: s.metro,
+      ladder: s.lap === undefined ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: { beats: lapBeats, items: TAB, cur: s.cur, rowLabel: P.rowLabel },
+      notes: N.map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, iv: fingerOf[key(n)], state: s.state.get(key(n)), bend: s.bend[key(n)], mx: !!(s.mx && s.mx.includes(key(n))), vib: s.vibKey === key(n),
         lig: s.lig && s.lig.key === key(n) ? s.lig : undefined, slide: s.slide && s.slide.key === key(n) ? s.slide : undefined })) };
     const sig = JSON.stringify(data);
     if (!cache.has(sig)) {
@@ -134,7 +138,7 @@ function parseArgs(argv) {
 
   // Audio: los ligados y deslizamientos no son notas nuevas, se cuelgan de la anterior de su voz.
   let t = 0; const events = [];
-  steps.forEach(s => { (s.sounds || []).forEach(e => events.push({ ...e, t })); t += s.dur; });
+  steps.forEach(s => { (s.sounds || []).forEach(e => events.push({ ...e, t: t + (e.off || 0) })); t += s.dur; });
   const total = t, main = events.filter(e => e.main);
   for (let i = main.length - 1; i > 0; i--) {
     const e = main[i], pv = main[i - 1];
@@ -147,7 +151,7 @@ function parseArgs(argv) {
   const evs = events.filter(e => !e.gone);
   const wav = path.join(tmp, 'notas.wav'), CHUNK = 40, parts = [];
   for (let a = 0; a < total; a += CHUNK) {
-    const ev = evs.filter(e => e.t >= a && e.t < a + CHUNK).map(e => ({ t: e.t - a, freq: e.freq, bend: e.bend, vib: e.vib, ligs: e.ligs }));
+    const ev = evs.filter(e => e.t >= a && e.t < a + CHUNK).map(e => ({ t: e.t - a, freq: e.freq, bend: e.bend, vib: e.vib, ligs: e.ligs, mute: e.mute, cut: e.cut }));
     if (!ev.length) continue;
     const w = path.join(tmp, `notas-${parts.length}.wav`);
     fs.writeFileSync(w, Buffer.from(await page.evaluate(renderToneTrackInPage, { events: ev, total: Math.min(CHUNK, total - a) + 4 }), 'base64'));

@@ -11,7 +11,13 @@ function renderToneTrackInPage({ events, total }) {
   bus.connect(ctx.destination);
   const len = Math.floor(rate * 1.4), imp = ctx.createBuffer(2, len, rate);
   for (let ch = 0; ch < 2; ch++) { const d = imp.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5); }
-  events.forEach(({ t, freq, glide, bend, vib, soft, ligs }) => {
+  events.forEach(({ t, freq, glide, bend, vib, soft, ligs, mute, cut }) => {
+    if (mute) {   // golpe apagado ("chk"): ráfaga de ruido muy corta, con algo de cuerpo grave
+      const nb = ctx.createBuffer(1, Math.floor(rate * 0.05), rate), nd = nb.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / nd.length, 3);
+      [[2400, 0.9, 0.5], [500, 1.2, 0.35]].forEach(([f0, q, gn]) => { const src = ctx.createBufferSource(); src.buffer = nb; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f0; bp.Q.value = q; const gg = ctx.createGain(); gg.gain.value = gn; src.connect(bp); bp.connect(gg); gg.connect(bus); src.start(t + 0.01); });
+      return;
+    }
     const ligEnd = ligs ? ligs[ligs.length - 1].at : 0;   // ligados: la MISMA voz sigue sonando y salta de nota, sin ataque nuevo
     const now = t + 0.01, sustain = 2.0, sum = ctx.createGain();
     let lg = null;   // vibrato: un LFO sobre la afinación, que entra poco a poco tras el ataque
@@ -31,7 +37,8 @@ function renderToneTrackInPage({ events, total }) {
     const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.Q.value = 0.7;
     filt.frequency.setValueAtTime(Math.min(9000, freq * 10), now); filt.frequency.exponentialRampToValueAtTime(Math.max(400, freq * 1.5), now + sustain);
     const env = ctx.createGain(); env.gain.setValueAtTime(0, now); env.gain.linearRampToValueAtTime(soft ? 0.6 : 0.9, now + (soft ? 0.014 : 0.004));
-    if (!ligs) env.gain.exponentialRampToValueAtTime(0.001, now + sustain);
+    if (cut) { env.gain.exponentialRampToValueAtTime(Math.max(0.002, 0.9 * Math.pow(0.001 / 0.9, cut / sustain)), now + cut); env.gain.linearRampToValueAtTime(0, now + cut + 0.03); }   // nota cortada (staccato del funk)
+    else if (!ligs) env.gain.exponentialRampToValueAtTime(0.001, now + sustain);
     else { let t0 = now + 0.004, pk = 0.9; ligs.forEach(l => { const ta = now + l.at; env.gain.exponentialRampToValueAtTime(Math.max(0.002, pk * Math.pow(0.001 / pk, (ta - t0) / sustain)), ta); env.gain.linearRampToValueAtTime(0.42, ta + 0.015); t0 = ta + 0.015; pk = 0.42; }); env.gain.exponentialRampToValueAtTime(0.001, t0 + sustain); }   // pequeño realce al ligar, como el tirón del dedo
     sum.connect(filt); filt.connect(env);
     const dry = ctx.createGain(); dry.gain.value = 0.8; dry.connect(bus);

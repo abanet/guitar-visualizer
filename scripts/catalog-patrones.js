@@ -119,7 +119,7 @@ const { loadOAuthClient } = require('./upload-youtube');
   if (a['extra-ids']) String(a['extra-ids']).split(',').forEach((id) => ids.add(id.trim()));
   const idsFile = path.join(__dirname, '.catalog-patrones-ids.txt');
   if (fs.existsSync(idsFile)) fs.readFileSync(idsFile, 'utf8').split(/\s+/).filter(Boolean).forEach((id) => ids.add(id));
-  const norm = (t) => t.replace(/[ _]+/g, ' ').trim();
+  const norm = (t) => t.replace(/[ _-]+/g, ' ').trim();
   const all = [...ids], vids = {};
   for (let i = 0; i < all.length; i += 50) {
     const r = await yt.videos.list({ part: ['snippet', 'status'], id: all.slice(i, i + 50) });

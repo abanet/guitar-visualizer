@@ -7,7 +7,26 @@ const n = (str, f, d, o = {}) => ({ s: 6 - str, f, d, ...o });
 const r = d => ({ r: true, d });
 const T = 1 / 3, X = 1 / 6;
 
+// Riff de "Sex Machine" (James Brown, guitarra de Catfish Collins), según la transcripción colaborativa de Songsterr:
+// Mib9 en las tres cuerdas agudas (cejilla en el traste 6) en los tiempos 1 y 2, con la tónica apagada con la palma
+// (5ª cuerda, traste 6) en los contratiempos; en el 3, Mib13 (meñique en el traste 8 de la 1ª) y vuelta a Mib9 en
+// la última semicorchea; el 4 es silencio.
+const TOP9 = [[3, 6, 3], [2, 6, 3], [1, 6, 3]], TOP13 = [[3, 6, 3], [2, 6, 3], [1, 8, 4]];
+const ch = (shape, d, strum, o = {}) => { const sh = shape.map(([str, f, fg]) => ({ s: 6 - str, f, fg })); return { ...sh[0], also: sh.slice(1), d, strum, ...o }; };
+const SEX_BAR = () => [ch(TOP9, 0.5, 'd'), n(5, 6, 0.5, { strum: 'd', pm: true, fg: 2 }), ch(TOP9, 0.5, 'd'), n(5, 6, 0.5, { strum: 'd', pm: true, fg: 2 }),
+  ch(TOP13, 0.75, 'd'), ch(TOP9, 0.25, 'u'), r(1)];
+// Puente (Lab): Lab13 y Lab9 en las tres primeras cuerdas, subida cromática 9-10-11 y Lab7 en las cuerdas 5ª a 3ª.
+const BAR3 = (f) => [[3, f, 1], [2, f, 1], [1, f, 1]], AB13 = [[3, 11, 1], [2, 11, 1], [1, 13, 3]], AB7 = [[5, 11, 1], [4, 13, 3], [3, 11, 1]];
+const SEX_PUENTE = () => [ch(AB13, 0.25, 'd'), ch(AB13, 0.25, 'u'), r(0.5),
+  ch(BAR3(11), 0.25, 'd'), ch(BAR3(11), 0.25, 'u'), r(0.25), ch(BAR3(9), 0.25, 'u'),
+  r(0.25), ch(BAR3(10), 0.25, 'u'), r(0.25), ch(BAR3(11), 0.25, 'u'),
+  r(0.25), ch(AB7, 0.25, 'u'), ch(AB7, 0.5, 'd')];
+
 module.exports = {
+  funk: { title: 'Guitarra rítmica funk · Mib9', name: 'El riff de "Sex Machine" (James Brown): Mib9 y Mib13', rootPc: 3, flats: true, noRest: true, rowLabel: 'púa',
+    items: [...SEX_BAR(), ...SEX_BAR()] },
+  funkPuente: { title: 'Guitarra rítmica funk · Lab9', name: 'El puente de "Sex Machine" (James Brown): Lab13, Lab9 y Lab7', rootPc: 8, flats: true, noRest: true, rowLabel: 'púa',
+    items: [...SEX_PUENTE(), ...SEX_PUENTE()] },
   // Un lick por cada una de las cinco formas CAGED de la pentatónica menor de La (E = tónica en 6ª cuerda).
   formaE: { name: 'Forma E (CAGED) · trastes 5 a 8', win: [5, 8], items: [
     n(3, 7, 1, { bend: 2, fg: 3 }), n(2, 5, 0.5, { fg: 1 }), n(1, 5, 0.5, { fg: 1 }), n(2, 8, 0.5, { fg: 4 }), n(2, 5, 0.5, { lig: 'P', fg: 1 }),

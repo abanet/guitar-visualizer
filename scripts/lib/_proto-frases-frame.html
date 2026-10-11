@@ -91,7 +91,7 @@ if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarill
   const is = (d, v) => Math.abs(d - v) < 0.02, grey = 'rgba(255,255,255,.5)', colOf = i => i === T.cur ? '#ffd640' : T.cur >= 0 && i < T.cur ? '#fff' : grey;
   for (let i = 0; i < 6; i++) h += `<line x1="${X0 - OFF}" y1="${Y0 + i * G}" x2="${X1 - OFF}" y2="${Y0 + i * G}" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>`;
   for (let b = 0; b <= T.beats; b += 4) h += `<line x1="${tx(b) - OFF}" y1="${Y0}" x2="${tx(b) - OFF}" y2="${Y0 + 5 * G}" stroke="rgba(255,255,255,.45)" stroke-width="2"/>`;
-  h += `<text x="${X0 - OFF - 16}" y="${Y0 + 2.5 * G + 8}" text-anchor="end" font-size="22" font-weight="700" fill="rgba(255,255,255,.5)">TAB</text><text x="${X0 - OFF - 16}" y="${FY}" text-anchor="end" font-size="16" font-weight="700" fill="rgba(255,255,255,.4)">dedo</text>`;
+  h += `<text x="${X0 - OFF - 16}" y="${Y0 + 2.5 * G + 8}" text-anchor="end" font-size="22" font-weight="700" fill="rgba(255,255,255,.5)">TAB</text><text x="${X0 - OFF - 16}" y="${FY}" text-anchor="end" font-size="16" font-weight="700" fill="rgba(255,255,255,.4)">${T.rowLabel || 'dedo'}</text>`;
   const wave = (x, y, n, c, w) => `<path d="M ${x} ${y} ${Array(n).fill('q 6 -9 12 0 q 6 9 12 0').join(' ')}" fill="none" stroke="${c}" stroke-width="${w}"/>`;
   T.items.forEach((it, i) => {
     const x = tx(it.at), col = colOf(i), m = (RY + RB) / 2;
@@ -105,8 +105,10 @@ if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarill
     const y = ly(it.notes[0].s), pv = it.prev === undefined ? null : T.items[it.prev];
     it.notes.forEach(nt => { const yy = ly(nt.s), w = String(nt.f).length > 1 ? 34 : 26;
       h += `<rect x="${x - w / 2}" y="${yy - 10}" width="${w}" height="20" fill="#0d0d0d"/>` + (i === T.cur ? `<rect x="${x - w / 2 - 3}" y="${yy - 13}" width="${w + 6}" height="26" rx="6" fill="rgba(255,214,64,.16)" stroke="#ffd640" stroke-width="2"/>` : '');
-      h += `<text x="${x}" y="${yy + 8}" text-anchor="middle" font-size="22" font-weight="700" fill="${col}">${nt.f}</text>`; });
-    h += `<text x="${x}" y="${FY}" text-anchor="middle" font-size="18" font-weight="700" fill="${i === T.cur ? '#ffd640' : grey}">${it.fg || ''}</text>`;
+      h += `<text x="${x}" y="${yy + 8}" text-anchor="middle" font-size="22" font-weight="700" fill="${col}">${it.x ? 'x' : nt.f}</text>`; });
+    if (it.pm) h += `<text x="${x}" y="${Y0 - 10}" text-anchor="middle" font-size="14" font-weight="700" fill="${col}">P.M.</text>`;
+    if (it.acc) h += `<text x="${x}" y="${Y0 - 8}" text-anchor="middle" font-size="20" font-weight="700" fill="${col}">&gt;</text>`;
+    h += `<text x="${x}" y="${FY}" text-anchor="middle" font-size="18" font-weight="700" fill="${i === T.cur ? '#ffd640' : grey}">${it.pick ? (it.pick === 'd' ? '↓' : '↑') : (it.fg || '')}</text>`;
     // Figuras: plica = negra, plica corta = blanca, puntillo, y barras/corchetes para corcheas, semicorcheas y tresillos.
     if (it.d < 4 - EPS) h += `<line x1="${x}" y1="${it.d >= 2 - EPS ? RY + 13 : RY}" x2="${x}" y2="${RB}" stroke="${col}" stroke-width="2.5"/>`;
     if (is(it.d, 0.75) || is(it.d, 1.5) || is(it.d, 3)) h += `<circle cx="${x + 9}" cy="${RB - 4}" r="3.2" fill="${col}"/>`;
@@ -163,6 +165,7 @@ D.notes.forEach(nt => {
   if (flash) h += `<circle cx="${x}" cy="${y}" r="${R + 14}" fill="${nt.isRoot ? 'rgba(229,57,53,.25)' : 'rgba(38,198,218,.25)'}"/>`;
   h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="${fill}" stroke="${flash ? '#fff' : 'rgba(255,255,255,.25)'}" stroke-width="${flash ? 3 : 1.2}"/>`;
   h += `<text x="${x}" y="${y + 8}" text-anchor="middle" font-size="24" font-weight="700" font-family="Helvetica,Arial,sans-serif" fill="${pend ? 'rgba(255,255,255,.6)' : '#fff'}">${nt.label}</text>`;
+  if (nt.mx) h += `<path d="M ${x - 13} ${y - 13} L ${x + 13} ${y + 13} M ${x + 13} ${y - 13} L ${x - 13} ${y + 13}" stroke="#ffd640" stroke-width="5" stroke-linecap="round"/>`;   // golpe apagado
   if (nt.lig) { const xa = xOf(nt.lig.from), my = y + R + 6; h += `<path d="M ${xa} ${my} Q ${(xa + x) / 2} ${my + 26} ${x} ${my}" fill="none" stroke="#ffd640" stroke-width="4"/><text x="${(xa + x) / 2}" y="${my + 8}" text-anchor="middle" font-size="18" font-weight="700" fill="#ffd640">${nt.lig.t === 'P' ? 'pull-off' : 'hammer-on'}</text>`; }   // ligado
   if (nt.vib) h += `<path d="M ${x + R + 12} ${y} q 6 -9 12 0 q 6 9 12 0 q 6 -9 12 0 q 6 9 12 0 q 6 -9 12 0 q 6 9 12 0" fill="none" stroke="#ffd640" stroke-width="4"/>`;   // vibrato
   h += ringOf(nt, x, y);
