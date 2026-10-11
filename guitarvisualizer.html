@@ -12311,7 +12311,15 @@ async function asSendToEditor(){
         const chordKey=ch=>{const m=(ch||'').match(/^([A-G][b#]?)(.*)$/);if(!m)return ch;
           const q=resolveChordDefs(m[2].trim()).map(iv=>iv.st).sort((a,b)=>a-b).join(',');
           return noteToSt(m[1])+'|'+q;};
-        const forms=asState.chords.filter(c=>chordKey(c.chord)===chordKey(chord)&&c.hasShape);
+        let forms=asState.chords.filter(c=>chordKey(c.chord)===chordKey(chord)&&c.hasShape);
+        // Sin forma exacta: vale la de un acorde guardado con la misma fundamental que lo contenga
+        // (el "C" final de la base en una serie de 7ª usa la forma de Cmaj7). Sin esto el acorde se
+        // quedaba sin fotograma y seguía viéndose la forma del anterior (Bm7b5 sobre el C final).
+        if(!forms.length){
+          const [r,q]=String(chordKey(chord)).split('|'),sts=(q||'').split(',');
+          forms=asState.chords.filter(c=>{if(!c.hasShape)return false;const [cr,cq]=String(chordKey(c.chord)).split('|');
+            return cr===r&&q&&sts.every(s=>(cq||'').split(',').includes(s));});
+        }
         const n=shapeOcc[chord]||0;shapeOcc[chord]=n+1;
         entry=forms.length?forms[n%forms.length]:null;
         cacheKey=chord+'|'+(entry?entry.variant:'-');
