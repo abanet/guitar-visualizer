@@ -16131,9 +16131,8 @@ function miInitEditableFields(){
     t.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter'){e.preventDefault();t.blur();}}); // título a una sola línea
   }
   if(d){
-    const savedD=localStorage.getItem('gv_mi_desc_v2');
-    d.textContent=savedD||'Ayudados por nuestro mástil interactivo...';
-    d.addEventListener('input',()=>localStorage.setItem('gv_mi_desc_v2',d.textContent));
+    // Igual que el título: arranca siempre con este texto, sin recordar lo escrito antes.
+    d.textContent='Ayudados por nuestro mástil interactivo...';
     d.addEventListener('keydown',e=>e.stopPropagation());
   }
 }
