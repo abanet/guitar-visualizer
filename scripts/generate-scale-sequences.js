@@ -17,8 +17,12 @@
  * posiciones seguidas = una 2ª), de modo que todo cae siempre dentro de la caja; empieza en la tónica
  * más grave y vuelve a ella.
  *
+ * --scale penta-menor | penta-mayor: los mismos patrones sobre la CAJA de pentatónica (2 notas por cuerda) de
+ * esa forma, con --seqs grupos3 | grupos4 | saltos (saltando una nota: casi todo cuartas). La fila de arriba
+ * son las cinco notas con su intervalo. Salida: Pentatonica<Menor|Mayor>_<Patrón>_<Root>_Forma<X>_….mp4
+ *
  * Uso: node scripts/generate-scale-sequences.js --root C --position E [--bpm 60]
- *        [--seqs terceras,triadas,cuatriadas] [--out <dir>] [--closed]
+ *        [--seqs terceras,triadas,cuatriadas] [--out <dir>] [--closed | --with-closed (si hay cuerdas al aire, genera además la cerrada)]
  * Salida: <out>/<Root>_Forma<X>_Secuencias.mp4 (por defecto ~/Downloads/PosicionEscala)
  *
  * Modo PROGRESIVO (serie de secuencias): --tempos 50,60,70 [--ruta caja|tonica] (por defecto caja) con UNA secuencia en --seqs.
@@ -39,15 +43,36 @@ const { renderToneTrackInPage } = require('./lib/pluck-audio');
 const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
 const POS_LABELS = ['E', 'D', 'C', 'A', 'G'];
 const SEQS = {
-  grupos3:    { name: 'Grupos de 3 notas',     span: [0, 1, 2], file: 'EscalasPorGruposDe3' },       // 1-2-3, 2-3-4… en tresillos (un grupo por pulso)
-  grupos4:    { name: 'Grupos de 4 notas',     span: [0, 1, 2, 3], file: 'EscalasPorGruposDe4' },    // 1-2-3-4, 2-3-4-5… en semicorcheas (un grupo por pulso)
+  grupos3:    { name: 'Grupos de 3 notas',     span: [0, 1, 2], file: 'EscalasPorGruposDe3', pfile: 'GruposDe3' },       // 1-2-3, 2-3-4… en tresillos (un grupo por pulso)
+  grupos4:    { name: 'Grupos de 4 notas',     span: [0, 1, 2, 3], file: 'EscalasPorGruposDe4', pfile: 'GruposDe4' },    // 1-2-3-4, 2-3-4-5… en semicorcheas (un grupo por pulso)
   alternas:   { name: 'Terceras alternas',     span: [0, 2], alt: true, file: 'EscalasPorTercerasAlternas' },   // una sube y la siguiente baja: C-E, F-D, E-G, A-F…
   sextas:     { name: 'Sextas',                span: [0, 5], file: 'EscalasPorSextas' },                       // C-A, D-B, E-C…
   zigzag:     { name: 'Triadas en zigzag',     span: [0, 2, 4], alt: true, roman: 'triadas', file: 'EscalasPorTriadasZigzag', suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },   // C-E-G, A-F-D, E-G-B…
+  saltos:     { name: 'Saltando una nota',     span: [0, 2], file: 'EscalasSaltandoUnaNota', pfile: 'SaltandoUnaNota' },   // pentatónica: A-D, C-E, D-G… (cuartas y alguna tercera)
   terceras:   { name: 'Terceras',              span: [0, 2], file: 'EscalasPorTerceras' },
   triadas:    { name: 'Triadas diatónicas',    span: [0, 2, 4], file: 'EscalasPorTriadas',   suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },
   cuatriadas: { name: 'Arpegios de 7ª diatónicos', span: [0, 2, 4, 6], file: 'EscalasPorSeptimas', progBeats: 2, suffix: ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'] },
 };
+
+// Pentatónicas (--scale): fórmula, intervalos de la fila y caja de 2 notas por cuerda (la misma de
+// generate-pentatonic-mix.js: desde el grado `start` sobre la 6ª cuerda, subiendo).
+const PENTA = {
+  'penta-menor': { name: 'Pentatónica menor', file: 'PentatonicaMenor', f: [0, 3, 5, 7, 10], iv: ['1', '3m', '4', '5', '7m'] },
+  'penta-mayor': { name: 'Pentatónica mayor', file: 'PentatonicaMayor', f: [0, 2, 4, 7, 9], iv: ['1', '2M', '3M', '5', '6M'] },
+};
+const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }, LETTERS = 'CDEFGAB', IV_DEG = { 0: 0, 2: 1, 3: 2, 4: 2, 5: 3, 7: 4, 9: 5, 10: 6 };
+function pentaBox(root, sc, start) {
+  const rootPc = ((PC[root[0]] + (root.includes('#') ? 1 : 0) - (root.slice(1).includes('b') ? 1 : 0)) % 12 + 12) % 12;
+  const name = iv => { const L = LETTERS[(LETTERS.indexOf(root[0]) + IV_DEG[iv]) % 7], d = (((rootPc + iv) - PC[L]) % 12 + 18) % 12 - 6; return L + (d > 0 ? '#'.repeat(d) : 'b'.repeat(-d)); };
+  let midi = 40; while (midi % 12 !== (rootPc + sc.f[start]) % 12) midi++;
+  const out = [];
+  for (let string = 0, d = start; string < 6; string++) for (let k = 0; k < 2; k++, d++) {
+    out.push({ string, fret: midi - OPEN_MIDI[string], label: name(sc.f[d % 5]), isRoot: d % 5 === 0, degree: d % 5 });
+    midi += sc.f[(d + 1) % 5] + 12 * Math.floor((d + 1) / 5) - sc.f[d % 5] - 12 * Math.floor(d / 5);
+  }
+  if (out.some(n => n.fret < 0)) out.forEach(n => { n.fret += 12; });      // la caja no cabe junto a la cejuela: una octava arriba
+  return out;
+}
 
 // Claqueta (WAV PCM 16 bits estéreo): un tic por pulso, más agudo y fuerte en el primero del compás.
 function clickWav(clicks, total) {
@@ -87,7 +112,8 @@ function parseArgs(argv) {
 (async () => {
   const args = parseArgs(process.argv);
   const root = args.root || 'C', posLabel = (args.position || 'E').toUpperCase(), bpm = parseFloat(args.bpm || 60);
-  const posIdx = POS_LABELS.indexOf(posLabel);
+  const posIdx = POS_LABELS.indexOf(posLabel), scale = PENTA[args.scale];
+  if (args.scale && !scale) throw new Error('--scale: ' + Object.keys(PENTA).join(' | '));
   const seqKeys = (args.seqs || 'terceras,triadas,cuatriadas').split(',').map(s => s.trim()).filter(s => SEQS[s]);
   if (args['seq-name'] && seqKeys.length) SEQS[seqKeys[0]] = { ...SEQS[seqKeys[0]], name: String(args['seq-name']) };   // rótulo en pantalla alternativo (p.ej. "Tríadas diatónicas" con tilde)
   const beat = 60 / bpm;
@@ -104,7 +130,7 @@ function parseArgs(argv) {
   const app = await browser.newPage();
   app.on('dialog', d => d.accept());
   await app.goto('file://' + path.resolve(__dirname, '..', 'guitarvisualizer.html'));
-  const box = await app.evaluate(({ root, posIdx }) => {
+  const box = scale ? pentaBox(root, scale, posIdx) : await app.evaluate(({ root, posIdx }) => {
     showTab('arpscale');
     document.getElementById('asRoot').value = root; document.getElementById('asScale').value = 'major';
     document.getElementById('asPos').value = String(posIdx); document.getElementById('asQuality').value = 'triads';
@@ -141,7 +167,7 @@ function parseArgs(argv) {
   // terceras (con la calidad de cada tercera, mayor/menor, para ir asociando el sonido).
   const ROMAN = { triadas: ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'], cuatriadas: ['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viiø'] };
   const degLabel = d => notes.find(n => n.degree === d).label;
-  const stripItems = sk => [0, 1, 2, 3, 4, 5, 6].map(d => SEQS[sk].suffix ? { label: degLabel(d) + SEQS[sk].suffix[d], sub: ROMAN[SEQS[sk].roman || sk][d] } : { label: degLabel(d), sub: String(d + 1) });
+  const stripItems = sk => scale ? scale.iv.map((iv, d) => ({ label: degLabel(d), sub: iv })) : [0, 1, 2, 3, 4, 5, 6].map(d => SEQS[sk].suffix ? { label: degLabel(d) + SEQS[sk].suffix[d], sub: ROMAN[SEQS[sk].roman || sk][d] } : { label: degLabel(d), sub: String(d + 1) });
   const pushGroups = (sq, groups, b, base, bpm, gb = 1, lap) => {
     groups.forEach((g, gi) => {
       const chordRoot = notes[Math.min(...g.idx)];
@@ -205,9 +231,9 @@ function parseArgs(argv) {
   for (const s of steps) {
     const sig = s.caption + '|' + (s.metro ? `${s.metro.bpm}:${s.metro.beat}:${s.metro.next || ''}` : '') + '|' + (s.strip ? s.strip.on.join(',') + (s.strip.q || '') : '') + '|' + (s.lap === undefined ? '' : s.lap) + '|' + (s.ring || '') + '|' + notes.map(n => s.state.get(key(n))[0]).join('');
     if (!cache.has(sig)) {
-      const data = { title: `Escala de ${root} mayor · Forma ${posLabel}${args.closed ? ' cerrada' : ''}`, subtitle: tempos ? `Patrones melódicos · ${SEQS[seqKeys[0]].name}` : 'Secuencias dentro de la posición', caption: s.caption, metro: s.metro,
+      const data = { title: `${scale ? `${scale.name} de ${root}` : `Escala de ${root} mayor`} · Forma ${posLabel}${args.closed ? ' cerrada' : ''}`, subtitle: tempos ? `Patrones melódicos · ${SEQS[seqKeys[0]].name}` : 'Secuencias dentro de la posición', caption: s.caption, metro: s.metro,
         ladder: tempos && s.lap !== undefined ? { tempos: ladderTempos, cur: ladderTempos.indexOf(tempos[s.lap]) } : undefined,
-        strip: s.strip && tempos ? { items: stripItems(seqKeys[0]), on: s.strip.on, q: s.strip.q, pill: SEQS[seqKeys[0]].span.length === 2, iv: SEQS[seqKeys[0]].span[1] === 5 ? '6ª' : '3ª' } : undefined, fretMin, fretMax,
+        strip: s.strip && tempos ? { items: stripItems(seqKeys[0]), on: s.strip.on, q: s.strip.q, pill: SEQS[seqKeys[0]].span.length === 2, iv: SEQS[seqKeys[0]].span[1] === 5 ? '6ª' : '3ª', qText: scale && s.strip.q ? (s.strip.q === 'may' ? '3ª mayor' : '4ª justa') : undefined } : undefined, fretMin, fretMax,
         notes: notes.map(n => ({ string: n.string, fret: n.fret, label: n.label, isRoot: n.isRoot, state: s.state.get(key(n)), ring: s.ring === key(n) })) };
       if (!framePage) { framePage = await browser.newPage({ viewport: { width: 1600, height: 900 } }); await framePage.goto(frameUrl); }
       await framePage.evaluate(d => render(d), data);                               // una sola página para todos los fotogramas
@@ -245,7 +271,7 @@ function parseArgs(argv) {
   fs.writeFileSync(list, steps.map(s => `file '${s.png}'\nduration ${s.dur.toFixed(4)}`).join('\n') + `\nfile '${steps[steps.length - 1].png}'\n`);
   const rootF = root.replace('#', 's'), sq0 = SEQS[seqKeys[0]];
   const out = path.join(outDir, tempos
-    ? `${sq0.file || sq0.name.replace(/\s+/g, '')}_${rootF}_Forma${posLabel}${args.closed ? '_Cerrada' : ''}_${tempos[0]}-${tempos[tempos.length - 1]}bpm${ruta === 'tonica' ? '_tonica' : ''}.mp4`
+    ? `${scale ? `${scale.file}_${sq0.pfile || sq0.file}` : sq0.file || sq0.name.replace(/\s+/g, '')}_${rootF}_Forma${posLabel}${args.closed ? '_Cerrada' : ''}_${tempos[0]}-${tempos[tempos.length - 1]}bpm${ruta === 'tonica' ? '_tonica' : ''}.mp4`
     : `${rootF}_Forma${posLabel}${args.closed ? '_Cerrada' : ''}_Secuencias.mp4`);
   // Modo progresivo: base rítmica (--backing <biblioteca>) o, sin ella, claqueta.
   const clickArgs = [];
@@ -261,4 +287,6 @@ function parseArgs(argv) {
   fs.rmSync(tmp, { recursive: true, force: true });
   mark('vídeo');
   console.log(`✓ ${out} (${total.toFixed(1)} s, ${steps.length} pasos, ${nPng} fotogramas distintos; ${lap.join(', ')})`);
+  // --with-closed: si la forma cae en cuerdas al aire, genera también la cerrada (Alberto: siempre las dos).
+  if (args['with-closed'] && !args.closed && notes.some(n => n.fret === 0)) { const r = await execFileP(process.execPath, [...process.argv.slice(1).filter(x => x !== '--with-closed'), '--closed'], { maxBuffer: 1 << 24 }); process.stdout.write(r.stdout); }
 })().catch(e => { console.error(e.stderr || e); process.exitCode = 1; });

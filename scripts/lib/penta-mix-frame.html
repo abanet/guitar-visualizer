@@ -1,0 +1,187 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!--
+  Fotograma de "Mezcla de pentatónicas sobre un blues" (scripts/generate-pentatonic-mix.js): arriba la
+  estructura ENTERA de la rueda (rejilla de compases) con el compás que suena encendido, y debajo el
+  mástil con la pentatónica mayor y la menor de la misma forma CAGED. render(D) con D =
+    { title, subtitle, fretMin, fretMax,
+      grid: { cols, cells: [{ chord, sup, scale: 'may'|'men'|'both'|null, tag: false = sin rótulo de escala }], cur (-1 = ninguno), beat 0..3,
+              next (-1 = sin aviso; índice del compás donde cambia la escala), nextScale },
+      lap: { cur (0..), total }, phase: { name, lines: [{ html }], now: 'may'|'men'|'both'|null, nowText, hint },
+      notes: [{ string, fret, label (nombre de la nota), iv (intervalo, en la placa), kind: 'com'|'may'|'men'|'blue', state: 'on'|'soft'|'dim'|'pre'|'off' }],
+      legend: [[kind, texto]] }
+  Colores: mayor = azul,
+  menor = ámbar (elegido por Alberto: el azul le resulta "más de mayor"); las notas comunes a las dos escalas (tónica y 5ª) en rojo, como la tónica de siempre.
+  Estados de nota: 'on' = se toca ahora; 'soft' = disponible sin destacar (fase libre); 'dim' = de la otra
+  escala, tenue; 'pre' = tenue con aro: entra en el compás siguiente.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1600px; height: 900px; background: #0d0d0d; overflow: hidden; font-family: Arial, Helvetica, sans-serif; }
+  #title { position: absolute; top: 26px; left: 60px; font: 700 40px Arial; color: #8ab4ff; text-shadow: 0 0 18px rgba(120,160,255,.45); }
+  #subtitle { position: absolute; top: 76px; left: 62px; font: 700 20px Arial; color: rgba(255,255,255,.6); letter-spacing: .04em; }
+  #grid { position: absolute; left: 60px; top: 118px; display: grid; gap: 8px; }
+  .cell { width: 200px; height: 72px; border-radius: 10px; border: 2px solid rgba(255,255,255,.22); background: rgba(255,255,255,.05); position: relative; }
+  .cell .n { position: absolute; left: 9px; top: 6px; font: 700 13px Arial; color: rgba(255,255,255,.4); }
+  .cell .ch { position: absolute; left: 0; right: 0; top: 9px; text-align: center; font: 700 36px Arial; color: rgba(255,255,255,.78); line-height: 40px; }
+  .cell .ch sup { font-size: 21px; vertical-align: top; position: relative; top: -3px; margin-left: 1px; }
+  .cell .tag { position: absolute; left: 0; right: 0; bottom: 5px; text-align: center; font: 700 13px Arial; letter-spacing: .08em; text-transform: uppercase; }
+  .cell .tag.may { color: rgba(126,155,255,.85); } .cell .tag.men { color: rgba(255,167,38,.95); } .cell .tag.both { color: rgba(255,255,255,.5); }
+  .cell .dots { position: absolute; right: 9px; top: 9px; display: none; gap: 5px; }
+  .cell .dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(0,0,0,.22); }
+  .cell .dots i.on { background: #111; }
+  .cell.past { opacity: .42; }
+  .cell.cur { border-color: #fff; }
+  .cell.cur .n { color: rgba(0,0,0,.55); } .cell.cur .ch { color: #111; } .cell.cur .tag { color: rgba(0,0,0,.7); } .cell.cur .dots { display: flex; }
+  .cell.cur.may { background: #7e9bff; box-shadow: 0 0 22px rgba(126,155,255,.75); }
+  .cell.cur.men { background: #ffa726; box-shadow: 0 0 22px rgba(255,167,38,.8); }
+  .cell.cur.both, .cell.cur.none { background: #e2b34f; box-shadow: 0 0 22px rgba(226,179,79,.7); }
+  .cell.next.may { border: 3px dashed #7e9bff; } .cell.next.men { border: 3px dashed #ffa726; }
+  .cell.next.strong.may { background: rgba(126,155,255,.2); } .cell.next.strong.men { background: rgba(255,167,38,.24); }
+  /* Pentatónica sola: en vez de la rejilla, la fórmula sobre los siete grados de la escala de la que sale. */
+  #formula { position: absolute; left: 60px; top: 150px; width: 620px; }
+  #formula .head { font: 700 14px Arial; color: rgba(255,255,255,.5); letter-spacing: .05em; height: 20px; }
+  #formula .degs { display: flex; margin-top: 10px; }
+  #formula .gap { width: 24px; position: relative; } #formula .gap span { position: absolute; left: -6px; width: 36px; top: 15px; text-align: center; font: 700 13px Arial; color: rgba(255,255,255,.5); }
+  #formula .gap.st span { color: #ff6f6c; }
+  #formula .deg { width: 50px; text-align: center; }
+  #formula .deg .c { width: 44px; height: 44px; margin: 0 3px; border-radius: 50%; font: 700 17px Arial; line-height: 41px; border: 1.5px solid rgba(255,255,255,.5); color: #111; position: relative; }
+  #formula .deg .nm { margin-top: 6px; font: 700 15px Arial; color: rgba(255,255,255,.75); }
+  #formula .deg .c { color: #fff; border-color: rgba(255,255,255,.3); } #formula .deg.com .c { background: rgba(229,57,53,.45); } #formula .deg.men .c, #formula .deg.may .c { background: rgba(38,198,218,.5); } #formula .deg.out .c { background: rgba(196,198,208,.5); }
+  #formula .deg.ring .c { box-shadow: 0 0 0 3px #0d0d0d, 0 0 0 6px #fff, 0 0 18px rgba(255,255,255,.6); }
+  #formula .deg.off .c { background: none; border: 1.5px dashed rgba(255,255,255,.2); color: rgba(255,255,255,.25); } #formula .deg.off .nm { color: rgba(255,255,255,.25); }
+  #formula .deg.gone .c { background: none; border: 1.5px dashed rgba(196,198,208,.4); color: rgba(196,198,208,.5); } #formula .deg.gone .nm { color: rgba(255,255,255,.35); }
+  #formula .deg.gone .c::after { content: ''; position: absolute; left: 5px; right: 5px; top: 20px; height: 2px; background: rgba(196,198,208,.6); transform: rotate(-45deg); }
+  #lines b.out { color: #c4c6d0; } #legend i.out { background: none; border: 2px dashed rgba(196,198,208,.7); }
+  /* Metrónomo visual arriba a la derecha, el mismo de las secuencias y las frases (scale-intro-frame.html). */
+  #metro { position: absolute; right: 44px; top: 34px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  #metro .bpm { font: 700 46px Arial; color: #e2b34f; line-height: 46px; }
+  #metro .bpm small { font: 700 22px Arial; color: rgba(226,179,79,.75); margin-left: 8px; }
+  #metro .dots { display: flex; gap: 12px; }
+  #metro .dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,.45); background: rgba(255,255,255,.08); }
+  #metro .dot.on { background: #26c6da; border-color: #fff; box-shadow: 0 0 16px rgba(38,198,218,.8); }
+  #metro .dot.on.one { background: #e53935; box-shadow: 0 0 16px rgba(229,57,53,.8); }
+  #panel { position: absolute; left: 936px; top: 30px; width: 604px; height: 400px; }
+  #lap { font: 700 17px Arial; color: rgba(255,255,255,.55); letter-spacing: .1em; display: flex; align-items: center; gap: 14px; height: 30px; }
+  #lap .pips { display: flex; gap: 6px; }
+  #lap .pips i { width: 26px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.14); }
+  #lap .pips i.done { background: rgba(255,255,255,.45); } #lap .pips i.cur { background: #e2b34f; box-shadow: 0 0 10px rgba(226,179,79,.7); }
+  #phase { margin-top: 20px; font: 700 38px Arial; color: #fff; line-height: 44px; }
+  #lines { margin-top: 14px; font: 700 21px Arial; color: rgba(255,255,255,.72); line-height: 33px; }
+  #lines b.may, #now.may, #hint b.may { color: #7e9bff; } #lines b.men, #now.men, #hint b.men { color: #ffa726; } #lines b.com { color: #ff6f6c; }
+  #lines .arr { color: rgba(255,255,255,.4); margin: 0 6px; }
+  #nowbox { position: absolute; left: 0; top: 232px; display: flex; align-items: center; gap: 14px; }
+  #nowbox .lbl { font: 700 15px Arial; color: rgba(255,255,255,.45); letter-spacing: .1em; }
+  #now { font: 700 30px Arial; padding: 6px 20px; border-radius: 26px; border: 2px solid currentColor; color: #e2b34f; min-width: 60px; text-align: center; }
+  #now.may { background: rgba(126,155,255,.14); } #now.men { background: rgba(255,167,38,.16); }
+  #hint { position: absolute; left: 0; top: 300px; font: 700 21px Arial; color: rgba(255,255,255,.85); height: 28px; }
+  /* Pentatónica sola: el texto va en una tarjeta propia a la derecha de la fórmula, bajo el metrónomo. */
+  #panel.solo { left: 716px; top: 134px; width: 840px; height: 142px; padding: 15px 28px 0 26px; border-radius: 14px; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.1); border-left: 5px solid #e2b34f; }
+  #panel.solo #lap, #panel.solo #nowbox, #panel.solo #hint { display: none; }
+  #tag { display: none; } #panel.solo #tag { display: block; font: 700 13px Arial; letter-spacing: .14em; text-transform: uppercase; color: #e2b34f; height: 18px; }
+  #panel.solo #phase { margin-top: 4px; font: 700 29px Arial; line-height: 36px; white-space: nowrap; }
+  #panel.solo #lines { margin-top: 5px; font: 700 20px Arial; line-height: 27px; color: rgba(255,255,255,.7); }
+  #panel.solo #lines b.men, #panel.solo #lines b.may { color: #26c6da; }
+  #hint .tri { color: #e2b34f; margin-right: 8px; }
+  #legend { position: absolute; left: 0; right: 0; bottom: 30px; display: flex; justify-content: center; gap: 34px; font: 700 17px Arial; color: rgba(255,255,255,.62); }
+  #legend span { display: flex; align-items: center; gap: 9px; }
+  #legend i { width: 20px; height: 20px; border-radius: 50%; display: inline-block; }
+  #legend i.blue { background: #c77dff; } #lines b.blue, #now.blue { color: #c77dff; } #now.blue { background: rgba(199,125,255,.16); }
+  #legend i.iv { width: 26px; height: 26px; background: rgba(20,20,20,.9); border: 1px solid rgba(255,255,255,.4); font: 700 11px Helvetica, Arial; color: #ffd640; font-style: normal; display: inline-flex; align-items: center; justify-content: center; }
+  #legend i.com { background: #e53935; } #legend i.may { background: #7e9bff; } #legend i.men { background: #ffa726; }
+  #legend i.common { background: none; border: 3px solid #fff; } #lines b.fif { color: #fff; }
+  #legend.solo i.com { background: rgba(229,57,53,.45); } #legend.solo i.may, #legend.solo i.men { background: rgba(38,198,218,.5); } #legend.solo i.com, #legend.solo i.may, #legend.solo i.men { border: 1px solid rgba(255,255,255,.3); }
+  #brand { position: absolute; right: 26px; bottom: 18px; font: 700 15px Arial; color: #fff; }
+  svg { position: absolute; left: 0; top: 0; }
+</style></head>
+<body>
+<div id="title"></div><div id="subtitle"></div>
+<svg id="neck" width="1600" height="900"></svg>
+<div id="grid"></div><div id="formula"></div><div id="metro"></div>
+<div id="panel"><div id="lap"></div><div id="tag"></div><div id="phase"></div><div id="lines"></div>
+  <div id="nowbox"><span class="lbl">AHORA</span><span id="now"></span></div><div id="hint"></div></div>
+<div id="legend"></div>
+<div id="brand">@banetmasa</div>
+<script>
+const COL = { com: '229,57,53', may: '126,155,255', men: '255,167,38', blue: '199,125,255', out: '196,198,208' };
+function render(D) {
+document.getElementById('title').textContent = D.title;
+document.getElementById('subtitle').textContent = D.subtitle;
+// Rejilla: la rueda completa, el compás que suena encendido con el color de la escala que toca.
+const G = D.grid || { cols: 1, cells: [] }, g = document.getElementById('grid'), F = D.formula;
+document.getElementById('formula').innerHTML = !F ? '' : `<div class="head">${F.head}</div><div class="degs">`
+  + F.degs.map(d => (d.step ? `<div class="gap ${d.step === 'ST' ? 'st' : ''}"><span>${d.step}</span></div>` : '') + `<div class="deg ${d.state === 'out' ? 'gone' : d.state === 'off' ? 'off' : d.kind + (d.state === 'ring' ? ' ring' : '')}"><div class="c">${d.iv}</div><div class="nm">${d.note}</div></div>`).join('')
+  + '</div>';
+document.getElementById('metro').innerHTML = !D.metro ? '' : `<span class="bpm">${D.metro.bpm}<small>bpm</small></span><span class="dots">`
+  + [0, 1, 2, 3].map(i => `<span class="dot${i === D.metro.beat ? ' on' + (i === 0 ? ' one' : '') : ''}"></span>`).join('') + '</span>';
+document.getElementById('panel').className = document.getElementById('legend').className = D.metro ? 'solo' : '';
+document.getElementById('tag').textContent = (D.phase || {}).tag || '';
+g.style.gridTemplateColumns = `repeat(${G.cols}, 200px)`;
+g.innerHTML = G.cells.map((c, i) => {
+  const cls = ['cell'];
+  if (G.cur >= 0 && i < G.cur) cls.push('past');
+  if (i === G.cur) cls.push('cur', c.scale || 'none');
+  if (i === G.next && i !== G.cur) cls.push('next', G.nextScale, G.beat >= 2 ? 'strong' : '');
+  const tag = c.tag === false ? '' : c.scale === 'may' ? 'mayor' : c.scale === 'men' ? 'menor' : c.scale === 'both' ? 'las dos' : '';
+  return `<div class="${cls.join(' ')}"><span class="n">${i + 1}</span><span class="ch">${c.chord}<sup>${c.sup || ''}</sup></span>`
+    + `<span class="tag ${c.scale || ''}">${tag}</span><span class="dots">${[0, 1, 2, 3].map(b => `<i class="${i === G.cur && b <= G.beat ? 'on' : ''}"></i>`).join('')}</span></div>`;
+}).join('');
+// Panel: vuelta, fase, la regla de la fase, qué escala toca AHORA y el aviso del cambio.
+const L = D.lap, P = D.phase || {};
+document.getElementById('lap').innerHTML = !L ? '' : `<span>${L.word || 'VUELTA'} ${Math.min(L.cur + 1, L.total)} DE ${L.total}</span><span class="pips">`
+  + Array.from({ length: L.total }, (_, i) => `<i class="${i < L.cur ? 'done' : i === L.cur ? 'cur' : ''}"></i>`).join('') + '</span>';
+document.getElementById('phase').textContent = P.name || '';
+document.getElementById('lines').innerHTML = (P.lines || []).map(l => `<div>${l}</div>`).join('');
+const now = document.getElementById('now');
+document.getElementById('nowbox').style.visibility = P.nowText ? 'visible' : 'hidden';
+now.className = P.now || ''; now.textContent = P.nowText || '';
+document.getElementById('hint').innerHTML = P.hint ? `<span class="tri">▶</span>${P.hint}` : '';
+document.getElementById('legend').innerHTML = (D.legend || []).map(([k, t]) => `<span><i class="${k}"></i>${t}</span>`).join('')
+  + '<span><i class="iv">3M</i>Intervalo respecto a la tónica</span>';
+// Mástil.
+const SOLO = !!D.metro;                                                    // pentatónica sola: mástil más alto y notas más grandes
+const LEFT = 150, RIGHT = 1450, TOP = SOLO ? 366 : 478, STR_GAP = SOLO ? 74 : 58;
+const lo = D.fretMin, hi = D.fretMax, n = hi - lo + 1, fretW = (RIGHT - LEFT) / n;
+const xOf = f => f === 0 ? LEFT - 30 : LEFT + (f - lo + 0.5) * fretW;
+const yOf = s => TOP + (5 - s) * STR_GAP;                                 // s: 0 = 6ª (abajo) … 5 = 1ª (arriba)
+let h = '';
+const bot = yOf(0);
+if (lo <= 1) h += `<line x1="${LEFT}" y1="${TOP - 10}" x2="${LEFT}" y2="${bot + 10}" stroke="rgba(255,255,255,.85)" stroke-width="7"/>`;
+for (let i = (lo <= 1 ? 1 : 0); i <= n; i++) h += `<line x1="${LEFT + i * fretW}" y1="${TOP - 10}" x2="${LEFT + i * fretW}" y2="${bot + 10}" stroke="rgba(255,255,255,.35)" stroke-width="2"/>`;
+for (let s = 0; s < 6; s++) h += `<line x1="${LEFT - (lo <= 1 ? 0 : 20)}" y1="${yOf(s)}" x2="${RIGHT + 20}" y2="${yOf(s)}" stroke="rgba(255,255,255,${0.3 + (5 - s) * 0.03})" stroke-width="${3.6 - s * 0.45}"/>`;
+const inlay = (f, y) => `<circle cx="${xOf(f)}" cy="${y}" r="7" fill="rgba(255,255,255,.16)"/>`;
+[3, 5, 7, 9, 15, 17].filter(f => f >= lo && f <= hi).forEach(f => h += inlay(f, (yOf(2) + yOf(3)) / 2));
+if (12 >= lo && 12 <= hi) h += inlay(12, (yOf(1) + yOf(2)) / 2) + inlay(12, (yOf(3) + yOf(4)) / 2);
+for (let f = Math.max(1, lo); f <= hi; f++) h += `<text x="${xOf(f)}" y="${bot + 54}" text-anchor="middle" font-size="20" fill="rgba(255,255,255,.45)">${f}</text>`;
+const R = SOLO ? 30 : 25, K = R / 25;
+// Intervalo respecto a la tónica: placa pequeña arriba a la derecha de la nota, como la del dedo en los Drop 2.
+const badge = (x, y, iv, dim) => !iv ? '' : `<g opacity="${dim ? .5 : 1}"><circle cx="${x + 21 * K}" cy="${y - 17 * K}" r="${11.5 * K}" fill="rgba(20,20,20,.92)" stroke="rgba(255,255,255,.4)" stroke-width="1"/><text x="${x + 21 * K}" y="${y - 17 * K + 4 * K}" text-anchor="middle" font-size="${(iv.length > 1 ? 11 : 13.5) * K}" font-weight="700" fill="#ffd640" font-family="Helvetica,Arial,sans-serif">${iv}</text></g>`;
+const txt = (x, y, label, fill) => `<text x="${x}" y="${y + 7 * K}" text-anchor="middle" font-size="${(label.length > 1 ? 19 : 22) * K}" font-weight="700" font-family="Helvetica,Arial,sans-serif" fill="${fill}">${label}</text>`;
+D.notes.forEach(nt => {
+  if (nt.state === 'off') return;
+  // Pentatónica sola: los colores de los patrones melódicos (tónica roja, el resto turquesa).
+  const x = xOf(nt.fret), y = yOf(nt.string), c = SOLO && (nt.kind === 'men' || nt.kind === 'may') ? '38,198,218' : COL[nt.kind];
+  h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/>`;
+  if (nt.state === 'dim' || nt.state === 'pre') {
+    // Mezclas: lo que no suena (la otra escala) es una nota fantasma SIN color. Pentatónica sola: fantasma con su color.
+    const g = SOLO ? c : '255,255,255';
+    h += `<circle cx="${x}" cy="${y}" r="${R}" fill="rgba(${g},.09)" stroke="rgba(${g},.5)" stroke-width="1.6" stroke-dasharray="5 4"/>` + txt(x, y, nt.label, `rgba(${g},.6)`);
+    h += badge(x, y, nt.iv, true);
+    return;
+  }
+  const on = nt.state === 'on';
+  // Pentatónica sola: relleno traslúcido como en los patrones (tónica .45, las demás .5; la nota que suena, a tope).
+  // Mezclas: color vivo (traslúcido, el ámbar de la menor se ve marrón), con la letra oscura salvo en la tónica.
+  const a = SOLO ? (nt.ring ? .95 : on ? (nt.kind === 'com' ? .45 : .5) : .2) : nt.kind === 'com' ? .8 : .92;   // también en 'soft' (te toca): más tenue, el ámbar se vuelve marrón
+  if (nt.kind === 'split') {                                                // la 5ª cuando valen las dos escalas: mitad mayor, mitad menor
+    h += `<path d="M${x} ${y - R}A${R} ${R} 0 0 0 ${x} ${y + R}Z" fill="rgba(${COL.may},${a})"/><path d="M${x} ${y - R}A${R} ${R} 0 0 1 ${x} ${y + R}Z" fill="rgba(${COL.men},${a})"/>`;
+  } else h += `<circle cx="${x}" cy="${y}" r="${R}" fill="rgba(${c},${a})" stroke="rgba(255,255,255,${on ? (SOLO ? .3 : .55) : .25})" stroke-width="1.4"/>`;
+  if (nt.ring) h += `<circle cx="${x}" cy="${y}" r="${R + 6}" fill="none" stroke="#fff" stroke-width="3.5"/>`;
+  if (nt.common) h += `<circle cx="${x}" cy="${y}" r="${R + 4}" fill="none" stroke="rgba(255,255,255,${on ? .95 : .5})" stroke-width="3"/>`;   // mezclas: aro blanco en las notas comunes a las dos escalas
+  h += txt(x, y, nt.label, SOLO ? (nt.ring && nt.kind !== 'com' ? '#111' : on ? '#fff' : 'rgba(255,255,255,.85)') : nt.kind !== 'com' ? '#111' : '#fff') + badge(x, y, nt.iv, false);
+});
+document.getElementById('neck').innerHTML = h;
+}
+if (window.__DATA__) render(window.__DATA__);
+</script>
+</body></html>
