@@ -273,11 +273,15 @@ async function runOne({ appUrl, root, scale, posLabel, closed, visConfig, link, 
 
   const outPath = path.join(outDir, `${root}_${scale}_Forma${posLabel}${closed ? '_Cerrada' : ''}${link ? '_Enlace' : ''}_TriadasEnPosicion.mp4`);
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque, ${mixDuration.toFixed(1)}s de duración)…`);
+  const HOLD = 0.6;
   await execFileP('ffmpeg', [
     '-y',
     '-i', silentPath,
     '-i', audioPath,
-    '-filter_complex', `[0:v]trim=start=${trimOffsetSec.toFixed(3)},setpts=PTS-STARTPTS[v]`,
+    // startIt() bloquea el hilo unas décimas al pintar el primer compás: esos primeros fotogramas son
+    // los de ANTES de arrancar (reproductor vacío "Asigna imágenes en el editor" + marca blanca). Se
+    // sustituyen por el primer fotograma ya pintado, congelado (HOLD s) — la sincronía no cambia.
+    '-filter_complex', `[0:v]trim=start=${(trimOffsetSec + HOLD).toFixed(3)},setpts=PTS-STARTPTS,tpad=start_mode=clone:start_duration=${HOLD}[v]`,
     '-map', '[v]', '-map', '1:a:0',
     '-t', mixDuration.toFixed(3),
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
