@@ -8,7 +8,7 @@
  *   - oculta "Ejercicios en <Tono> mayor"
  * Reanudable: scripts/.catalog-patrones-<serie>-done.txt. IDs extra: scripts/.catalog-patrones-ids.txt o --extra-ids.
  *
- * Series (--series): terceras | triadas | septimas (12 tonalidades) · grupos3 | grupos4 | alternas | sextas | zigzag (solo C)
+ * Series (--series): terceras | triadas | septimas | grupos3 | grupos4 | alternas | sextas | zigzag (las 8 en las 12 tonalidades)
  * Uso: node scripts/catalog-patrones.js --series terceras --key C --publish-at 2026-10-31T16:30:00Z [--thumbs <dir>] [--dry-run]
  *      node scripts/catalog-patrones.js --series terceras --key C --print     (título + descripción de cada forma, sin API)
  */
@@ -38,15 +38,15 @@ const SERIES = {
     que: (k) => `La escala recorrida por triadas diatónicas: sobre cada nota, su triada (${tri(k).join(', ')}), tres notas por pulso. En la fila de arriba se ilumina el acorde que suena, con su grado.` },
   septimas: { file: 'EscalasPorSeptimas', como: 'por arpegios de 7ª', tempos: range(40, 120), lap: [44, 40], notas: 'corcheas',
     que: (k) => `La escala recorrida por arpegios de 7ª diatónicos: sobre cada nota, su acorde de cuatro notas (${sev(k).join(', ')}). En la fila de arriba se ilumina el acorde que suena, con su grado.` },
-  grupos3: { file: 'EscalasPorGruposDe3', como: 'en grupos de 3 notas', tempos: range(40, 110), lap: [32, 32], notas: 'tresillos', soloC: true,
+  grupos3: { file: 'EscalasPorGruposDe3', como: 'en grupos de 3 notas', tempos: range(40, 110), lap: [32, 32], notas: 'tresillos',
     que: 'La escala en grupos de tres notas seguidas: 1-2-3, 2-3-4, 3-4-5… Un grupo por pulso, en tresillos. Es una de las secuencias más usadas para ganar soltura y velocidad dentro de una posición.' },
-  grupos4: { file: 'EscalasPorGruposDe4', como: 'en grupos de 4 notas', tempos: range(40, 90), lap: [32, 28], notas: 'semicorcheas', soloC: true,
+  grupos4: { file: 'EscalasPorGruposDe4', como: 'en grupos de 4 notas', tempos: range(40, 90), lap: [32, 28], notas: 'semicorcheas',
     que: 'La escala en grupos de cuatro notas seguidas: 1-2-3-4, 2-3-4-5, 3-4-5-6… Un grupo por pulso, en semicorcheas. Es la secuencia clásica para trabajar la velocidad y la púa alterna.' },
-  alternas: { file: 'EscalasPorTercerasAlternas', como: 'por terceras alternas', tempos: range(40, 120), lap: [32, 32], notas: 'corcheas', soloC: true,
+  alternas: { file: 'EscalasPorTercerasAlternas', como: 'por terceras alternas', tempos: range(40, 120), lap: [32, 32], notas: 'corcheas',
     que: 'La escala por terceras alternas: una tercera sube y la siguiente baja (C-E, F-D, E-G, A-F…). Rompe la rutina de las terceras seguidas y obliga a pensar cada salto.' },
-  sextas: { file: 'EscalasPorSextas', como: 'por sextas', tempos: range(40, 120), lap: [28, 24], notas: 'corcheas', soloC: true,
+  sextas: { file: 'EscalasPorSextas', como: 'por sextas', tempos: range(40, 120), lap: [28, 24], notas: 'corcheas',
     que: 'La escala recorrida por sextas: cada nota seguida de la que está cinco grados por encima (C-A, D-B, E-C…). En la fila de arriba ves las dos notas y si la sexta es mayor o menor.' },
-  zigzag: { file: 'EscalasPorTriadasZigzag', como: 'por triadas en zigzag', tempos: range(40, 110), lap: [28, 28], notas: 'tresillos', soloC: true,
+  zigzag: { file: 'EscalasPorTriadasZigzag', como: 'por triadas en zigzag', tempos: range(40, 110), lap: [28, 28], notas: 'tresillos',
     que: 'La escala por triadas en zigzag: una triada sube y la siguiente baja (C-E-G, A-F-D, E-G-B…). En la fila de arriba se ilumina el acorde que suena, con su grado.' },
 };
 const SERIE = a.series, S = SERIES[SERIE];

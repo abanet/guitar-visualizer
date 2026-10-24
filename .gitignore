@@ -13,3 +13,6 @@ scripts/.catalog-arpegios-done.txt
 scripts/.catalog-acordes7-done.txt
 scripts/.catalog-arpegios7-done.txt
 scripts/.catalog-acordes7-ids.txt
+# Estado y logs de los runners de catalogación (se generan al catalogar; no van al repo, como los -done de arriba)
+scripts/.catalog-*
+scripts/.check-slots-*
