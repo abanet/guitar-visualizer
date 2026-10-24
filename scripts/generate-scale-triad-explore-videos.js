@@ -264,7 +264,10 @@ async function runOne({ appUrl, root, scale, posLabel, closed, visConfig, link, 
     videoStartRef = flipTimestamp - markerPtsTime * 1000;
     log(`marca de calibración detectada en t=${markerPtsTime.toFixed(3)}s`);
   } else {
-    log('aviso: no se detectó la marca de calibración — uso flipTimestamp (menos preciso)');
+    // Sin marca el recorte queda ~1 s corto y el vídeo sale desfasado del audio; el fotograma congelado
+    // del arranque puede además ocultárselo a startsWithApp (5 vídeos del lote del 2026-10-13). Se lanza
+    // error para que recordWithStartCheck repita la toma.
+    throw new Error('no se detectó la marca de calibración');
   }
   const trimOffsetSec = Math.max(0, (playStartAt - videoStartRef) / 1000);
 

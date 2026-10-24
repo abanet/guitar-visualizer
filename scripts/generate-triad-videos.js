@@ -34,6 +34,15 @@
  *                         "root":"C","scale":"major"} para el fondo automático.
  *   --groups <lista>      Índices de grupo de cuerdas a generar, coma-separados (por defecto: 0,1,2,3)
  *   --invs <lista>        Índices de inversión a generar, coma-separados (por defecto: 0,1,2)
+ *   --drop2               En vez de tríadas, un único vídeo de "Drop 2 por ciclos (Goodrick)" (cuerdas
+ *                         4-3-2-1, ciclo 4). Con --drop2-inv auto|0-3 y --drop2-ref <traste> (por
+ *                         defecto auto y 7, como en la tarjeta de la pestaña Tríadas). El ciclo
+ *                         sale de los acordes del XML (ciclo automático, v4.5.0).
+ *   --drop2-guides        Con --drop2: frase de notas guía (3ª y 7ª) en la leyenda y placa ═ en las voces
+ *                         que se quedan. Implica --intervals.
+ *   --drop2-arrows        Con --drop2: antes de cada cambio, flecha curva de cada voz que se mueve a su
+ *                         nota del siguiente acorde, con el intervalo de antes y después (7→3).
+ *   --intervals           Placa pequeña con el intervalo de cada nota (R, 3, b7…) respecto al acorde.
  *   --concurrency <n>     Vídeos en paralelo (por defecto: 1 — más sube el riesgo de saltos en la animación en máquinas de pocos núcleos)
  *   --width/--height      Tamaño del viewport grabado (por defecto: 1600x900)
  */
@@ -83,7 +92,38 @@ async function getAudioDurationSeconds(audioPath) {
   }
 }
 
-async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cycleLen, visConfig, gi, inv, width, height, outDir, tmpDir }) {
+// Portado tal cual de generate-scale-arpeggio-videos.js / generate-explore-triad-video.js: marca
+// visual (negro→blanco a los 200ms) pintada en la esquina, detectada luego sobre el vídeo YA
+// grabado para recortar el arranque (carga de página + entrada en modo presentación) con
+// precisión — sin esto el vídeo empieza con un tramo de la UI normal antes de que el
+// visualizador a pantalla completa se asiente.
+async function detectMarkerFrameTime(videoPath, tmpDir) {
+  const statsPath = path.join(tmpDir, `marker-stats-${process.pid}-${Date.now()}.log`);
+  try {
+    await execFileP('ffmpeg', [
+      '-i', videoPath,
+      '-vf', `crop=48:48:0:0,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=${statsPath}`,
+      '-f', 'null', '-',
+    ]);
+    const text = fs.readFileSync(statsPath, 'utf8');
+    const lines = text.split('\n');
+    let sawDark = false;
+    for (let i = 0; i < lines.length; i++) {
+      const pm = lines[i].match(/pts_time:([0-9.]+)/);
+      if (!pm) continue;
+      const vm = (lines[i + 1] || '').match(/YAVG=([0-9.]+)/);
+      if (!vm) continue;
+      const y = parseFloat(vm[1]);
+      if (!sawDark) { if (y < 60) sawDark = true; continue; }
+      if (y > 180) return parseFloat(pm[1]);
+    }
+    return null;
+  } finally {
+    fs.unlink(statsPath, () => {});
+  }
+}
+
+async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cycleLen, visConfig, gi, inv, drop2, width, height, outDir, tmpDir }) {
   const groupLabel = GROUP_LABELS[gi] || `grupo${gi}`;
   const invLabel = INV_LABELS[inv] || `inv${inv}`;
   const tag = `${groupLabel}_${invLabel}`;
@@ -110,7 +150,7 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cyc
   // todo el setup previo queda al principio del vídeo silencioso mostrando el Editor. Medimos
   // ese "arranque" para recortarlo luego con ffmpeg y que el vídeo empiece justo con el audio.
   const recordStartAt = Date.now();
-  let playStartAt = null;
+  let playStartAt = null, flipTimestamp = null;
   let stepError = null;
   let appVersion = 'unknown';
   try {
@@ -144,14 +184,29 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cyc
       return el && el.classList.contains('ok');
     }, null, { timeout: 20000 });
 
-    log(`generando tríadas (${groupLabel}, ${invLabel})…`);
-    await page.evaluate(({ gi, inv }) => {
-      const shapeCb = document.getElementById('triadFixedShape');
-      shapeCb.checked = true;
-      onTriadFixedShapeChange();
-      document.getElementById('triadFixedGroupSel').value = String(gi);
-      document.getElementById('triadFixedInvSel').value = String(inv);
-    }, { gi, inv });
+    if (drop2) {
+      log(`generando drop 2 por ciclos (inversión ${drop2.inv}, traste de referencia ${drop2.ref})…`);
+      await page.evaluate(({ inv, ref, guides, arrows }) => {
+        const cb = document.getElementById('triadDrop2Cycle');
+        cb.checked = true;
+        onTriadDrop2CycleChange();
+        document.getElementById('triadDrop2Inv').value = String(inv);
+        document.getElementById('triadDrop2RefFret').value = String(ref);
+        const gcb = document.getElementById('triadDrop2Guides');
+        if (gcb) gcb.checked = !!guides;
+        const acb = document.getElementById('triadDrop2Arrows');
+        if (acb) acb.checked = !!arrows;
+      }, drop2);
+    } else {
+      log(`generando tríadas (${groupLabel}, ${invLabel})…`);
+      await page.evaluate(({ gi, inv }) => {
+        const shapeCb = document.getElementById('triadFixedShape');
+        shapeCb.checked = true;
+        onTriadFixedShapeChange();
+        document.getElementById('triadFixedGroupSel').value = String(gi);
+        document.getElementById('triadFixedInvSel').value = String(inv);
+      }, { gi, inv });
+    }
     await page.evaluate(() => autoGenerateTriads());
 
     const total = audioDuration + extraSec;
@@ -159,6 +214,9 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cyc
 
     // Selectores del Visualizador que no se guardan en localStorage ni en la sesión (modo de
     // acorde, modo de notas, voces seguidas) — se aplican aparte de gv_vis/gv_colors.
+    // Drop 2: arriba, la escala armonizada con el acorde que suena y el siguiente (applyDrop2CycleToEditor
+    // ya la activa; la config por defecto trae "bars" y la pisaría).
+    if (drop2 && visConfig) visConfig = { ...visConfig, chordDisplayMode: 'scale' };
     if (visConfig) {
       await page.evaluate((cfg) => {
         if (cfg.chordDisplayMode) {
@@ -207,14 +265,34 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cyc
     // una latencia variable que se colaba entera como desync constante en el vídeo final. Este
     // script ni siquiera esperaba a 'playing' antes (tomaba el timestamp nada más volver de
     // startIt(), con audioEl.play() aún sin empezar a sonar de verdad) — doble motivo de desync.
-    playStartAt = await page.evaluate(() => new Promise((resolve) => {
-      const stamp = () => resolve(performance.timeOrigin + performance.now());
-      startIt();
-      if (!audioEl.paused && audioEl.currentTime > 0) { stamp(); return; }
-      const onPlaying = () => { audioEl.removeEventListener('playing', onPlaying); stamp(); };
-      audioEl.addEventListener('playing', onPlaying);
-      setTimeout(stamp, 2000); // failsafe: no colgarse si el evento no llega
+    // Marca de calibración (2026-10-14, Alberto: "la sincronización del audio está mal" en la
+    // prueba de drop 2): el recorte medido como playStartAt - recordStartAt (Date.now() de Node
+    // antes de crear la página) no sabe cuándo empezó DE VERDAD a grabar Playwright y dejaba la
+    // imagen ~0,45 s por delante del audio. Igual que generate-scale-triad-explore-videos.js: un
+    // cuadro negro→blanco en la esquina fija en el vídeo el instante flipTimestamp, y el arranque
+    // del audio sale de la mediana de varias muestras (t - currentTime) ya sonando.
+    flipTimestamp = await page.evaluate(() => new Promise((resolve) => {
+      const marker = document.createElement('div');
+      marker.id = '__syncMarker';
+      marker.style.cssText = 'position:fixed;top:0;left:0;width:48px;height:48px;background:#000;z-index:2147483647;pointer-events:none;';
+      document.body.appendChild(marker);
+      setTimeout(() => { marker.style.background = '#fff'; resolve(performance.timeOrigin + performance.now()); }, 200);
     }));
+    await page.evaluate(() => { const m = document.getElementById('__syncMarker'); if (m) m.remove(); });
+    const stampInfo = await page.evaluate(() => new Promise((resolve) => {
+      const sample = () => ({ t: performance.timeOrigin + performance.now(), c: audioEl.currentTime });
+      const afterPlaying = () => {
+        const samples = []; let n = 0;
+        const tick = () => { samples.push(sample()); n++; if (n < 6) setTimeout(tick, 100); else resolve(samples); };
+        setTimeout(tick, 1500);
+      };
+      startIt();
+      if (!audioEl.paused && audioEl.currentTime > 0) { afterPlaying(); return; }
+      audioEl.addEventListener('playing', () => afterPlaying(), { once: true });
+      setTimeout(afterPlaying, 2000);
+    }));
+    const t0c = stampInfo.map((x) => x.t - x.c * 1000).sort((x, y) => x - y);
+    playStartAt = t0c.length % 2 ? t0c[(t0c.length - 1) / 2] : (t0c[t0c.length / 2 - 1] + t0c[t0c.length / 2]) / 2;
     log(`grabando… (arranque: ${((playStartAt - recordStartAt) / 1000).toFixed(2)}s de setup a recortar)`);
     await page.waitForTimeout(total * 1000);
     await page.evaluate(() => { if (typeof pauseIt === 'function') pauseIt(); });
@@ -230,16 +308,25 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cyc
   if (stepError) throw stepError;
   if (!videoObj) throw new Error('No se generó ningún vídeo (context sin recordVideo).');
   const silentPath = await videoObj.path();
-  const trimOffsetSec = Math.max(0, ((playStartAt || recordStartAt) - recordStartAt) / 1000);
+  let videoStartRef = recordStartAt;
+  const markerPtsTime = flipTimestamp != null ? await detectMarkerFrameTime(silentPath, tmpDir) : null;
+  if (markerPtsTime != null) { videoStartRef = flipTimestamp - markerPtsTime * 1000; log(`marca de calibración detectada en t=${markerPtsTime.toFixed(3)}s`); }
+  else throw new Error('no se detectó la marca de calibración — repite la grabación');
+  const trimOffsetSec = Math.max(0, ((playStartAt || recordStartAt) - videoStartRef) / 1000);
 
-  const outPath = path.join(outDir, `triads_${tag}.mp4`);
+  const outPath = path.join(outDir, drop2 ? `drop2_ciclo4_cuerdas4321_inv-${drop2.inv}${drop2.guides ? '_guias' : ''}${drop2.intervals ? '_intervalos' : ''}${drop2.arrows ? '_flechas' : ''}.mp4` : `triads_${tag}.mp4`);
+  const HOLD = 0.6;
   log(`mezclando audio con ffmpeg (recortando ${trimOffsetSec.toFixed(2)}s de arranque)…`);
   await execFileP('ffmpeg', [
     '-y',
-    '-ss', trimOffsetSec.toFixed(3), '-i', silentPath,
+    '-i', silentPath,
     '-i', audioPath,
-    '-filter_complex', `[1:a]apad=pad_dur=${extraSec}[a]`,
-    '-map', '0:v:0', '-map', '[a]',
+    // startIt() bloquea el hilo unas décimas al pintar el primer compás: los primeros fotogramas son
+    // los de ANTES de arrancar (reproductor vacío "Asigna imágenes en el editor"). Se sustituyen por
+    // el primer fotograma ya pintado, congelado HOLD s — la sincronía no cambia (mismo arreglo que
+    // generate-scale-triad-explore-videos.js, commit 017cbe0; Alberto lo vio en la prueba de drop 2).
+    '-filter_complex', `[0:v]trim=start=${(trimOffsetSec + HOLD).toFixed(3)},setpts=PTS-STARTPTS,tpad=start_mode=clone:start_duration=${HOLD}[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',
     '-metadata', `comment=Generado con Guitar Visualizer v${appVersion}`,
@@ -301,6 +388,11 @@ async function main() {
     visConfig = JSON.parse(fs.readFileSync(defaultVisConfigPath, 'utf8'));
     console.log(`(usando configuración de vis por defecto: ${defaultVisConfigPath} — pasa --vis-config <archivo> para otra distinta)`);
   }
+  // --intervals: placa pequeña con el intervalo de cada nota respecto al acorde (opción de la app
+  // "Intervalo en pequeño junto a cada nota", VIS_ELEMENTS.intervalBadge); la nota sigue con su nombre.
+  // Con --drop2-guides también: la frase de notas guía de la leyenda se apoya en esas placas (3, 7).
+  if (args['drop2-guides']) args.intervals = true;
+  if (args.intervals) visConfig = { ...visConfig, vis: { ...(visConfig.vis || {}), intervalBadge: true } };
 
   for (const p of [appPath, xmlPath, audioPath]) {
     if (!fs.existsSync(p)) { console.error('No existe: ' + p); process.exit(1); }
@@ -312,13 +404,15 @@ async function main() {
   const audioDuration = await getAudioDurationSeconds(audioPath);
   console.log(`Audio: ${audioDuration.toFixed(1)}s (${path.basename(audioPath)})`);
 
+  const drop2 = args.drop2 ? { inv: args['drop2-inv'] != null ? String(args['drop2-inv']) : 'auto', ref: args['drop2-ref'] != null ? parseInt(args['drop2-ref'], 10) : 7, guides: !!args['drop2-guides'], arrows: !!args['drop2-arrows'], intervals: !!args.intervals } : null;
   const jobs = [];
-  for (const gi of groups) for (const inv of invs) jobs.push({ gi, inv });
+  if (drop2) jobs.push({ gi: 0, inv: 0 });
+  else for (const gi of groups) for (const inv of invs) jobs.push({ gi, inv });
 
   console.log(`Generando ${jobs.length} vídeos (concurrencia=${concurrency})…`);
   const t0 = Date.now();
   const results = await runPool(jobs, concurrency, (job) =>
-    runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cycleLen, visConfig, gi: job.gi, inv: job.inv, width, height, outDir, tmpDir })
+    runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cycleLen, visConfig, gi: job.gi, inv: job.inv, drop2, width, height, outDir, tmpDir })
   );
 
   const ok = results.filter((r) => r.ok).length;

@@ -20,6 +20,7 @@
   "homepage": "https://github.com/abanet/guitar-visualizer#readme",
   "private": "true",
   "devDependencies": {
+    "jsdom": "^29.1.1",
     "playwright": "^1.62.1"
   },
   "dependencies": {

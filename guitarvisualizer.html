@@ -433,6 +433,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .sc-pill .sc-name{font:800 clamp(10px,1.25vw,20px)/1 Helvetica,Arial,sans-serif;color:#fff;white-space:nowrap;}
 .sc-pill.on{opacity:1;background:rgba(123,159,232,.28);border-color:#7B9FE8;transform:scale(1.04);box-shadow:0 0 14px rgba(123,159,232,.55);}
 .sc-pill.on .sc-deg{color:#f6d36b;}
+/* Drop 2 por ciclos: el acorde que viene (borde dorado discontinuo) y la flecha del salto del ciclo
+   ("4ª ↑") por debajo de la fila — solo con frames de drop 2, ver updateScaleChords(…, nextChord). */
+.sc-pill.nx{opacity:.85;border:1px dashed #f6d36b;}
+.scale-chords-mode.wa{padding-bottom:clamp(26px,3.4vw,46px);} /* hueco para la flecha: .chord-center recorta lo que sobresale */
+.sc-arrow{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;}
+/* Leyenda de símbolos de Drop 2 por ciclos (ver updateDrop2Legend). */
+#drop2Legend{position:absolute;left:0;right:0;top:0;display:none;flex-wrap:wrap;justify-content:center;gap:clamp(8px,1vw,14px) clamp(14px,2.4vw,40px);pointer-events:none;z-index:8;
+  font:400 clamp(11px,1.15vw,17px)/1 Helvetica,Arial,sans-serif;color:rgba(255,255,255,.62);}
+#drop2Legend.on{display:flex;}
+#drop2Legend .lg-line{flex-basis:100%;text-align:center;color:rgba(246,211,107,.85);white-space:nowrap;} /* frase de notas guía, 2ª línea */
+#drop2Legend .lg{display:flex;align-items:center;gap:7px;white-space:nowrap;}
+#drop2Legend svg{width:clamp(16px,1.6vw,24px);height:clamp(16px,1.6vw,24px);overflow:visible;}
 .minimal-chord{font-size:clamp(48px,9.5vw,95px);font-weight:800;line-height:1;letter-spacing:-3px;transition:color .25s,text-shadow .25s;}
 
 
@@ -969,6 +981,14 @@ body.presentation #channelWatermark{display:flex;}
                la franja vacía que deja el letterboxing del mástil (viewBox 1001x300 con otra
                relación de aspecto que la caja), no en una fila propia — así no resta altura real al
                mástil (feedback de Alberto: "una ubicación que no reste espacio"). -->
+          <!-- Leyenda de "Drop 2 por ciclos" (solo con sus frames, ver updateDrop2Legend) -->
+          <div id="drop2Legend">
+            <span class="lg" id="drop2LegendCommon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="rgba(38,198,218,.5)" stroke="#fff" stroke-width="2" stroke-opacity=".8"/></svg>nota común: se queda</span>
+            <span class="lg" id="drop2LegendStay" style="display:none;"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="rgba(20,20,20,.85)" stroke="rgba(220,226,235,.75)" stroke-width="1"/><text x="12" y="12.5" text-anchor="middle" dominant-baseline="central" fill="rgba(220,226,235,.75)" font-size="11" font-weight="bold" font-family="Helvetica,Arial,sans-serif">═</text></svg>nota común: se queda</span>
+            <span class="lg"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="rgba(120,140,160,.38)" stroke="rgba(200,210,225,.85)" stroke-width="2" stroke-dasharray="4,3"/></svg>adonde va la voz</span>
+            <span class="lg"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="rgba(20,20,20,.85)" stroke="#ffd640" stroke-width="1.5"/><text x="12" y="12.5" text-anchor="middle" dominant-baseline="central" fill="#ffd640" font-size="10" font-weight="bold" font-family="Helvetica,Arial,sans-serif" id="drop2LegendArrow">◀1</text></svg><span id="drop2LegendMoveTxt">baja 1 traste (◀2: 2 trastes) en el próximo cambio</span></span>
+            <span class="lg-line" id="drop2LegendGuide" style="display:none;"></span>
+          </div>
           <div id="exploreMsgOverlay" style="position:absolute;left:0;right:0;bottom:1%;text-align:center;pointer-events:none;z-index:8;">
             <span id="exploreMsgOverlayText" style="font:400 clamp(14px,1.6vw,22px)/1.3 Arial,Helvetica,sans-serif;color:rgba(255,255,255,.55);letter-spacing:.06em;opacity:0;transition:opacity .6s ease;"></span>
           </div>
@@ -1498,6 +1518,45 @@ body.presentation #channelWatermark{display:flex;}
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
           <button class="btn" onclick="autoGenerateTriads()" title="Genera las tríadas de todo el tema aplicando todas las opciones activas de esta pestaña"><i class="ti ti-wand"></i> Generar tríadas automáticas</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3>Drop 2 por ciclos (Goodrick) <span style="font-weight:400;font-size:12px;color:var(--text3);">(cuatriadas de 4 notas encadenadas por un ciclo diatónico)</span></h3>
+        <div class="tab-help" style="margin:0 0 10px;"><div><span class="th-k">Qué genera</span>Un <b>voicing drop 2 (4 notas, una por cuerda)</b> por acorde, sobre los acordes reales del XML, encadenados por los <b>ciclos de Goodrick</b>: en cada cambio las voces que son <b>nota común</b> no se mueven y las demás se mueven <b>un grado</b> de la escala, todas en el mismo sentido. Ciclo 4 (I-IV-vii…): 2 comunes, 2 bajan · ciclo 5 (I-V-ii…): 2 comunes, 2 suben · ciclo 2 (I-ii-iii…): 1 común, 3 bajan · ciclo 7 (I-vii-vi…): 1 común, 3 suben · ciclo 6 (I-vi-IV…): 3 comunes, 1 baja · ciclo 3 (I-iii-V…): 3 comunes, 1 sube. En <b>automático</b> el ciclo sale de los acordes del XML (vale aunque la progresión mezcle ciclos). La inversión cambia sola acorde a acorde y cada voz se queda en su cuerda. Cada vuelta vuelve a empezar en el voicing inicial (donde el primer acorde se repite); los compases vacíos mantienen el último acorde.</div><div><span class="th-k">Cómo se reproduce</span>Por la <b>ruta de tríadas</b>: las voces que se mueven deslizan por su cuerda, las notas comunes llevan anillo blanco (si está activado) y se ven los fantasmas del siguiente acorde.</div><div><span class="th-k">Opciones que le afectan</span>Las de este bloque, Configuración → <b>Transición · Tríadas</b> y el selector <b>Mástil:</b> (notas/intervalos 1-3-5-7). Excluyente con las demás estrategias de esta pestaña.</div></div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="triadDrop2Cycle" onchange="onTriadDrop2CycleChange()" style="width:15px;height:15px;cursor:pointer;">
+          Generar voicings drop 2 por ciclos en vez de tríadas
+        </label>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 0 21px;">
+          <select id="triadDrop2Strings" disabled title="Juego de cuerdas" style="font-size:13px;padding:5px 7px;border-radius:var(--rad);border:1px solid var(--border2);background:white;color:var(--text);">
+            <option value="4-3-2-1">Cuerdas 4-3-2-1</option>
+          </select>
+          <select id="triadDrop2Inv" disabled title="Inversión del primer acorde (por la nota del bajo)" style="font-size:13px;padding:5px 7px;border-radius:var(--rad);border:1px solid var(--border2);background:white;color:var(--text);">
+            <option value="auto">Inversión inicial: automática</option>
+            <option value="0">Fundamental (R en el bajo)</option>
+            <option value="1">1ª inversión (3ª en el bajo)</option>
+            <option value="2">2ª inversión (5ª en el bajo)</option>
+            <option value="3">3ª inversión (7ª en el bajo)</option>
+          </select>
+          <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;">Traste de referencia
+            <input type="number" id="triadDrop2RefFret" value="7" min="0" max="15" disabled style="width:52px;padding:5px 7px;border-radius:var(--rad);border:1px solid var(--border2);font-size:13px;">
+          </label>
+          <select id="triadDrop2CycleSel" disabled title="Ciclo diatónico" style="font-size:13px;padding:5px 7px;border-radius:var(--rad);border:1px solid var(--border2);background:white;color:var(--text);">
+            <option value="auto" selected>Ciclo: automático (según los acordes)</option>
+            <option value="2">Ciclo 2 (I-ii-iii-IV…): 1 común, 3 bajan</option>
+            <option value="3">Ciclo 3 (I-iii-V-vii…): 3 comunes, 1 sube</option>
+            <option value="4">Ciclo 4 (I-IV-vii-iii…): 2 comunes, 2 bajan</option>
+            <option value="5">Ciclo 5 (I-V-ii-vi…): 2 comunes, 2 suben</option>
+            <option value="6">Ciclo 6 (I-vi-IV-ii…): 3 comunes, 1 baja</option>
+            <option value="7">Ciclo 7 (I-vii-vi-V…): 1 común, 3 suben</option>
+          </select>
+          <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;" title="Frase en la leyenda que explica las notas guía (3ª y 7ª) y placa ═ en las voces que se quedan. Actívalo junto con 'Intervalo en pequeño junto a cada nota' (Configuración) para que se vea cuál es la 3ª y la 7ª"><input type="checkbox" id="triadDrop2Guides" disabled> Notas guía (3ª y 7ª): frase + placa ═ en las que se quedan</label>
+          <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;" title="Antes de cada cambio, cada voz que se mueve lleva una flecha curva hasta su nota del siguiente acorde (la fantasma), con el intervalo que era y el que pasa a ser (p. ej. 7→3), al estilo de los diagramas de Goodrick"><input type="checkbox" id="triadDrop2Arrows" disabled> Flechas hacia el siguiente acorde (7→3…)</label>
+        </div>
+        <p style="font-size:12px;color:var(--text3);margin:6px 0 0 21px;">Automática: de los voicings del primer acorde, el que recorre la vuelta entera sin bajar del traste 3 ni abrir más de 4 trastes y queda más cerca del traste de referencia. Si alguna posición bajara del traste 3, la figura entera sube una octava (y si pasara del 17, baja una) y se avisa al terminar.</p>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+          <button class="btn" onclick="generateDrop2CycleFromUI()" title="Activa este bloque y genera los voicings drop 2 de todo el tema"><i class="ti ti-wand"></i> Generar drop 2 por ciclos</button>
         </div>
       </div>
 
@@ -3872,7 +3931,7 @@ function loadSession(input){
 
 // ── AUTOSAVE ─────────────────────────────────────────────────────────────────
 const AUTOSAVE_KEY='gv_autosave';
-const APP_VERSION='4.3.15';
+const APP_VERSION='4.6.0';
 console.log('%cGuitar Visualizer v'+APP_VERSION,'font-weight:bold');
 try{const _vb=document.getElementById('appVersionBadge');if(_vb)_vb.textContent='v'+APP_VERSION;}catch(e){}
 let _autosaveLast='';
@@ -4039,7 +4098,10 @@ function paintTriadGhosts(nextNotes,intensity,currentNotes,commonsOnly,chordForL
   const isCommon=(n)=>anchorOn&&isCoincident(n);
   const parseRGB=(s)=>{s=(s||'').trim();if(s[0]==='#'){const h=s.slice(1);const n=h.length===3?h.split('').map(c=>c+c).join(''):h;const v=parseInt(n,16);return[(v>>16)&255,(v>>8)&255,v&255];}const m=s.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);return m?[+m[1],+m[2],+m[3]]:[150,170,190];};
   const ghostRGB=parseRGB(gFill);
-  const key=(anchorOn?'A':'')+ndModeG+':'+nextNotes.map(n=>Math.round(n.cx)+','+Math.round(n.cy)).sort().join('|');
+  // Flechas de Drop 2 (data-drop2arrows): dependen también de dónde está la voz ahora.
+  const arrowsOn=Array.isArray(currentNotes)&&currentNotes.some(n=>n.drop2Arrows===true);
+  const key=(anchorOn?'A':'')+ndModeG+':'+nextNotes.map(n=>Math.round(n.cx)+','+Math.round(n.cy)).sort().join('|')
+    +(arrowsOn?'>'+currentNotes.map(n=>Math.round(n.cx)+','+Math.round(n.cy)).sort().join('|'):'');
   let els=window._triadGhostEls;
   if(!els || window._triadGhostKey!==key || !overlay.firstChild){
     overlay.innerHTML='';overlay.style.display='block';els=[];
@@ -4053,7 +4115,8 @@ function paintTriadGhosts(nextNotes,intensity,currentNotes,commonsOnly,chordForL
     overlay.appendChild(gDefs);
     nextNotes.forEach(note=>{
       const common=isCommon(note);
-      const r=common?note.r*1.15:note.r;
+      // Drop 2: el aro discreto va justo sobre el borde de la nota (mismo radio), no 15% más grande.
+      const r=common&&note.drop2!==true?note.r*1.15:note.r;
       // Coordenadas EXACTAS de la nota (sin tope): con overflow:visible en ghostCanvas el
       // voladizo de las cuerdas al aire se ve igual que en svgCanvas, y anillo/nota alinean.
       const cx=note.cx;
@@ -4069,17 +4132,78 @@ function paintTriadGhosts(nextNotes,intensity,currentNotes,commonsOnly,chordForL
       g.appendChild(t);
       overlay.appendChild(g);
       const isRed=(note.fill||'').toLowerCase().includes('e53935')||(note.fill||'').includes('229,57,53');
-      els.push({g,c,t,col:isRed?'#E53935':'#26C6DA',common,coincident:isCoincident(note)});
+      els.push({g,c,t,col:isRed?'#E53935':'#26C6DA',common,coincident:isCoincident(note),discreet:note.drop2===true,noRing:note.drop2Guides===true});
     });
+    // Drop 2 por ciclos con flechas (sugerencia que le hicieron a Alberto, 2026-10-14, "al estilo
+    // de los diagramas de Goodrick"): cada voz que se mueve apunta con una flecha curva a su
+    // fantasma (misma cuerda), con el intervalo que es ahora y el que pasa a ser ("7→3"). Se
+    // anticipa adónde va cada dedo antes de que cambie el acorde. Van por encima de la cuerda
+    // (arco) porque con 1 traste de distancia el hueco recto entre las dos notas casi no existe.
+    if(arrowsOn){
+      const curChord=currentChordData?.chord||'';
+      const amber=dark?'#FFD640':'#C88A00';
+      nextNotes.forEach(to=>{
+        if(isCoincident(to))return;
+        const from=currentNotes.find(c=>Math.abs(c.cy-to.cy)<6&&!nextNotes.some(n=>Math.abs(n.cx-c.cx)<6&&Math.abs(n.cy-c.cy)<6));
+        if(!from)return;
+        const dir=to.cx>=from.cx?1:-1,r=from.r,y=from.cy;
+        const sx=from.cx+dir*r*0.55,sy=y-r*0.83,ex=to.cx-dir*r*0.55,ey=y-r*0.83;
+        const qx=(sx+ex)/2,qy=y-r*1.75;
+        const g=document.createElementNS(NS,'g');
+        const path=document.createElementNS(NS,'path');
+        path.setAttribute('d',`M ${sx} ${sy} Q ${qx} ${qy} ${ex} ${ey}`);
+        path.setAttribute('fill','none');path.setAttribute('stroke',amber);path.setAttribute('stroke-width','2.5');path.setAttribute('stroke-linecap','round');
+        g.appendChild(path);
+        // Punta orientada según la tangente final de la curva (de Q a E).
+        const tx=ex-qx,ty=ey-qy,tl=Math.hypot(tx,ty)||1,ux=tx/tl,uy=ty/tl,hs=9;
+        const ah=document.createElementNS(NS,'path');
+        ah.setAttribute('d',`M ${ex} ${ey} L ${ex-ux*hs-uy*hs*0.55} ${ey-uy*hs+ux*hs*0.55} L ${ex-ux*hs+uy*hs*0.55} ${ey-uy*hs-ux*hs*0.55} z`);
+        ah.setAttribute('fill',amber);
+        g.appendChild(ah);
+        const fi=noteToInterval(from.label,curChord),ti=noteToInterval(to.label,chordForLabel||'');
+        if(fi&&ti&&fi!==from.label&&ti!==to.label){
+          const lx=qx,ly=(sy+2*qy+ey)/4,txt=`${fi}→${ti}`;
+          const bg=document.createElementNS(NS,'rect');
+          const bw=txt.length*7.6+8;
+          bg.setAttribute('x',lx-bw/2);bg.setAttribute('y',ly-8.5);bg.setAttribute('width',bw);bg.setAttribute('height',17);bg.setAttribute('rx',8.5);
+          bg.setAttribute('fill','rgba(20,20,20,.85)');bg.setAttribute('stroke',amber);bg.setAttribute('stroke-width','1');
+          g.appendChild(bg);
+          const lt=document.createElementNS(NS,'text');
+          lt.setAttribute('x',lx);lt.setAttribute('y',ly+0.5);lt.setAttribute('text-anchor','middle');lt.setAttribute('dominant-baseline','central');
+          lt.setAttribute('fill',amber);lt.setAttribute('font-size','12');lt.setAttribute('font-weight','bold');lt.setAttribute('font-family','Helvetica,Arial,sans-serif');
+          lt.textContent=txt;
+          g.appendChild(lt);
+        }
+        overlay.appendChild(g);
+        els.push({g,arrow:true});
+      });
+    }
     window._triadGhostEls=els;window._triadGhostKey=key;
   }
   els.forEach(o=>{
+    if(o.arrow){o.g.style.opacity=commonsOnly?'0':String(Math.min(1,0.5+0.8*e));return;}
     if(o.common){
       // Ancla fija: anillo blanco brillante. Con 'triadCommonPulse' activo, DENTRO de la
       // ventana de transición (!commonsOnly) el anillo late (mismo pulso que markCommonNotes
       // en arpegios); fuera de la ventana queda fijo.
       const pulseOn=getVisConfig().triadCommonPulse===true&&!commonsOnly;
       o.g.style.opacity='1';
+      // Drop 2 por ciclos (note.drop2, ver svgStringToParsed): anillo blanco DISCRETO — sin relleno
+      // blanqueado, sin glow ni letra duplicada encima; con 2 notas comunes en cada cambio, el estilo
+      // de tríadas hacía que esas notas "se pusieran blancas" y llamaran demasiado la atención
+      // (Alberto, 2026-10-14). Las tríadas siguen con su anclaje de siempre.
+      // Con notas guía la placa "═" ya dice "se queda": sin aro (no competir con el anillo dorado).
+      if(o.noRing){o.g.style.opacity='0';return;}
+      if(o.discreet){
+        o.c.setAttribute('fill','none');
+        o.c.setAttribute('stroke','#FFFFFF');
+        o.c.setAttribute('stroke-width','2');
+        o.c.setAttribute('stroke-opacity','0.8');
+        o.c.removeAttribute('stroke-dasharray');
+        o.c.removeAttribute('filter');
+        o.t.setAttribute('fill','none');
+        return;
+      }
       o.c.setAttribute('fill','rgba(255,255,255,0.20)');
       o.c.setAttribute('stroke','#FFFFFF');
       if(pulseOn){
@@ -5549,6 +5673,10 @@ function renderSVGStatic(parsed){
         g.appendChild(ring);
       }
     }
+    // Notas guía (note.guide, "Drop 2 por ciclos" con la opción activada): SIN marca en la nota.
+    // Hubo un anillo dorado (primero por fuera, luego sobre el borde), pero con la placa de intervalo
+    // ya se ve cuál es la 3ª y la 7ª y Alberto lo quitó (2026-10-14): lo explica una frase en la
+    // leyenda (#drop2LegendGuide). note.guide se sigue usando para la leyenda y la placa "═".
     const displayLabel=noteDisplayLabel(note,ndMode,chord);
     const t=document.createElementNS(NS,'text');t.setAttribute('x',note.cx);t.setAttribute('y',note.cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');
     const _dimTN=isTNparsed&&!ownStyle&&(note.fill||'').indexOf('255,255,255')>=0;
@@ -5570,6 +5698,25 @@ function renderSVGStatic(parsed){
       ft.setAttribute('fill','#ffd640');ft.setAttribute('font-size',Math.round(fr2*1.15));ft.setAttribute('font-weight','bold');ft.setAttribute('font-family','Helvetica,Arial,sans-serif');ft.setAttribute('pointer-events','none');
       ft.textContent=String(note.finger);
       g.appendChild(ft);
+    }
+    // Señal de bajada ("Drop 2 por ciclos", data-move): esta voz se moverá en el próximo cambio.
+    // Placa abajo a la IZQUIERDA (hacia donde va: la cejilla) para no pisar la del intervalo/dedo
+    // (arriba a la derecha): flecha ◀ + trastes que baja (1 = semitono, 2 = tono). Solo la llevan los
+    // frames de drop 2 — tríadas y demás no escriben data-move, así que no cambia nada para ellos.
+    // v4.5.0: si la voz SUBE (ciclos 3, 5, 7) la placa ▶ va abajo a la DERECHA, también hacia donde va.
+    // move 0 (solo con "Destacar notas guía"): la voz se QUEDA → placa "═" gris claro, más tenue,
+    // en el mismo hueco (abajo a la izquierda).
+    if(Number.isFinite(note.move)){
+      const stay=note.move===0,bc=stay?'rgba(220,226,235,.75)':'#ffd640';
+      const mr=Math.max(9,Math.round(rr*0.46));
+      const mx=note.cx+(note.move>0?1:-1)*rr*0.78,my=note.cy+rr*0.78;
+      const mc=document.createElementNS(NS,'circle');mc.setAttribute('cx',mx);mc.setAttribute('cy',my);mc.setAttribute('r',mr);
+      mc.setAttribute('fill','rgba(20,20,20,.85)');mc.setAttribute('stroke',bc);mc.setAttribute('stroke-width',stay?'1':'1.5');mc.setAttribute('pointer-events','none');mc.setAttribute('class','move-badge');
+      g.appendChild(mc);
+      const mt=document.createElementNS(NS,'text');mt.setAttribute('x',mx);mt.setAttribute('y',my);mt.setAttribute('text-anchor','middle');mt.setAttribute('dominant-baseline','central');
+      mt.setAttribute('fill',bc);mt.setAttribute('font-size',Math.round(mr*1.0));mt.setAttribute('font-weight','bold');mt.setAttribute('font-family','Helvetica,Arial,sans-serif');mt.setAttribute('pointer-events','none');mt.setAttribute('class','mv-lbl');
+      mt.textContent=stay?'═':(note.move<0?'◀':'▶')+Math.abs(note.move);
+      g.appendChild(mt);
     }
     canvas.appendChild(g);
   });
@@ -5724,7 +5871,9 @@ function animateVoiceLeading(fromNotes,toParsed,durationMs,explicitChord){
       const dx=(s.cx+(e.cx-s.cx)*p)-s.cx;
       const dy=(s.cy+(e.cy-s.cy)*p)-s.cy;
       g.setAttribute('transform',`translate(${dx},${dy})`);
-      const circles=Array.from(g.querySelectorAll('circle'));
+      // :not(.move-badge): la señal de bajada de drop 2 se dibuja DESPUÉS de la nota y sería el
+      // último círculo — sin excluirla, el fundido de color se aplicaba a la placa y no a la nota.
+      const circles=Array.from(g.querySelectorAll('circle:not(.move-badge)'));
       const mainCircle=circles[circles.length-1];
       if(mainCircle){
         const isF=followIdx>=0&&i===followIdx;
@@ -6130,7 +6279,9 @@ function generateNeckSVG(voicing,chord,fretStart=0,fretEnd=15,msg=null,showEcho=
   // por la fila #vMsgText igual que hace con el nombre de pentatónica, sin depender de bar.msgText
   // (que el usuario podría borrar/editar por compás).
   const msgAttr=msg?` data-msg="${String(msg).replace(/"/g,'&quot;')}"`:'';
-  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="triads" data-fretrange="${fretStart},${fretEnd}"${msgAttr}>`;
+  // data-drop2 (solo "Drop 2 por ciclos"): marca los frames para el anclaje discreto de notas comunes.
+  const drop2Attr=voicing.drop2?' data-drop2="1"'+(voicing.drop2Cycle?` data-drop2cycle="${voicing.drop2Cycle}"`:'')+(voicing.drop2Arrows?' data-drop2arrows="1"':''):'';
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" data-generated="true" data-darkstyle="true" data-gen="triads" data-fretrange="${fretStart},${fretEnd}"${msgAttr}${drop2Attr}>`;
   if(fretStart===0)s+=`<line x1="${leftPad}" y1="${topPad}" x2="${leftPad}" y2="${topPad+5*stringSpacing}" stroke="rgba(255,255,255,.85)" stroke-width="6"/>`;
   for(let f=fretStart+(fretStart===0?1:0);f<=fretEnd;f++){
     const x=fretX(f);
@@ -6176,7 +6327,14 @@ function generateNeckSVG(voicing,chord,fretStart=0,fretEnd=15,msg=null,showEcho=
     // nunca en el vídeo/mástil en vivo). Con data-finger en la nota real, sobrevive el viaje y
     // renderSVGStatic dibuja el badge junto a ella (ver ese mismo comentario ahí).
     const fingerAttr=(voicing.fingers&&voicing.fingers[i]!=null)?` data-finger="${voicing.fingers[i]}"`:'';
-    s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" data-st="${getNoteStAtFret(sIdx,f)}"${fingerAttr}/>`;
+    // data-move (opcional — solo "Drop 2 por ciclos", ver generateDrop2Cycle → nextMoves): semitonos
+    // que se moverá esta voz en el PRÓXIMO cambio (-1/-2 = baja). Mismo viaje que data-finger: va en
+    // el círculo de la nota para sobrevivir a svgStringToParsed; renderSVGStatic dibuja la señal.
+    const moveAttr=(voicing.moves&&voicing.moves[i]!=null)?` data-move="${voicing.moves[i]}"`:'';
+    // data-guide (opcional — "Drop 2 por ciclos" con "Destacar notas guía"): la nota es 3ª o 7ª del
+    // acorde; renderSVGStatic le pone el anillo dorado de las guías (el mismo de Chord tones).
+    const guideAttr=(voicing.guides&&voicing.guides[i])?' data-guide="1"':'';
+    s+=`<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" data-st="${getNoteStAtFret(sIdx,f)}"${fingerAttr}${moveAttr}${guideAttr}/>`;
     s+=`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="white" font-size="${lbl.length>2?Math.round(r*0.65):Math.round(r*0.85)}" font-weight="bold" font-family="Arial,sans-serif">${lbl}</text>`;
   });
   // Posición "eco" (ver "Explora una tríada en el mástil", feedback de Alberto): con el mástil
@@ -6306,6 +6464,8 @@ function svgStringToParsed(svgStr){
     // data-finger (ver generateNeckSVG/buildDrop2Voicing): dedo transcrito del PDF para la
     // tríada abierta (Drop 2) — renderSVGStatic dibuja el badge a partir de esto.
     const dfg=c.getAttribute('data-finger');if(dfg!=null&&dfg!=='')note.finger=parseInt(dfg,10);
+    const dmv=c.getAttribute('data-move');if(dmv!=null&&dmv!=='')note.move=parseInt(dmv,10);
+    if(c.getAttribute('data-guide')==='1')note.guide=true;
     // data-echo (ver generateNeckSVG): posición "eco" de "Explora una tríada" — renderSVGStatic
     // debe pintarla con su estilo amarillo tenue SIEMPRE, incluso con forceOwnNoteStyle activado
     // (que si no, repintaría este círculo con el rojo/cian fijo y perdería el marcador).
@@ -6364,6 +6524,12 @@ function svgStringToParsed(svgStr){
   // sp (escalas por tramos): todas las notas iluminadas → SÍ admiten el diseño propio,
   // a diferencia de los tn reales (donde los fills tenues/iluminados SON el ejercicio).
   if(doc.documentElement&&doc.documentElement.getAttribute('data-sp')==='1')out.spFrame=true;
+  // Drop 2 por ciclos: cada nota lleva la marca (paintTriadGhosts recibe notas, no el frame).
+  if(doc.documentElement&&doc.documentElement.getAttribute('data-drop2')==='1'){out.drop2Frame=true;notes.forEach(n=>{n.drop2=true;});
+    // Con notas guía, la placa "═" sustituye al aro blanco de nota común (ver triad ghosts).
+    if(notes.some(n=>n.guide===true)){out.drop2Guides=true;notes.forEach(n=>{n.drop2Guides=true;});}
+    const dc=parseInt(doc.documentElement.getAttribute('data-drop2cycle')||'',10);if(dc)out.drop2Cycle=dc;
+    if(doc.documentElement.getAttribute('data-drop2arrows')==='1'){out.drop2Arrows=true;notes.forEach(n=>{n.drop2Arrows=true;});}}
   // Arpegios en escala: mismo trato que sp — a diferencia de un tn real (Chord tones), SÍ
   // admite "Aplicar estilo propio a las notas" (ver renderSVGStatic/animateVoiceLeading).
   if(doc.documentElement&&doc.documentElement.getAttribute('data-as')==='1')out.asFrame=true;
@@ -6392,6 +6558,223 @@ function buildFixedShapeVoicings(chordList,group,inv){
     return{voicing:v,group,inv,notes:group.map((s,i)=>({string:s,fret:v.frets[i]}))};
   });
 }
+
+// ── DROP 2 POR CICLOS (método Goodrick, "Almanac of Guitar Voice-Leading") ───────────────────────
+// Cuatriadas drop 2 (4 notas, una por cuerda) encadenadas por un ciclo diatónico. Primera versión:
+// solo cuerdas 4-3-2-1 y ciclo 4 (I-IV-vii-iii-vi-ii-V-I). Regla del ciclo 4: en cada cambio las
+// voces que también están en el acorde siguiente se QUEDAN (mismo traste y cuerda) y las demás
+// BAJAN a la nota más cercana del acorde siguiente (1 o 2 semitonos: un grado de la escala). Se
+// calcula a partir de las NOTAS de los acordes reales del XML, no de plantillas de forma, así que
+// vale en cualquier tonalidad; la inversión cambia sola acorde a acorde (manda la conducción, no
+// la fundamental). Cada voz se queda en SU cuerda todo el recorrido: el voicing se emite siempre
+// en el mismo orden de cuerdas (grave→aguda), y animateVoiceLeading empareja las notas por orden,
+// así que cada voz desliza por su propia cuerda.
+// Cada vuelta empieza otra vez en el voicing inicial (decisión de Alberto 2026-10-14: el ciclo
+// baja ~6-7 trastes por vuelta; encadenando, en 12 vueltas se saldría del mástil). El reinicio se
+// hace donde el primer acorde de la progresión se repite (Dmaj7 | Dmaj7 entre vueltas): mismo
+// acorde, así que no rompe la conducción. Si aun así una posición cae por debajo de minFret, la
+// figura entera sube una octava (Goodrick lo permite) y se avisa.
+// v4.5.0 — los 6 ciclos de Goodrick (vol. I del Almanac). La regla es la misma en todos: las voces
+// que también están en el acorde siguiente se quedan y las demás se mueven UN grado, todas en el
+// mismo sentido. Lo que cambia es el sentido y cuántas notas comunes hay:
+//   ciclo 2 (I-ii-iii…, sube una 2ª): 1 común, 3 BAJAN   ciclo 7 (I-vii-vi…, baja una 2ª): 1 común, 3 SUBEN
+//   ciclo 4 (I-IV-vii…, sube una 4ª): 2 comunes, 2 BAJAN  ciclo 5 (I-V-ii…, baja una 4ª): 2 comunes, 2 SUBEN
+//   ciclo 6 (I-vi-IV…, baja una 3ª): 3 comunes, 1 BAJA   ciclo 3 (I-iii-V…, sube una 3ª): 3 comunes, 1 SUBE
+// Goodrick nombra los ciclos por el intervalo diatónico ASCENDENTE entre fundamentales (su "ciclo
+// 4" es lo que casi todo el mundo llama ciclo de 5ª). Ojo con el ciclo 2: los acordes suben pero
+// las voces bajan (C E G B → C D F A = Dm7 con la C de 7ª); es la conducción "disjunta" que él
+// elige a propósito en vez de subir las 4 voces en paralelo.
+// Modo 'auto' (el de la UI por defecto): el ciclo de cada cambio sale de los propios acordes —
+// se prueba la regla en los dos sentidos y vale el que da exactamente las 4 notas del acorde
+// siguiente (es único en las 3 escalas, ver tools/test-drop2-cycle.js) —, así que sirve con
+// cualquier ciclo e incluso con progresiones que mezclan ciclos.
+// Siguientes fases previstas (no implementadas): otros juegos de cuerdas (DROP2_STRING_SETS),
+// drop 3 (otro orden en drop2Candidates), menor melódica/armónica (ya funciona: la regla lee los
+// acordes, no la escala).
+const DROP2_STRING_SETS={'4-3-2-1':[2,3,4,5]}; // 0 = 6ª cuerda (Mi grave), mismo criterio que TRIAD_STRING_GROUPS
+const DROP2_OPEN_MIDI=[40,45,50,55,59,64];
+const DROP2_INV_NAMES=['Fundamental','1ª inversión','2ª inversión','3ª inversión'];
+const DROP2_CYCLE_RULES={2:'down',3:'up',4:'down',5:'up',6:'down',7:'up'}; // ciclo → dirección de las voces que no son nota común
+const DROP2_CYCLE_COMMON={2:1,3:3,4:2,5:2,6:3,7:1}; // notas comunes por cambio (solo informativo/tests)
+const DROP2_CYCLE_NAMES={2:'I-ii-iii-IV-V-vi-vii',3:'I-iii-V-vii-ii-IV-vi',4:'I-IV-vii-iii-vi-ii-V',5:'I-V-ii-vi-iii-vii-IV',6:'I-vi-IV-ii-vii-V-iii',7:'I-vii-vi-V-IV-iii-ii'};
+// Las 4 notas (R, 3ª, 5ª, 7ª) de un acorde de cuatro notas, con su grafía e intervalo. null si el
+// acorde no es una cuatriada (una tríada no admite drop 2 de 4 voces).
+function drop2ChordTones(chord){
+  const cm=(chord||'').match(/^([A-G][b#]?)(.*)/);
+  if(!cm)return null;
+  const rootRaw=cm[1],defs=resolveChordDefs(cm[2].trim());
+  if(!defs||defs.length<4)return null;
+  const rpc=noteToSt(rootRaw);
+  if(rpc<0)return null;
+  return defs.slice(0,4).map(iv=>({pc:((rpc+iv.st)%12+12)%12,n:iv.n,name:spellNote(rootRaw,iv.n,iv.st)||NTS[((rpc+iv.st)%12+12)%12]}));
+}
+// Todos los voicings drop 2 de un acorde en un juego de 4 cuerdas: por cada inversión de la
+// posición cerrada (c0<c1<c2<c3) se baja una octava la 2ª voz desde arriba → orden grave→agudo
+// c2,c0,c1,c3. inv = inversión por la nota del BAJO (R→0, 3ª→1, 5ª→2, 7ª→3).
+function drop2Candidates(tones,strings,maxFret){
+  const out=[];
+  for(let k=0;k<4;k++){
+    const close=[0,1,2,3].map(i=>tones[(k+i)%4]);
+    const order=[close[2],close[0],close[1],close[3]];
+    for(let f0=0;f0<=maxFret;f0++){
+      const m0=DROP2_OPEN_MIDI[strings[0]]+f0;
+      if(m0%12!==order[0].pc)continue;
+      const midi=[m0];let ok=true;
+      for(let s=1;s<4&&ok;s++){
+        let m=-1;
+        for(let x=0;x<=maxFret;x++){const c=DROP2_OPEN_MIDI[strings[s]]+x;if(c%12===order[s].pc&&c>midi[s-1]&&c-midi[s-1]<12){m=c;break;}}
+        if(m<0)ok=false;else midi.push(m);
+      }
+      if(ok)out.push({midi,inv:tones.indexOf(order[0])});
+    }
+  }
+  return out;
+}
+const drop2Frets=(midi,strings)=>midi.map((m,i)=>m-DROP2_OPEN_MIDI[strings[i]]);
+function drop2Fit(midi,strings,o){
+  const fr=drop2Frets(midi,strings),mn=Math.min(...fr),mx=Math.max(...fr);
+  return{fr,mn,mx,span:mx-mn,low:mn<o.minFret,wide:mx-mn>o.maxSpan,high:mx>o.maxFret};
+}
+// Un paso del ciclo: voces comunes se quedan, el resto se mueve 1-2 semitonos hacia `dir`.
+// null si alguna voz no encuentra destino o si el resultado no tiene las 4 notas del acorde
+// siguiente (p.ej. ciclo 4 probado hacia arriba: G→A y B→C duplica la C y pierde la F) — en
+// ambos casos la progresión no es un ciclo con ese sentido.
+function drop2Step(prevMidi,nextTones,dir){
+  const pcs=nextTones.map(t=>t.pc),sgn=dir==='up'?1:-1;
+  const midi=[],common=[],moved=[];
+  for(let i=0;i<prevMidi.length;i++){
+    const m=prevMidi[i];
+    if(pcs.includes(m%12)){midi.push(m);common.push(i);continue;}
+    let to=null;
+    for(let d=1;d<=2&&to==null;d++){if(pcs.includes(((m+sgn*d)%12+12)%12))to=m+sgn*d;}
+    if(to==null)return null;
+    midi.push(to);moved.push(i);
+  }
+  if(new Set(midi.map(m=>m%12)).size!==pcs.length)return null;
+  return{midi,common,moved};
+}
+// Ciclo de Goodrick entre dos acordes por la distancia entre las LETRAS de sus fundamentales
+// (D→G = 3 letras → ciclo 4). Solo para mensajes y para desempatar en modo 'auto'; null si no hay
+// letra o es el mismo acorde.
+function drop2CycleBetween(a,b){
+  const L='CDEFGAB',ia=L.indexOf((a||'').charAt(0)),ib=L.indexOf((b||'').charAt(0));
+  if(ia<0||ib<0||ia===ib)return null;
+  return((ib-ia+7)%7)+1;
+}
+// Paso con el ciclo fijo (dir) o deducido de los acordes (dir==='auto': se prueban los dos
+// sentidos; si valen ambos —no pasa en mayor/menor melódica/armónica— manda el ciclo por letras).
+function drop2StepAuto(prevMidi,nextTones,dir,prevChord,nextChord){
+  if(dir!=='auto')return drop2Step(prevMidi,nextTones,dir);
+  const dn=drop2Step(prevMidi,nextTones,'down'),up=drop2Step(prevMidi,nextTones,'up');
+  if(dn&&up){const c=drop2CycleBetween(prevChord,nextChord);return DROP2_CYCLE_RULES[c]==='up'?up:dn;}
+  return dn||up;
+}
+const drop2SameChord=(a,b)=>!!a&&!!b&&a.map(t=>t.pc).join()===b.map(t=>t.pc).join();
+// chords: un acorde por segmento (los del XML). opts: {strings, startInv:'auto'|0-3, refFret,
+// cycle, minFret, maxSpan, maxFret}. Devuelve {out, warnings, startDesc}; out[i] = null (sin
+// acorde antes del primero válido, p.ej. claqueta) o {chord, voicing, notes, inv, midi, common,
+// moved, restart, held, jumped}. Un segmento vacío o no-cuatriada DESPUÉS de uno válido mantiene
+// el último acorde (held) — p.ej. los compases vacíos entre tandas del XML.
+function generateDrop2Cycle(chords,opts){
+  opts=opts||{};
+  const o={strings:opts.strings||DROP2_STRING_SETS['4-3-2-1'],startInv:opts.startInv==null?'auto':opts.startInv,
+    refFret:typeof opts.refFret==='number'?opts.refFret:7,cycle:opts.cycle||4,
+    minFret:opts.minFret!=null?opts.minFret:3,maxSpan:opts.maxSpan!=null?opts.maxSpan:4,maxFret:opts.maxFret!=null?opts.maxFret:17};
+  const dir=o.cycle==='auto'?'auto':DROP2_CYCLE_RULES[o.cycle];
+  if(!dir)throw new Error('Ciclo '+o.cycle+' no existe (los de Goodrick son 2, 3, 4, 5, 6 y 7).');
+  const tones=chords.map(drop2ChordTones);
+  const first=tones.findIndex(t=>t);
+  const warnings=[];
+  const out=chords.map(()=>null);
+  if(first<0)return{out,warnings:['Ningún acorde de cuatro notas en la progresión.'],startDesc:''};
+  // Reinicios: el primer acorde válido y cada repetición del acorde inicial justo después de sí mismo.
+  const isRestart=i=>i===first||(tones[i]&&drop2SameChord(tones[i],tones[first])&&drop2SameChord(tones[i],tones[i-1]));
+  const nextRestart=i=>{for(let j=i+1;j<chords.length;j++)if(isRestart(j))return j;return chords.length;};
+  // Recorrido simulado desde un voicing de arranque hasta el siguiente reinicio: cuántos saltos de
+  // octava/aberturas excesivas tendría (para elegir el arranque que recorra la vuelta limpio).
+  const simulate=(startMidi,i0)=>{
+    let cur=startMidi,bad=0;const end=nextRestart(i0);
+    for(let j=i0+1;j<end;j++){
+      if(!tones[j]||drop2SameChord(tones[j],tones[j-1]))continue;
+      const st=drop2StepAuto(cur,tones[j],dir,chords[j-1],chords[j]);if(!st){bad+=10;break;}
+      cur=st.midi;const f=drop2Fit(cur,o.strings,o);
+      if(f.low){bad++;cur=cur.map(m=>m+12);}else if(f.high){bad++;if(f.mn-12>=o.minFret)cur=cur.map(m=>m-12);}
+      if(f.wide)bad++;
+    }
+    return bad;
+  };
+  const pickStart=(i)=>{
+    let cands=drop2Candidates(tones[i],o.strings,o.maxFret);
+    if(o.startInv!=='auto'){const f=cands.filter(c=>c.inv===o.startInv);if(f.length)cands=f;else warnings.push(chords[i]+': no hay drop 2 en '+DROP2_INV_NAMES[o.startInv]+' en estas cuerdas — se elige la más cercana.');}
+    let best=null,bestKey=null;
+    cands.forEach(c=>{
+      const f=drop2Fit(c.midi,o.strings,o);
+      const key=[(f.low||f.wide||f.high?1:0)+simulate(c.midi,i),Math.abs((f.mn+f.mx)/2-o.refFret)];
+      if(!best||key[0]<bestKey[0]||(key[0]===bestKey[0]&&key[1]<bestKey[1])){best=c;bestKey=key;}
+    });
+    return best;
+  };
+  const entry=(i,midi,extra)=>{
+    const t=tones[i];
+    const byPc=pc=>t.find(x=>x.pc===pc);
+    const frets=drop2Frets(midi,o.strings);
+    const ts=midi.map(m=>byPc(m%12));
+    return Object.assign({chord:chords[i],midi,inv:t.indexOf(ts[0]),
+      voicing:{frets,strings:o.strings.slice(),notes:ts.map(x=>x.name),intervals:ts.map(x=>x.n),drop2:true},
+      notes:frets.map((f,k)=>({string:o.strings[k],fret:f})),common:[],moved:[],restart:false,held:false,jumped:false},extra||{});
+  };
+  let prev=null,startDesc='',restarts=0;
+  for(let i=first;i<chords.length;i++){
+    if(!tones[i]){ // mantener el último acorde
+      if(prev)out[i]=Object.assign({},prev,{voicing:Object.assign({},prev.voicing),chord:prev.chord,held:true,restart:false,jumped:false,common:[0,1,2,3],moved:[]});
+      continue;
+    }
+    if(isRestart(i)){
+      // Todas las vueltas reinician en el MISMO voicing que la primera (no se recalcula: con una
+      // "vuelta" de un solo compás —el acorde final repetido— cualquier arranque valdría y saldría otro).
+      const s=(i!==first&&out[first])?{midi:out[first].midi.slice()}:pickStart(i);
+      if(!s){warnings.push(chords[i]+': sin voicing drop 2 posible en estas cuerdas.');prev=null;continue;}
+      out[i]=entry(i,s.midi,{restart:true});
+      if(i===first){const f=drop2Fit(s.midi,o.strings,o);startDesc=chords[i]+' '+DROP2_INV_NAMES[out[i].inv]+' (trastes '+f.fr.join('-')+', cuerdas '+o.strings.map(x=>6-x).join('-')+')';}
+      else restarts++;
+      prev=out[i];continue;
+    }
+    if(!prev){const s=pickStart(i);if(s){out[i]=entry(i,s.midi,{restart:true});prev=out[i];}continue;}
+    if(drop2SameChord(tones[i],drop2ChordTones(prev.chord))){ // mismo acorde repetido (no inicial): se queda
+      out[i]=Object.assign({},prev,{voicing:Object.assign({},prev.voicing),chord:chords[i],held:true,restart:false,jumped:false,common:[0,1,2,3],moved:[]});prev=out[i];continue;
+    }
+    const st=drop2StepAuto(prev.midi,tones[i],dir,prev.chord,chords[i]);
+    if(!st){
+      warnings.push('Compás/segmento '+(i+1)+' ('+prev.chord+' → '+chords[i]+'): alguna voz no tiene destino a 1-2 semitonos — no es '+(dir==='auto'?'ningún ciclo diatónico':'un ciclo '+o.cycle)+'. Se reinicia en el voicing más cercano.');
+      const s=pickStart(i);if(s){out[i]=entry(i,s.midi,{restart:true});prev=out[i];}
+      continue;
+    }
+    let midi=st.midi,jumped=false;
+    const f=drop2Fit(midi,o.strings,o);
+    if(f.low&&f.mx+12<=o.maxFret){midi=midi.map(m=>m+12);jumped=true;warnings.push('Segmento '+(i+1)+' ('+chords[i]+'): la figura bajaba del traste '+o.minFret+' — sube una octava.');}
+    // Simétrico para los ciclos que suben (3, 5, 7): si se pasa del traste máximo, baja una octava.
+    else if(f.high&&f.mn-12>=o.minFret){midi=midi.map(m=>m-12);jumped=true;warnings.push('Segmento '+(i+1)+' ('+chords[i]+'): la figura pasaba del traste '+o.maxFret+' — baja una octava.');}
+    if(f.wide)warnings.push('Segmento '+(i+1)+' ('+chords[i]+'): abertura de '+f.span+' trastes (máx. '+o.maxSpan+').');
+    out[i]=entry(i,midi,{common:jumped?[]:st.common,moved:jumped?[0,1,2,3]:st.moved,jumped});
+    prev=out[i];
+  }
+  // Bajadas del PRÓXIMO cambio (señal en el frame actual): solo si el siguiente es un paso del ciclo
+  // (no reinicio, ni acorde mantenido, ni salto de octava). moves[k] = semitonos de la voz k.
+  for(let i=0;i<out.length;i++){
+    const e=out[i];if(!e)continue;
+    const n=out[i+1];
+    e.voicing.moves=[null,null,null,null];
+    e.nextMoves=[];
+    if(n&&!n.restart&&!n.held&&!n.jumped){
+      n.moved.forEach(k=>{const d=n.midi[k]-e.midi[k];e.voicing.moves[k]=d;e.nextMoves.push({k,d,string:6-o.strings[k]});});
+    }
+    e.nextRestart=!!(n&&n.restart);
+  }
+  // Ciclos que aparecen en los cambios de verdad (para el mensaje final).
+  const cyclesUsed=[];
+  for(let i=1;i<out.length;i++){const e=out[i];if(!e||e.restart||e.held||!out[i-1])continue;const c=drop2CycleBetween(out[i-1].chord,e.chord);if(c&&!cyclesUsed.includes(c))cyclesUsed.push(c);}
+  return{out,warnings,startDesc,restarts,cyclesUsed};
+}
 // Las 6 estrategias de generación son mutuamente excluyentes DOS A DOS salvo las combinaciones
 // explícitamente permitidas (Eje fijo + Zona de trastes fija, Eje fijo + zona por vuelta). El
 // "Barrido de posiciones" y "Figura por vuelta" son especiales: ninguno combina con NINGUNA otra
@@ -6405,6 +6788,33 @@ function deactivateTriadSweep(){
 function deactivateTriadPerLapShape(){
   const cb=document.getElementById('triadPerLapShape');
   if(cb&&cb.checked){cb.checked=false;onTriadPerLapShapeChange();}
+}
+// "Drop 2 por ciclos" no combina con NINGUNA de las 6 estrategias de tríadas (no pasa por
+// triadCandidates ni por figuras de 3 notas): activarlo las apaga todas y activar cualquiera de
+// ellas lo apaga a él — mismo patrón que el barrido y la figura por vuelta.
+function deactivateTriadDrop2Cycle(){
+  const cb=document.getElementById('triadDrop2Cycle');
+  if(cb&&cb.checked){cb.checked=false;onTriadDrop2CycleChange();}
+}
+function onTriadDrop2CycleChange(){
+  const on=document.getElementById('triadDrop2Cycle')?.checked===true;
+  ['triadDrop2Strings','triadDrop2Inv','triadDrop2RefFret','triadDrop2CycleSel','triadDrop2Guides','triadDrop2Arrows']
+    .forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=!on;});
+  if(!on)return;
+  const shapeCb=document.getElementById('triadFixedShape');
+  if(shapeCb&&shapeCb.checked){shapeCb.checked=false;onTriadFixedShapeChange();}
+  const axisCb=document.getElementById('triadFixedAxis');
+  if(axisCb&&axisCb.checked){axisCb.checked=false;onTriadFixedAxisChange();}
+  const zfCb=document.getElementById('triadZoneFixed');
+  if(zfCb&&zfCb.checked){zfCb.checked=false;onTriadZoneFixedChange();}
+  const zpCb=document.getElementById('triadZonePerLap');
+  if(zpCb&&zpCb.checked){zpCb.checked=false;onTriadZonePerLapChange();}
+  deactivateTriadSweep();deactivateTriadPerLapShape();
+}
+function generateDrop2CycleFromUI(){
+  const cb=document.getElementById('triadDrop2Cycle');
+  if(cb&&!cb.checked){cb.checked=true;onTriadDrop2CycleChange();}
+  return autoGenerateTriads();
 }
 function onTriadFixedShapeChange(){
   const on=document.getElementById('triadFixedShape')?.checked===true;
@@ -6421,7 +6831,7 @@ function onTriadFixedShapeChange(){
   // "Misma figura" tampoco pasa por triadCandidates, así que ignora la zona de trastes fija.
   const zfCb=document.getElementById('triadZoneFixed');
   if(on&&zfCb&&zfCb.checked){zfCb.checked=false;onTriadZoneFixedChange();}
-  if(on){deactivateTriadSweep();deactivateTriadPerLapShape();}
+  if(on){deactivateTriadSweep();deactivateTriadPerLapShape();deactivateTriadDrop2Cycle();}
 }
 function onTriadZonePerLapChange(){
   const on=document.getElementById('triadZonePerLap')?.checked===true;
@@ -6437,7 +6847,7 @@ function onTriadZonePerLapChange(){
   // sola zona para todo vs. una por vuelta) — no tiene sentido combinarlas.
   const zfCb=document.getElementById('triadZoneFixed');
   if(on&&zfCb&&zfCb.checked){zfCb.checked=false;onTriadZoneFixedChange();}
-  if(on){deactivateTriadSweep();deactivateTriadPerLapShape();}
+  if(on){deactivateTriadSweep();deactivateTriadPerLapShape();deactivateTriadDrop2Cycle();}
 }
 // "Eje fijo": fija grupo de cuerdas O inversión (elegido en triadFixedAxisWhich) y deja el otro
 // eje libre para el voice leading (ver generateTriadVoiceLeading opts.filter). Incompatible con
@@ -6454,7 +6864,7 @@ function onTriadFixedAxisChange(){
     document.getElementById('triadFixedGroupSel').disabled=true;
     document.getElementById('triadFixedInvSel').disabled=true;
   }
-  if(on){deactivateTriadSweep();deactivateTriadPerLapShape();}
+  if(on){deactivateTriadSweep();deactivateTriadPerLapShape();deactivateTriadDrop2Cycle();}
 }
 function syncTriadFixedAxisSelects(){
   const on=document.getElementById('triadFixedAxis')?.checked===true;
@@ -6477,7 +6887,7 @@ function onTriadZoneFixedChange(){
   if(on&&shapeCb&&shapeCb.checked){shapeCb.checked=false;onTriadFixedShapeChange();}
   const zoneCb=document.getElementById('triadZonePerLap');
   if(on&&zoneCb&&zoneCb.checked){zoneCb.checked=false;onTriadZonePerLapChange();}
-  if(on){deactivateTriadSweep();deactivateTriadPerLapShape();}
+  if(on){deactivateTriadSweep();deactivateTriadPerLapShape();deactivateTriadDrop2Cycle();}
 }
 // "Barrido de posiciones": sigue los acordes REALES del tema (vía `flat`, igual que las otras 4
 // estrategias) pero rota entre posiciones jugables (grupo fijo o todos los grupos) cada X
@@ -6500,7 +6910,7 @@ function onTriadSweepChange(){
   if(zfCb&&zfCb.checked){zfCb.checked=false;onTriadZoneFixedChange();}
   const zpCb=document.getElementById('triadZonePerLap');
   if(zpCb&&zpCb.checked){zpCb.checked=false;onTriadZonePerLapChange();}
-  deactivateTriadPerLapShape();
+  deactivateTriadPerLapShape();deactivateTriadDrop2Cycle();
 }
 function syncTriadSweepScope(){
   const on=document.getElementById('triadSweepChord')?.checked===true;
@@ -6536,7 +6946,7 @@ function onTriadPerLapShapeChange(){
   if(zfCb&&zfCb.checked){zfCb.checked=false;onTriadZoneFixedChange();}
   const zpCb=document.getElementById('triadZonePerLap');
   if(zpCb&&zpCb.checked){zpCb.checked=false;onTriadZonePerLapChange();}
-  deactivateTriadSweep();
+  deactivateTriadSweep();deactivateTriadDrop2Cycle();
 }
 // Lista de patrones {gi,inv} para "Figura por vuelta" — gi es índice en TRIAD_STRING_GROUPS/
 // TRIAD_GROUP_LABELS, inv es 0/1/2 (Fundamental/1ª/2ª). Por defecto un único patrón razonable:
@@ -8076,6 +8486,87 @@ async function generateExploreDrop2Triad(rootRaw,quality,barsPerPos){
   return{applied,bumpedTo};
 }
 
+// "Drop 2 por ciclos" (ver generateDrop2Cycle): escribe un frame por segmento con el MISMO formato
+// que las tríadas (generateNeckSVG → svgStringToParsed, data-gen="triads"), así que se reproduce
+// por la ruta de tríadas sin cambios. Lee las opciones del bloque de la pestaña Tríadas.
+async function applyDrop2CycleToEditor(all,barLoc,flat){
+  const setKey=document.getElementById('triadDrop2Strings')?.value||'4-3-2-1';
+  const invV=document.getElementById('triadDrop2Inv')?.value||'auto';
+  const refFret=parseInt(document.getElementById('triadDrop2RefFret')?.value??'7',10);
+  const cv=document.getElementById('triadDrop2CycleSel')?.value??'auto';
+  const guidesOn=document.getElementById('triadDrop2Guides')?.checked===true;
+  const arrowsOn=document.getElementById('triadDrop2Arrows')?.checked===true;
+  const cycle=cv==='auto'?'auto':parseInt(cv,10);
+  let res;
+  try{
+    res=generateDrop2Cycle(flat.map(f=>f.chord),{strings:DROP2_STRING_SETS[setKey],startInv:invV==='auto'?'auto':parseInt(invV,10),refFret:isNaN(refFret)?7:refFret,cycle});
+  }catch(e){alert(e.message);return;}
+  let sharedFretEnd=13;
+  res.out.forEach(v=>{if(v){const mx=Math.max(...v.voicing.frets);if(mx>sharedFretEnd)sharedFretEnd=mx;}});
+  const bumpedTo=bumpMaxFretsShownIfNeeded(sharedFretEnd);
+  let applied=0,jumps=0;
+  const usedSlotsByBar={};
+  for(let idx=0;idx<flat.length;idx++){
+    const f=flat[idx],v=res.out[idx];
+    if(!v)continue;
+    if(v.jumped)jumps++;
+    // Mensaje: inversión + qué cuerdas bajan en el próximo cambio (la placa ◀ de cada nota lo marca
+    // en el mástil; el texto lo dice con palabras).
+    const nm=v.nextMoves||[];
+    const nmUp=nm.length&&nm[0].d>0;
+    const nextTxt=nm.length?' · '+(nm.length===1?(nmUp?'sube la cuerda ':'baja la cuerda '):(nmUp?'suben las cuerdas ':'bajan las cuerdas '))+nm.map(x=>x.string).sort((a,b)=>b-a).join(nm.length>2?', ':' y ').replace(/, (\d)$/,' y $1'):(v.nextRestart?' · vuelve al inicio':'');
+    // Con notas guía, las voces que se QUEDAN en el próximo cambio llevan también placa (move 0 →
+    // "═"), en el mismo hueco que la ◀/▶ de las que se mueven: el anillo dorado ocupa el sitio
+    // del aro blanco de nota común y esa información se perdía (Alberto, 2026-10-14). Solo si el
+    // próximo cambio es un paso del ciclo (hay alguna voz que se mueve): reinicios y acordes
+    // mantenidos siguen sin placas.
+    const hasMoves=(v.voicing.moves||[]).some(d=>d!=null);
+    let vv=guidesOn?Object.assign({},v.voicing,{guides:v.voicing.intervals.map(iv=>TN_GUIDE_IVS.includes(iv)),
+      moves:hasMoves?v.voicing.moves.map(d=>d==null?0:d):v.voicing.moves,
+      drop2Cycle:hasMoves?drop2CycleBetween(v.chord,flat[idx+1]?.chord):null}):v.voicing;
+    // Flechas hacia el siguiente acorde (sugerencia que le hicieron a Alberto, 2026-10-14): solo
+    // marca el frame; las dibuja paintTriadGhosts junto a la fantasma de destino.
+    if(arrowsOn)vv=Object.assign({},vv,{drop2Arrows:true});
+    const svg=generateNeckSVG(vv,v.chord,0,sharedFretEnd,'Drop 2 · '+DROP2_INV_NAMES[v.inv]+nextTxt);
+    if(!svg)continue;
+    const parsed=svgStringToParsed(svg);
+    let thumb=null; try{thumb=await svgToThumb(svg,320,116);}catch(e){}
+    const loc=barLoc[f.bi];if(!loc)continue;
+    const target=getTargetBars(loc.ci);
+    if(target&&target[loc.local]){
+      const slotIdx=Math.round((f.beat||1)-1);
+      target[loc.local].imgs[slotIdx]={type:'svg',data:svg,name:v.chord+' drop 2 '+DROP2_INV_NAMES[v.inv],thumb,svgParsed:parsed};
+      (usedSlotsByBar[f.bi]=usedSlotsByBar[f.bi]||new Set()).add(slotIdx);
+      applied++;
+    }
+  }
+  // Limpia slots de una generación anterior que esta no ha escrito (p.ej. compases de claqueta).
+  all.forEach((b,bi)=>{
+    const loc=barLoc[bi];if(!loc)return;
+    const target=getTargetBars(loc.ci);
+    if(!target||!target[loc.local])return;
+    const used=usedSlotsByBar[bi]||new Set();
+    for(let s=0;s<4;s++){if(!used.has(s))target[loc.local].imgs[s]=null;}
+  });
+  renderEditor();renderBank();checkReady();
+  if(typeof setExerciseType==='function'){
+    const sel=document.getElementById('exerciseType');if(sel)sel.value='triads';
+    setExerciseType('triads');
+  }
+  // Arriba, la escala armonizada (cuatriadas del tema) con el acorde que suena y el siguiente marcado.
+  {const cdm=document.getElementById('chordDisplayMode');if(cdm){cdm.value='scale';if(typeof setChordDisplayMode==='function')setChordDisplayMode('scale');}}
+  const w=res.warnings||[];
+  const cyTxt=cycle==='auto'?(res.cyclesUsed&&res.cyclesUsed.length?(res.cyclesUsed.length>1?'ciclos ':'ciclo ')+res.cyclesUsed.join(', ')+' detectado'+(res.cyclesUsed.length>1?'s':'')+' en los acordes':'ciclo automático'):'ciclo '+cycle;
+  alert('✓ '+applied+' voicings drop 2 generados ('+cyTxt+', cuerdas '+setKey+').'+
+    (res.startDesc?'\nArranque: '+res.startDesc+'.':'')+
+    (res.restarts?'\n↺ '+res.restarts+' reinicio(s) al voicing inicial (al repetirse el primer acorde).':'')+
+    (jumps?'\n⤴ '+jumps+' salto(s) de octava (la figura se salía del traste 3-17).':'')+
+    (w.length?'\n⚠ '+w.slice(0,8).join('\n⚠ ')+(w.length>8?'\n… y '+(w.length-8)+' aviso(s) más.':''):'')+
+    (bumpedTo?'\n↔ Se ha ampliado el mástil hasta el traste '+bumpedTo+'.':'')+
+    '\nModo cambiado a Tríadas. Revísalos en el editor y pulsa Visualizador.');
+  return res;
+}
+
 // Apply auto-generated minimal-movement triads to every bar/segment of the loaded exercise.
 async function autoGenerateTriads(){
   if(!cycles.length){alert('Carga primero un tema (XML con acordes).');return;}
@@ -8093,8 +8584,11 @@ async function autoGenerateTriads(){
   }
   const perLapZones=document.getElementById('triadZonePerLap')?.checked===true;
   const perLapShapeOn=document.getElementById('triadPerLapShape')?.checked===true;
+  const drop2On=document.getElementById('triadDrop2Cycle')?.checked===true;
   // For per-lap zones/shapes each cycle needs its OWN bars (ref cycles reuse cycle 0). Make them custom.
-  if(perLapZones||perLapShapeOn){
+  // Drop 2 por ciclos también: su reinicio va por el acorde (no por el ciclo de la app), así que una
+  // vuelta 'ref' podría no coincidir con lo que le toca.
+  if(perLapZones||perLapShapeOn||drop2On){
     for(let ci=0;ci<cycles.length;ci++){
       if(cycles[ci].mode==='ref'){makeCycleCustom(ci);}
     }
@@ -8117,6 +8611,8 @@ async function autoGenerateTriads(){
   // cuerdas × inversión, ver buildSweepSlots) cada `barsPerPos` compases — el cambio de posición es
   // independiente de cuándo cambien los acordes. Siempre usa el/los acorde(s) real(es) del XML,
   // tal cual vengan (uno o varios).
+  if(drop2On)return applyDrop2CycleToEditor(all,barLoc,flat);
+
   const sweepOn=document.getElementById('triadSweepChord')?.checked===true;
   if(sweepOn){
     const scope=document.getElementById('triadSweepScope')?.value||'group';
@@ -13772,7 +14268,8 @@ function tick(){
     if(_exF&&_exF.onFrame)_exF.onFrame({slot,bi,allBars,elapsed,beatSec,imgs,si,currentBarSec});
   }
   if(getChordDisplayMode()==='bars') updateBarsMinimal(barChordNow,allBars[bi+1]?.chord||'',getFn(barChordNow),allBars,bi,beatInBar);
-  else if(getChordDisplayMode()==='scale') updateScaleChords(barChordNow,allBars);
+  else if(getChordDisplayMode()==='scale') updateScaleChords(barChordNow,allBars,slot?.svgParsed?.drop2Frame?(allBars[bi+1]?.chord||''):null);
+  updateDrop2Legend(slot?.svgParsed?.drop2Frame===true,slot?.svgParsed?.notes,slot?.svgParsed?.drop2Cycle);
   if(seqActive)seqPaintPlayer(elapsed,introSec);
   tickBeats(timeInBar,currentBarSec,barBeats);
   rafId=requestAnimationFrame(tick);
@@ -14397,7 +14894,7 @@ function scaleChordDegree(chord,keyPc){
   const half=/m7b5|ø/.test(q),dim=!half&&/dim|°/.test(q),minor=!half&&!dim&&/^m(?!aj)/i.test(q)&&!/^M/.test(q);
   return{deg,label:(half||dim||minor)?R.toLowerCase()+(half?'ø':dim?'°':''):R};
 }
-function updateScaleChords(curChord,allBars){
+function updateScaleChords(curChord,allBars,nextChord){
   const box=document.getElementById('scaleChordsMode');if(!box)return;
   const key=(document.getElementById('keySelect')?.value||'C').replace(/m$/,'');
   const sig=key+'|'+(allBars||[]).length;
@@ -14409,6 +14906,70 @@ function updateScaleChords(curChord,allBars){
   }
   const cur=(curChord||'').trim();
   box.querySelectorAll('.sc-pill').forEach(el=>el.classList.toggle('on',el.dataset.chord===cur));
+  // nextChord (solo "Drop 2 por ciclos", ver tick): marca el acorde que viene y dibuja bajo la fila
+  // una flecha curva del actual al siguiente con el salto del ciclo ("4ª ↑" en el ciclo 4). Para el
+  // resto de ejercicios nextChord llega null y la fila queda como siempre.
+  const nx=(nextChord||'').trim();
+  box.classList.toggle('wa',nextChord!=null);
+  box.querySelectorAll('.sc-pill').forEach(el=>el.classList.toggle('nx',!!nx&&nx!==cur&&el.dataset.chord===nx));
+  const sig2=cur+'>'+nx+'|'+box.clientWidth;
+  // Se redibuja si cambia el par actual→siguiente o si la flecha ya no está (la fila se reconstruye
+  // con innerHTML al cambiar tema/tonalidad y se la lleva por delante).
+  const a=box.querySelector('.sc-pill.on'),b=box.querySelector('.sc-pill.nx');
+  if(box._arrowSig===sig2&&(!a||!b||box.querySelector('.sc-arrow')))return;
+  box._arrowSig=sig2;
+  box.querySelector('.sc-arrow')?.remove();
+  if(!a||!b)return;
+  const kPc=noteToSt((document.getElementById('keySelect')?.value||'C').replace(/m$/,''));
+  const da=scaleChordDegree(cur,kPc),db=scaleChordDegree(nx,kPc);
+  const steps=(da&&db)?((db.deg-da.deg)%7+7)%7:null;
+  const lbl=steps?(['','2ª','3ª','4ª','5ª','6ª','7ª'][steps]+' ↑'):'';
+  const x1=a.offsetLeft+a.offsetWidth/2,x2=b.offsetLeft+b.offsetWidth/2,y=a.offsetTop+a.offsetHeight+3;
+  const room=box.clientHeight-y; // hueco bajo las píldoras (padding-bottom de .wa)
+  const dip=Math.max(6,Math.min(room*0.42,Math.abs(x2-x1)*0.12)),mx=(x1+x2)/2;
+  const NSs='http://www.w3.org/2000/svg',svg=document.createElementNS(NSs,'svg');
+  svg.setAttribute('class','sc-arrow');
+  const dir=x2>x1?1:-1;
+  svg.innerHTML=`<path d="M${x1},${y} Q${mx},${y+dip*2} ${x2-dir*4},${y+2}" fill="none" stroke="#f6d36b" stroke-width="2" stroke-opacity=".85"/>`+
+    `<path d="M${x2},${y} l${-dir*9},${2} l${dir*1},${8} z" fill="#f6d36b" fill-opacity=".9"/>`+
+    (lbl?`<text x="${mx}" y="${y+dip+2}" text-anchor="middle" dominant-baseline="hanging" fill="#f6d36b" font-family="Helvetica,Arial,sans-serif" font-weight="700" font-size="${Math.max(11,Math.round(room*0.4))}">${lbl}</text>`:'');
+  box.appendChild(svg);
+}
+// Leyenda de "Drop 2 por ciclos": qué significa cada símbolo (aro de nota común, fantasma de destino,
+// placa ◀1/◀2). Visible solo mientras suenan frames de drop 2.
+// v4.5.0: con los ciclos que suben (3, 5, 7) la placa es ▶ y el texto dice "sube"; el sentido se
+// lee de las señales del frame (note.move). Un frame sin señales (el último, o antes de un
+// reinicio) deja la leyenda como estaba.
+let _drop2LegendOn=null,_drop2LegendUp=false;
+// Frase de notas guía (opción "Notas guía"), como la explicaría un profesor: qué son y, en los
+// ciclos donde se enlazan entre sí (4 y 5), qué hacen en cada cambio. En los demás ciclos las guías
+// no pasan a guías del acorde siguiente, así que solo se dice qué son. `cycle` = ciclo del próximo
+// cambio (data-drop2cycle); sin él (último frame, reinicio) se mantiene la frase anterior.
+let _drop2GuideCycle=null;
+function drop2GuideSentence(cycle){
+  if(cycle)_drop2GuideCycle=cycle;
+  const base='La 3ª y la 7ª son las notas guía: definen si el acorde es mayor, menor o dominante.';
+  const c=_drop2GuideCycle;
+  if(c===4)return base+' En cada cambio la 7ª baja a la 3ª del siguiente y la 3ª se queda como su 7ª.';
+  if(c===5)return base+' En cada cambio la 3ª sube a la 7ª del siguiente y la 7ª se queda como su 3ª.';
+  return base;
+}
+function updateDrop2Legend(on,notes,cycle){
+  const mv=(notes||[]).find(n=>Number.isFinite(n.move)&&n.move!==0);
+  if(on&&mv&&(mv.move>0)!==_drop2LegendUp){
+    _drop2LegendUp=mv.move>0;
+    const a=document.getElementById('drop2LegendArrow'),t=document.getElementById('drop2LegendMoveTxt');
+    if(a)a.textContent=_drop2LegendUp?'▶1':'◀1';
+    if(t)t.textContent=_drop2LegendUp?'sube 1 traste (▶2: 2 trastes) en el próximo cambio':'baja 1 traste (◀2: 2 trastes) en el próximo cambio';
+  }
+  // Entrada "nota guía" solo si el frame trae guías (opción "Destacar notas guía").
+  if(on){const gOn=(notes||[]).some(n=>n.guide===true);
+    const lg=document.getElementById('drop2LegendGuide');
+    if(lg&&gOn){const txt=drop2GuideSentence(cycle);if(txt&&lg.textContent!==txt)lg.textContent=txt;}
+    [['drop2LegendGuide',gOn],['drop2LegendStay',gOn],['drop2LegendCommon',!gOn]].forEach(([id,show])=>{const el=document.getElementById(id);const want=show?'':'none';if(el&&el.style.display!==want)el.style.display=want;});}
+  if(on===_drop2LegendOn)return;
+  _drop2LegendOn=on;
+  document.getElementById('drop2Legend')?.classList.toggle('on',on);
 }
 
 function updateCarousel(prevChord, curChord, nextChord, fn){
