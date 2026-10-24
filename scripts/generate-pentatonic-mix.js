@@ -55,7 +55,7 @@ const IV_LABEL = { 0: '1', 2: '2M', 3: '3m', 4: '3M', 5: '4', 6: 'b5', 7: '5', 8
 // Nombre de la nota según su intervalo (la letra la da el grado: la 3m de G es Bb, no A#).
 const LETTERS = 'CDEFGAB', IV_DEG = { 0: 0, 2: 1, 3: 2, 4: 2, 5: 3, 6: 4, 7: 4, 8: 5, 9: 5, 10: 6, 11: 6 };
 const noteName = (tonicName, tonicPc, iv) => { const L = LETTERS[(LETTERS.indexOf(tonicName[0]) + IV_DEG[iv]) % 7], d = (((tonicPc + iv) - PC[L]) % 12 + 18) % 12 - 6; return L + (d > 0 ? '#'.repeat(d) : 'b'.repeat(-d)); };
-const KIND_SUP = { dominant: '7', major: '', minor: 'm', 'major-seventh': 'maj7', 'minor-seventh': 'm7' };
+const KIND_SUP = { dominant: '7', major: '', minor: 'm', 'major-seventh': 'maj7', 'minor-seventh': 'm7', 'major-sixth': '6', 'minor-sixth': 'm6' }; // 6: base de la pentatónica mayor (C6…)
 const PLAN_MIX = ['may', 'men', 'com', 'sw', 'sw', 'sw', 'sw', 'free', 'free', 'free'];
 const PLAN_ONE = ['pen', 'blue', 'full', 'full', 'full', 'full', 'full', 'free', 'free', 'free'];
 const PLAN_PLAIN = ['ton', 'full', 'full', 'full', 'full', 'full', 'full', 'free', 'free', 'free'];
@@ -213,7 +213,7 @@ function outNotes(box, pcs) {
     ? [['com', 'Tónica'], [M.one, M.penta[0].toUpperCase() + M.penta.slice(1)], ['out', `Resto de la ${M.parent}`]]
     : M.one
     ? [['com', 'Tónica'], [M.one, M.penta[0].toUpperCase() + M.penta.slice(1)], ['blue', `Blue note (${M.bn})`]]
-    : [['com', 'Tónica'], ['common', 'Comunes a las dos (1 y 5): aro blanco'], ['may', `Solo mayor (2M · 3M · 6M)`], ['men', 'Solo menor (3m · 4 · 7m)'], ...(M.blue ? [['blue', 'Blue note (b5)']] : [])];
+    : [['com', 'Tónica'], ['common', 'Comunes a las dos (1 y 5): aro blanco'], ['may', `Solo mayor (2M · 3M · 6M)`], ['men', 'Solo menor (3m · 4 · 7m)'], ...(M.blue ? [['blue', 'Blue note (b5 · 3m)']] : [])];
   const isCommon = n => n.in.may && n.in.men;
   // Pentatónica sola: la fórmula sobre los siete grados de la escala de la que sale (st: estado de cada grado)
   // y, en vez de vueltas, las partes del vídeo.
@@ -252,6 +252,25 @@ function outNotes(box, pcs) {
     ['Canta lo que tocas', ['Si puedes tararear la frase,', 'es una buena frase']],
     ['Júntalo todo', ['Frases cortas, silencios, ritmo', 'y alguna nota de paso']],
   ];
+  // Escalas de blues: consejos de una línea, uno cada media vuelta, en las vueltas de escala completa y libres (Alberto,
+  // 10-15: "algún consejo profesional"). Son los habituales de los profesores de blues (la b5 y la 3m como notas de
+  // paso, fraseo, pregunta-respuesta, silencios…), sin atribuirlos a nadie con nombre: no hay citas verificadas.
+  const BT_COMMON = ['Pocas notas, bien dichas: el blues es fraseo', 'Pregunta y respuesta: una frase pide, otra contesta',
+    'Deja silencios: respirar también es tocar', 'Repite una frase y cambia solo el final', 'Tócala como si la cantaras',
+    'Vibrato en las notas largas', 'Llega a las notas importantes con un slide', 'Empieza a veces a contratiempo, no en el 1',
+    'Unas frases suaves y otras con ataque', 'En los compases 11-12, cierra la frase'];
+  const BTIPS = !M.blue ? [] : M.one === 'men' ? ['La b5 es de paso: 4 → b5 → 5, sin pararte', 'Llega a la b5 con un bend desde la 4',
+      'Si te paras en la b5, resuélvela en la 4 o la 5', 'No la pongas en cada frase: que siga sonando especial', ...BT_COMMON, 'Termina en la tónica: reposo total', 'Júntalo todo: pocas notas, silencios y la b5 de paso']
+    : M.one === 'may' ? ['La 3m es de paso: 2M → 3m → 3M', 'Sube la 3m con un bend corto hasta la 3M', 'No te quedes en la 3m: resuélvela en la 3M',
+      'Sobre el IV7, la 3M choca: pásala rápido', ...BT_COMMON, 'Termina en la tónica: reposo total', 'Júntalo todo: pocas notas, silencios y la 3m de paso']
+    : ['En casa (I7) mayor; fuera (IV7 y V7) menor', 'El gesto clave: de la 3m a la 3M, con slide o bend', 'Empieza en mayor y termina en menor, o al revés',
+      'La 3M suena dulce; la 3m, a blues: elige qué decir', 'La 1 y la 5 son de las dos: úsalas de puente', 'Sobre el IV7, no te apoyes en la 3M',
+      'Un bend corto en la 3m: ni mayor ni menor', 'La b5, de paso entre la 4 y la 5', 'Pregunta en mayor, contesta en menor',
+      ...BT_COMMON.slice(0, 4), 'Termina en la tónica: reposo total', 'Júntalo todo: el mapa, los puentes y silencios'];
+  const tipLaps = plan.map((p, i) => [i, p]).filter(([, p]) => ['full', 'sw', 'free'].includes(p)).map(([i]) => i);
+  const btipAt = w => { if (!BTIPS.length || w.zone !== 'lap') return null; const k = tipLaps.indexOf(w.lap); if (k < 0) return null;
+    const slot = k * 2 + (w.pos >= cyc / 2 ? 1 : 0), nSlots = tipLaps.length * 2; const i = Math.min(Math.floor(slot * BTIPS.length / nSlots), BTIPS.length - 1);
+    return { n: i + 1, total: BTIPS.length, text: BTIPS[i], hi: !!M.one }; };
   // Los 8 primeros compases son de la escala; después, cada consejo dura TIP_SPAN compases (par, mínimo 4).
   const TIP_SPAN = M.plain ? Math.max(4, 2 * Math.floor((laps * cyc - 8) / TIPS.length / 2)) : 0;
   const titles = M.plain ? { title: `${M.title} · Base en ${chordName(tonic)}`, subtitle: `${M.sub(tonic.name)} · Forma ${posLabel}${args.closed ? ' cerrada' : ''} (CAGED)` } : null;
@@ -281,9 +300,11 @@ function outNotes(box, pcs) {
       return change && n.in[change] && bt >= 2 ? 'pre' : 'dim';
     };
     const hint = w.zone === 'in' ? 'Cuenta de entrada'
-      : w.zone === 'lap' && w.pos === cyc - 1 && nw.zone === 'lap' && nw.phase !== phase ? `Siguiente vuelta: ${PHASE_NAME[nw.phase].toLowerCase()}`
+      // Una sola escala de blues: sin "Siguiente vuelta" (Alberto, 10-15: no hace falta; salía un compás antes de los consejos).
+      : w.zone === 'lap' && w.pos === cyc - 1 && nw.zone === 'lap' && nw.phase !== phase && !(M.one && M.blue) ? `Siguiente vuelta: ${PHASE_NAME[nw.phase].toLowerCase()}`
       : change ? `Siguiente compás: ${chordName(nw.chord)}${arr}${b2(change, change === 'may' ? 'mayor' : 'menor')}` : '';
-    const nowText = w.zone !== 'lap' ? '' : M.one ? (phase === 'blue' && w.pos >= 4 ? NOW.full : NOW[phase]) : cur ? { may: 'MAYOR', men: 'MENOR', both: 'LAS DOS' }[cur] : M.blue ? 'TÓNICA, 3m Y 5ª' : 'TÓNICA Y 5ª';
+    // Una sola escala de blues: sin "AHORA" (Alberto, 10-15: ocupa mucho y no aporta; su sitio es para los consejos).
+    const nowText = w.zone !== 'lap' || (M.one && M.blue) ? '' : M.one ? (phase === 'blue' && w.pos >= 4 ? NOW.full : NOW[phase]) : cur ? { may: 'MAYOR', men: 'MENOR', both: 'LAS DOS' }[cur] : M.blue ? 'TÓNICA, 3m Y 5ª' : 'TÓNICA Y 5ª';
     const kb = bar - countIn, tip = M.plain && w.zone === 'lap' && kb >= 8 ? TIPS[Math.min(Math.floor((kb - 8) / TIP_SPAN), TIPS.length - 1)] : null;
     if (M.plain) return {
       ...titles, fretMin, fretMax, grid: null, metro: { bpm: tempo, beat: w.zone === 'out' ? -1 : bt },
@@ -298,9 +319,12 @@ function outNotes(box, pcs) {
       fretMin, fretMax,
       grid: { cols: 4, cells: cycleCells(lap), cur: w.zone === 'lap' ? w.pos : -1, beat: bt, next: change && sameLap ? nw.pos : -1, nextScale: change },
       lap: { cur: lap, total: laps },
-      phase: { name: w.zone === 'out' ? 'Final' : PHASE_NAME[phase], lines: w.zone === 'out' ? [] : LINES[phase], now: M.one ? (phase === 'blue' && w.pos < 4 ? 'blue' : phase === 'ton' ? 'com' : M.one) : cur, nowText, hint },
+      tip: btipAt(w), phase: { name: w.zone === 'out' ? 'Final' : PHASE_NAME[phase], lines: w.zone === 'out' ? [] : LINES[phase], now: M.one ? (phase === 'blue' && w.pos < 4 ? 'blue' : phase === 'ton' ? 'com' : M.one) : cur, nowText, hint },
       // la 5ª es de las dos escalas: toma el color de la que suena en ese compás y, si valen las dos, va partida
-      notes: NOTES.map(n => ({ string: n.string, fret: n.fret, label: n.label, iv: n.ivLabel, kind: n.kind === 'fif' ? (w.zone === 'in' ? plan[0] : cur === 'may' || cur === 'men' ? cur : 'split') : n.kind, state: state(n), common: !M.one && (n.iv === 0 || n.iv === 7) })),
+      // Mezcla de blues: la 3m es la blue note de la mayor de blues → violeta mientras suena la mayor, como la b5 en la
+      // menor (Alberto, 10-15: le despistaba que la blue note fuese naranja en la mayor y violeta en la menor).
+      notes: NOTES.map(n => ({ string: n.string, fret: n.fret, label: n.label, iv: n.ivLabel, kind: n.kind === 'fif' ? (w.zone === 'in' ? plan[0] : cur === 'may' || cur === 'men' ? cur : 'split') : M.blue && !M.one && n.iv === 3 && (w.zone === 'in' ? plan[0] : cur) === 'may' ? 'blue' : n.kind, state: state(n), common: !M.one && (n.iv === 0 || n.iv === 7),
+        ...(M.one && w.zone === 'lap' && phase === 'blue' && n.kind === 'blue' && state(n) === 'on' ? { pulse: 1 } : {}) })),
       legend,
     };
   };
@@ -371,8 +395,19 @@ function outNotes(box, pcs) {
     fs.writeFileSync(introWav, Buffer.from(await page.evaluate(renderToneTrackInPage, { events, total: introDur }), 'base64'));
   }
 
-  const cache = new Map(), list = [], datas = intro.map(f => f.d);
-  for (let b = from; b < from + nBars; b++) for (let bt = 0; bt < 4; bt++) datas.push(frameAt(b, bt));
+  const cache = new Map(), list = [], datas = intro.map(f => f.d), fracs = intro.map(() => STEP);
+  // La blue note PALPITA despacio en su vuelta (Alberto, 10-15: "la imagen queda muy estática"; luego: más suave,
+  // de lo más claro a lo más oscuro en 2 tiempos): onda coseno de 4 pulsos, 4 fotogramas por pulso. Solo
+  // cambia el brillo (ver penta-mix-frame.html). El fundido entre escalas no ve estos fotogramas (nsig).
+  const SUB = 4, PERIOD = 4;
+  for (let b = from; b < from + nBars; b++) for (let bt = 0; bt < 4; bt++) {
+    const d = frameAt(b, bt);
+    if (!d.notes.some(n => n.pulse)) { datas.push(d); fracs.push(1); continue; }
+    for (let j = 0; j < SUB; j++) {
+      const g = Math.round((0.5 + 0.5 * Math.cos(2 * Math.PI * ((b * 4 + bt + j / SUB) % PERIOD) / PERIOD)) * 20) / 20;
+      datas.push({ ...d, notes: d.notes.map(n => n.pulse ? { ...n, pulse: g } : n) }); fracs.push(1 / SUB);
+    }
+  }
   for (const d of datas) {
     const sig = JSON.stringify(d);
     if (!cache.has(sig)) { await page.evaluate(x => render(x), d); const png = path.join(tmp, `f${String(cache.size).padStart(4, '0')}.png`); await page.screenshot({ path: png }); cache.set(sig, png); }
@@ -386,8 +421,8 @@ function outNotes(box, pcs) {
   const tail = clip ? 0 : Math.max(0, audioDur - nBars * 4 * beat), total = introDur + nBars * 4 * beat + tail;
   // Cambio de escala suave (Alberto): cuando entre dos pulsos seguidos cambian las notas, fundido de FADE s
   // repartido a los dos lados del pulso (8 fotogramas intermedios con xfade). La entrada tocada va a cortes secos.
-  const FADE = args['no-fade'] ? 0 : 0.32, nsig = datas.map(d => JSON.stringify(d.notes));
-  const segs = list.map((p, i) => ({ p, dur: (i < intro.length ? STEP : 1) * beat + (i === list.length - 1 ? tail : 0) })), seq = [], xf = new Map();
+  const FADE = args['no-fade'] ? 0 : 0.32, nsig = datas.map(d => JSON.stringify(d.notes.map(n => n.pulse ? { ...n, pulse: 1 } : n)));
+  const segs = list.map((p, i) => ({ p, dur: fracs[i] * beat + (i === list.length - 1 ? tail : 0) })), seq = [], xf = new Map();
   for (let i = 0; i < segs.length; i++) {
     seq.push(segs[i]);
     if (!FADE || i + 1 >= segs.length || i < intro.length || nsig[i] === nsig[i + 1]) continue;

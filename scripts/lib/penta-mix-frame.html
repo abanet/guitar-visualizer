@@ -82,6 +82,11 @@
   #panel.solo #phase { margin-top: 4px; font: 700 29px Arial; line-height: 36px; white-space: nowrap; }
   #panel.solo #lines { margin-top: 5px; font: 700 20px Arial; line-height: 27px; color: rgba(255,255,255,.7); }
   #panel.solo #lines b.men, #panel.solo #lines b.may { color: #26c6da; }
+  /* Consejo de las escalas de blues: en el hueco del "AHORA" (una escala) o bajo el aviso (mezcla). */
+  #tipbox { position: absolute; left: 0; right: 0; top: 342px; padding-left: 14px; border-left: 4px solid #e2b34f; }
+  #tipbox.hi { top: 236px; }
+  #tipbox .lbl { font: 700 13px Arial; letter-spacing: .14em; color: #e2b34f; }
+  #tipbox .txt { margin-top: 4px; font: 700 22px Arial; color: rgba(255,255,255,.9); white-space: nowrap; }
   #hint .tri { color: #e2b34f; margin-right: 8px; }
   #legend { position: absolute; left: 0; right: 0; bottom: 30px; display: flex; justify-content: center; gap: 34px; font: 700 17px Arial; color: rgba(255,255,255,.62); }
   #legend span { display: flex; align-items: center; gap: 9px; }
@@ -99,7 +104,7 @@
 <svg id="neck" width="1600" height="900"></svg>
 <div id="grid"></div><div id="formula"></div><div id="metro"></div>
 <div id="panel"><div id="lap"></div><div id="tag"></div><div id="phase"></div><div id="lines"></div>
-  <div id="nowbox"><span class="lbl">AHORA</span><span id="now"></span></div><div id="hint"></div></div>
+  <div id="nowbox"><span class="lbl">AHORA</span><span id="now"></span></div><div id="hint"></div><div id="tipbox"><div class="lbl"></div><div class="txt"></div></div></div>
 <div id="legend"></div>
 <div id="brand">@banetmasa</div>
 <script>
@@ -135,6 +140,9 @@ document.getElementById('lines').innerHTML = (P.lines || []).map(l => `<div>${l}
 const now = document.getElementById('now');
 document.getElementById('nowbox').style.visibility = P.nowText ? 'visible' : 'hidden';
 now.className = P.now || ''; now.textContent = P.nowText || '';
+const TB = document.getElementById('tipbox'), T = D.tip;
+TB.style.display = T ? 'block' : 'none'; TB.className = T && T.hi ? 'hi' : '';
+if (T) { TB.querySelector('.lbl').textContent = `CONSEJO ${T.n} DE ${T.total}`; TB.querySelector('.txt').textContent = T.text; }
 document.getElementById('hint').innerHTML = P.hint ? `<span class="tri">▶</span>${P.hint}` : '';
 document.getElementById('legend').innerHTML = (D.legend || []).map(([k, t]) => `<span><i class="${k}"></i>${t}</span>`).join('')
   + '<span><i class="iv">3M</i>Intervalo respecto a la tónica</span>';
@@ -164,7 +172,9 @@ D.notes.forEach(nt => {
   h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/>`;
   if (nt.state === 'dim' || nt.state === 'pre') {
     // Mezclas: lo que no suena (la otra escala) es una nota fantasma SIN color. Pentatónica sola: fantasma con su color.
-    const g = SOLO ? c : '255,255,255';
+    // La tónica, siempre roja aunque esté apagada (Alberto, 10-15: en la vuelta de la blue note, con solo ella
+    // encendida, la tónica en blanco se perdía como referencia).
+    const g = SOLO || nt.kind === 'com' ? c : '255,255,255';
     h += `<circle cx="${x}" cy="${y}" r="${R}" fill="rgba(${g},.09)" stroke="rgba(${g},.5)" stroke-width="1.6" stroke-dasharray="5 4"/>` + txt(x, y, nt.label, `rgba(${g},.6)`);
     h += badge(x, y, nt.iv, true);
     return;
@@ -177,6 +187,11 @@ D.notes.forEach(nt => {
     h += `<path d="M${x} ${y - R}A${R} ${R} 0 0 0 ${x} ${y + R}Z" fill="rgba(${COL.may},${a})"/><path d="M${x} ${y - R}A${R} ${R} 0 0 1 ${x} ${y + R}Z" fill="rgba(${COL.men},${a})"/>`;
   } else h += `<circle cx="${x}" cy="${y}" r="${R}" fill="rgba(${c},${a})" stroke="rgba(255,255,255,${on ? (SOLO ? .3 : .55) : .25})" stroke-width="1.4"/>`;
   if (nt.ring) h += `<circle cx="${x}" cy="${y}" r="${R + 6}" fill="none" stroke="#fff" stroke-width="3.5"/>`;
+  // Blue note que titila al pulso (pulse 0-1, ver GLOW en el generador): solo cambia el BRILLO del relleno, sin
+  // crecer (Alberto, 10-15: el halo que crecía era demasiado grande). Variación PEQUEÑA, sin llegar al blanco: de un
+  // violeta algo apagado a uno algo más brillante, "que destaque de forma sutil, se vea sin mirar y no distraiga".
+  if (typeof nt.pulse === 'number') { const k = nt.pulse, mix = [199 + 14 * k, 125 + 20 * k, 255].map(Math.round).join(',');
+    h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="rgba(${mix},${.7 + .3 * k})" stroke="rgba(255,255,255,${.3 + .2 * k})" stroke-width="1.4"/>`; }
   if (nt.common) h += `<circle cx="${x}" cy="${y}" r="${R + 4}" fill="none" stroke="rgba(255,255,255,${on ? .95 : .5})" stroke-width="3"/>`;   // mezclas: aro blanco en las notas comunes a las dos escalas
   h += txt(x, y, nt.label, SOLO ? (nt.ring && nt.kind !== 'com' ? '#111' : on ? '#fff' : 'rgba(255,255,255,.85)') : nt.kind !== 'com' ? '#111' : '#fff') + badge(x, y, nt.iv, false);
 });
