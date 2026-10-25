@@ -850,6 +850,10 @@ body.presentation #channelWatermark{display:flex;}
           <option value="reggae">Reggae (verde/dorado)</option>
           <option value="soul">Soul (cobre/oro vintage)</option>
           <option value="afrocubano">Afrocubano (coral/turquesa)</option>
+          <option value="flamenco">Flamenco (rojo clavel/oro)</option>
+          <option value="caribe">Caribe (turquesa/amarillo)</option>
+          <option value="tango">Tango (burdeos/plata)</option>
+          <option value="africa">África (ocre/verde)</option>
         </select></label>
         <label>Idioma del vídeo: <select id="tvCfgLang" onchange="tvSync()">
           <option value="es" selected>Español</option>
@@ -3931,7 +3935,7 @@ function loadSession(input){
 
 // ── AUTOSAVE ─────────────────────────────────────────────────────────────────
 const AUTOSAVE_KEY='gv_autosave';
-const APP_VERSION='4.6.0';
+const APP_VERSION='4.6.2';
 console.log('%cGuitar Visualizer v'+APP_VERSION,'font-weight:bold');
 try{const _vb=document.getElementById('appVersionBadge');if(_vb)_vb.textContent='v'+APP_VERSION;}catch(e){}
 let _autosaveLast='';
@@ -17355,6 +17359,15 @@ const TV_COLOR_PRESETS={
   reggae:{label:'Reggae (verde/dorado)', c1:'#2e7d32', c2:'#f9a825'},
   soul:  {label:'Soul (cobre/oro vintage)',c1:'#a8542e', c2:'#e0a458'},
   afrocubano:{label:'Afrocubano (coral/turquesa)',c1:'#ff5a36', c2:'#00c2c7'},
+  // Primer ritmo flamenco del canal (RumbaFlamencaPerc^, 2026-10-25): ningún preset encajaba (rock
+  // y metal ya usan el rojo, pero con cian/plata), así que rojo clavel + oro, los del mantón.
+  flamenco:{label:'Flamenco (rojo clavel/oro)',c1:'#d81b3c', c2:'#f4c542'},
+  // Cola 1 de ritmos del mundo (2026-10-25): bachata y merengue (dominicanos) no son afrocubanos, de ahí
+  // "caribe" (mar y sol); el tango en burdeos y plata, de milonga; el djembé de África occidental en ocre
+  // (tierra) y verde. La salsa sí va con el afrocubano.
+  caribe:{label:'Caribe (turquesa/amarillo)',c1:'#00b4d8', c2:'#ffd60a'},
+  tango: {label:'Tango (burdeos/plata)',    c1:'#9b1d3c', c2:'#c9ccd1'},
+  africa:{label:'África (ocre/verde)',      c1:'#e07a1f', c2:'#2a9d8f'},
 };
 // Partículas de fondo pastel, tintadas hacia el acento secundario del preset (mezcladas con
 // gris claro: a color plano quedaban demasiado saturadas para ser "polvo" de fondo).
