@@ -55,6 +55,7 @@ const { promisify } = require('util');
 const execFileP = promisify(execFile);
 const { acquireRenderLock } = require('./lib/batch-sessions');
 
+const { keyframeFix } = require('./lib/keyframe-fix');
 const GROUP_LABELS = { 0: 'cuerdas432', 1: 'cuerdas543', 2: 'cuerdas654', 3: 'cuerdas321' };
 const INV_LABELS = { 0: 'fundamental', 1: 'inv1', 2: 'inv2' };
 
@@ -325,7 +326,7 @@ async function runOne({ appUrl, xmlPath, audioPath, audioDuration, extraSec, cyc
     // los de ANTES de arrancar (reproductor vacío "Asigna imágenes en el editor"). Se sustituyen por
     // el primer fotograma ya pintado, congelado HOLD s — la sincronía no cambia (mismo arreglo que
     // generate-scale-triad-explore-videos.js, commit 017cbe0; Alberto lo vio en la prueba de drop 2).
-    '-filter_complex', `[0:v]trim=start=${(trimOffsetSec + HOLD).toFixed(3)},setpts=PTS-STARTPTS,tpad=start_mode=clone:start_duration=${HOLD}[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-filter_complex', `[0:v]trim=start=${(trimOffsetSec + HOLD).toFixed(3)},setpts=PTS-STARTPTS${await keyframeFix(silentPath, trimOffsetSec + HOLD)},tpad=start_mode=clone:start_duration=${HOLD}[v];[1:a]apad=pad_dur=${extraSec}[a]`,
     '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',

@@ -52,6 +52,7 @@ const { promisify } = require('util');
 const execFileP = promisify(execFile);
 const { waitFfmpeg, acquireRenderLock, getAudioDurationSeconds } = require('./lib/batch-sessions');
 
+const { keyframeFix } = require('./lib/keyframe-fix');
 const AUDIO_EXT_RE = /\.(m4a|mp3|wav|aac|aiff?|caf)$/i;
 
 function parseArgs(argv) {
@@ -207,7 +208,7 @@ async function main() {
     '-y',
     '-i', silentPath,
     '-i', audioPath,
-    '-filter_complex', `[0:v]trim=start=${trimOffsetSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-filter_complex', `[0:v]trim=start=${trimOffsetSec.toFixed(3)},setpts=PTS-STARTPTS${await keyframeFix(silentPath, trimOffsetSec)}[v];[1:a]apad=pad_dur=${extraSec}[a]`,
     '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',

@@ -127,6 +127,7 @@ const { promisify } = require('util');
 const execFileP = promisify(execFile);
 const { acquireRenderLock } = require('./lib/batch-sessions');
 
+const { keyframeFix } = require('./lib/keyframe-fix');
 const AS_POS_LABELS = ['E', 'D', 'C', 'A', 'G'];
 
 function parseArgs(argv) {
@@ -565,7 +566,7 @@ async function runOne({ appUrl, cfg, posLabel, variant, xmlPath, cycleLen, whole
     '-y',
     '-i', silentPath,
     '-i', audioPath,
-    '-filter_complex', `[0:v]trim=start=${trimOffsetSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-filter_complex', `[0:v]trim=start=${trimOffsetSec.toFixed(3)},setpts=PTS-STARTPTS${await keyframeFix(silentPath, trimOffsetSec)}[v];[1:a]apad=pad_dur=${extraSec}[a]`,
     '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',

@@ -16,3 +16,6 @@ scripts/.catalog-acordes7-ids.txt
 # Estado y logs de los runners de catalogación (se generan al catalogar; no van al repo, como los -done de arriba)
 scripts/.catalog-*
 scripts/.check-slots-*
+
+# Tokens de Meta (Instagram, página de Facebook, Threads) y la clave secreta de la app
+scripts/.meta-*

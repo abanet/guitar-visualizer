@@ -11,6 +11,7 @@ const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileP = promisify(execFile);
+const { keyframeFix } = require('./keyframe-fix');
 
 async function waitFfmpeg() {
   try { await execFileP('ffmpeg', ['-version']); }
@@ -210,7 +211,7 @@ function requestCancel() {
 }
 function resetCancel() { cancelRequested = false; }
 
-async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuration, extraSec, visConfig, width, height, outDir, tmpDir, onLog }) {
+async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuration, extraSec, visConfig, width, height, outDir, tmpDir, onLog, fixKeyframes = true }) {
   const tag = path.basename(sessionPath, '.json');
   const log = (msg) => { if (onLog) onLog(msg); };
 
@@ -337,11 +338,15 @@ async function runOne({ appUrl, sessionPath, sessionObj, audioPath, audioDuratio
   // Recorte EXACTO por timestamp de fotograma (filtro trim+setpts), no por keyframe: el "-ss"
   // antes de "-i" busca al keyframe más cercano y puede desviarse del punto real hasta un GOP
   // entero, lo que se notaba como el audio ligeramente desfasado del metrónomo/cambio de acorde.
+  // Fotogramas clave borrosos de la grabación VP8: ver lib/keyframe-fix.js (siempre activo desde 2026-10-26).
+  const freezeChain = fixKeyframes ? await keyframeFix(silentPath, trimOffsetSec, log) : '';
+  // Depuración: GV_KEEP_RAW=<carpeta> guarda la grabación sin procesar (el tmpDir se borra al terminar).
+  if (process.env.GV_KEEP_RAW) { fs.mkdirSync(process.env.GV_KEEP_RAW, { recursive: true }); fs.copyFileSync(silentPath, path.join(process.env.GV_KEEP_RAW, path.basename(outPath || 'raw').replace(/\.mp4$/, '') + `_trim${trimOffsetSec.toFixed(3)}.webm`)); }
   const mux = (trimSec) => execFileP('ffmpeg', [
     '-y',
     '-i', silentPath,
     '-i', audioPath,
-    '-filter_complex', `[0:v]trim=start=${trimSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-filter_complex', `[0:v]trim=start=${trimSec.toFixed(3)},setpts=PTS-STARTPTS${freezeChain}[v];[1:a]apad=pad_dur=${extraSec}[a]`,
     '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',
@@ -395,7 +400,7 @@ async function runPool(jobs, concurrency, worker) {
 
 // Orquesta el lote completo y mantiene un objeto de estado mutable que el llamador puede seguir
 // leyendo mientras corre (polling) — lo usa tanto el servidor (GET /api/status) como el CLI.
-async function runBatch({ appPath, dir, audioPath, outDir, extraSec = 2, visConfig = null, visConfigPath = null, concurrency = 1, width = 1600, height = 900, onUpdate }) {
+async function runBatch({ appPath, dir, audioPath, outDir, extraSec = 2, visConfig = null, visConfigPath = null, concurrency = 1, width = 1600, height = 900, onUpdate, fixKeyframes = true }) {
   resetCancel();
   const notify = () => { if (onUpdate) try { onUpdate(state); } catch (e) {} };
   const state = {
@@ -438,7 +443,7 @@ async function runBatch({ appPath, dir, audioPath, outDir, extraSec = 2, visConf
         const sessionObj = JSON.parse(fs.readFileSync(job.sessionPath, 'utf8'));
         const outPath = await runOne({
           appUrl, sessionPath: job.sessionPath, sessionObj, audioPath: audioAbs, audioDuration: state.audioDuration,
-          extraSec, visConfig, width, height, outDir, tmpDir,
+          extraSec, visConfig, width, height, outDir, tmpDir, fixKeyframes,
           onLog: (msg) => { job.message = msg; notify(); },
         });
         job.status = 'done'; job.outPath = outPath; job.finishedAt = Date.now();

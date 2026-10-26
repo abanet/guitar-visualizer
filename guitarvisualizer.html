@@ -3935,7 +3935,7 @@ function loadSession(input){
 
 // ── AUTOSAVE ─────────────────────────────────────────────────────────────────
 const AUTOSAVE_KEY='gv_autosave';
-const APP_VERSION='4.6.2';
+const APP_VERSION='4.6.8';
 console.log('%cGuitar Visualizer v'+APP_VERSION,'font-weight:bold');
 try{const _vb=document.getElementById('appVersionBadge');if(_vb)_vb.textContent='v'+APP_VERSION;}catch(e){}
 let _autosaveLast='';
@@ -4924,6 +4924,9 @@ function appendIntervalBadge(g,note,rr,chord){
   if(getVisConfig().intervalBadge!==true||!note)return;
   const iv=noteDisplayLabel(note,'intervals',chord||'');
   if(!iv||/^[A-G][b#]?$/.test(iv))return;
+  // Sin placa en la tónica (opción aparte, apagada por defecto para no cambiar los vídeos ya hechos): en
+  // "Cambios entre arpegios" Alberto la vio sobrante — la tónica ya se distingue por el rojo (2026-10-26).
+  if(getVisConfig().intervalBadgeNoRoot===true&&(iv==='R'||iv==='1'))return;
   // MISMA placa que el número de dedo de los Drop2 (ver renderSVGStatic, note.finger): círculo oscuro
   // arriba a la derecha, medio fuera de la nota — pedido de Alberto ("como lo teníamos en drop2 y que
   // sean círculos, no elipses"). Un poco mayor para que quepan "b7"/"#5".
@@ -5071,6 +5074,12 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
   const g2=Math.max(0,Math.min(1,fadeProg==null?0:fadeProg));
   const isCommon=(n,arr)=>arr&&arr.some(c=>Math.abs(c.cx-n.cx)<6&&Math.abs(c.cy-n.cy)<6);
   const showGhost=getArpShowGhost();
+  // Relevo sin hueco (Alberto, 2026-10-26, "Cambios entre arpegios"): con la fantasma siempre visible,
+  // la nota que deja de sonar pasaba de color → nada → fantasma (se apagaba en el último tiempo y la
+  // fantasma nueva nacía DESPUÉS del cambio): un parpadeo que despista. Mismo principio que el arreglo
+  // de "Tríadas dentro de una posición" (932fb26): la fantasma está siempre ahí, tapada por la nota
+  // activa — al apagarse la nota, debajo va apareciendo su fantasma. Opción aparte, apagada por defecto.
+  const seamless=getVisConfig().arpGhostSeamless===true&&getVisConfig().arpGhostAlways===true&&showGhost;
   // El anillo de "notas comunes" (más abajo) vive en el mástil principal (svgCanvas), no en
   // el overlay de fantasmas — no depende de que "Mostrar notas fantasma de la siguiente
   // posición" esté activado (bug reportado: "las notas comunes solo se anclan si el fantasma
@@ -5090,8 +5099,16 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
   const asBackFill=(bgAuto&&bgAuto.mode==='scale'&&svgCanvas.querySelector('.as-backing'))?stageBgColor(svgCanvas):null;
   // (Re)create the next-position ghost elements only when the target position changed.
   let els=window._arpGhostEls;
-  if(!els || window._arpGhostChord!==nextChord || !overlay.firstChild){
-    overlay.innerHTML='';overlay.style.display='block';
+  // Relevo sin hueco: la capa se rehace también cuando cambian las notas ACTIVAS reales (en el primer
+  // fotograma tras el cambio aún llegan las del acorde anterior: la nota saliente se tomaba por común y
+  // se quedaba sin fantasma ese fotograma), y al rehacerla se conservan los ecos (data-echo) hasta que
+  // su fantasma nueva existe — se retiran más abajo.
+  const actKey=seamless?(activeNotes||[]).map(n=>Math.round(n.cx)+','+Math.round(n.cy)).join('|'):'';
+  if(!els || window._arpGhostChord!==nextChord || !overlay.firstChild || (seamless&&window._arpGhostActKey!==actKey)){
+    if(seamless){[...overlay.children].forEach(ch=>{if(!ch.hasAttribute('data-echo'))ch.remove();});}
+    else overlay.innerHTML='';
+    overlay.style.display='block';
+    window._arpGhostActKey=actKey;
     els=[];
     nextNotes.forEach(note=>{
       if(isCommon(note,activeNotes))return; // commons live on the active layer, never ghosted
@@ -5146,6 +5163,9 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
   const BORN_DUR=380;
   let bornFade=Math.min(1,Math.max(0,(_now-(window._arpGhostBornAt||_now))/BORN_DUR));
   bornFade=bornFade*bornFade*(3-2*bornFade); // smoothstep
+  // "Relevo sin hueco" (arpGhostSeamless): la fantasma nueva no vuelve a nacer desde 0 — en el cambio
+  // ya la sostiene el "eco" que dejó la nota saliente (ver abajo), así que aparece directamente a su nivel.
+  if(seamless)bornFade=1;
   els.forEach(o=>{
     o.g.style.opacity='1'; // el fundido va en las transparencias, no en la opacidad del grupo
     // FILL: gris → color/alfa EXACTOS de la nota real (cm). El alfa arranca en 0 (g1=0, sin pop),
@@ -5169,6 +5189,19 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
     o.t.setAttribute('fill',`rgba(${tr},${tg},${tb},${textA})`);
     o.t.setAttribute('opacity','1');
   });
+  if(seamless){
+    // Ecos de la nota saliente anterior: fuera en cuanto hay una fantasma nueva en su celda; si su
+    // celda ya no tiene fantasma (la nota no vuelve en el siguiente acorde), se desvanece en vez de
+    // cortarse. Los ecos de las notas que salen AHORA los gestiona el bucle de notas actuales.
+    const covered=(cx,cy)=>els.some(o=>Math.abs(parseFloat(o.c.getAttribute('cx'))-cx)<6&&Math.abs(parseFloat(o.c.getAttribute('cy'))-cy)<6);
+    const curOut=(cx,cy)=>svgCanvas.querySelectorAll('.vl-note circle')&&[...svgCanvas.querySelectorAll('.vl-note circle')].some(c=>Math.abs(parseFloat(c.getAttribute('cx'))-cx)<6&&Math.abs(parseFloat(c.getAttribute('cy'))-cy)<6);
+    overlay.querySelectorAll('[data-echo]').forEach(e=>{
+      const ec=e.querySelector('circle');if(!ec)return;const ex=parseFloat(ec.getAttribute('cx')),ey=parseFloat(ec.getAttribute('cy'));
+      if(curOut(ex,ey))return; // eco de una nota que sigue en el mástil (saliente actual): lo lleva el bucle de abajo
+      if(covered(ex,ey)){e.remove();return;}
+      const op=parseFloat(e.style.opacity||'1')*0.85;if(op<0.03)e.remove();else e.style.opacity=String(op);
+    });
+  }
   } // fin if(showGhost)
   // CURRENT notes: commons never fade (siguen sonando); el anillo blanco que las resalta
   // depende de "Notas comunes — anclarlas..." (hintCommonRing); el destello es un extra
@@ -5195,7 +5228,32 @@ function paintArpeggioGhosts(activeNotes,nextNotes,nextChord,ghostProg,fadeProg,
       }
       g.style.opacity='1';
     }
-    else g.style.opacity=String(1-g2); // fade out over the last beat, fully gone at the change
+    else{
+      g.style.opacity=String(1-g2); // fade out over the last beat, fully gone at the change
+      if(seamless){
+        // Eco con el MISMO aspecto que la fantasma tenue (nivel base 0.32 de arpGhostAlways): crece
+        // a la vez que la nota se apaga; en el cambio el overlay se limpia y la fantasma nueva (que
+        // en un cambio de ida y vuelta es esta misma nota) aparece ya a su nivel → sin hueco.
+        const key='echo@'+Math.round(cx)+','+Math.round(cy);
+        let e=overlay.querySelector('[data-echo="'+key+'"]');
+        if(!e&&g2>0){
+          const r=parseFloat(c.getAttribute('r'))||18;
+          e=document.createElementNS(NS,'g');e.setAttribute('data-echo',key);
+          const ec=document.createElementNS(NS,'circle');ec.setAttribute('cx',cx);ec.setAttribute('cy',cy);ec.setAttribute('r',r);
+          const B=0.32;
+          ec.setAttribute('fill',`rgba(206,211,221,${(0.12*B).toFixed(3)})`);ec.setAttribute('stroke',`rgba(206,211,221,${(0.85*B).toFixed(3)})`);
+          ec.setAttribute('stroke-width','2');ec.setAttribute('stroke-dasharray','6,4');e.appendChild(ec);
+          const src=g.querySelector('text');
+          if(src){const et=document.createElementNS(NS,'text');et.setAttribute('x',cx);et.setAttribute('y',cy);et.setAttribute('text-anchor','middle');et.setAttribute('dominant-baseline','central');
+            // Mismo tamaño de letra que la fantasma (ver la creación de fantasmas arriba), no el de la
+            // nota activa: si no, la letra "salta" al relevarse el eco por la fantasma.
+            et.setAttribute('font-size',String(Math.round((src.textContent||'').length>2?r*0.65:r*0.85)));et.setAttribute('font-weight','bold');et.setAttribute('font-family','Helvetica,Arial,sans-serif');
+            et.setAttribute('fill',`rgba(235,237,242,${(0.9*B).toFixed(3)})`);et.textContent=src.textContent;e.appendChild(et);}
+          overlay.style.display='block';overlay.appendChild(e);
+        }
+        if(e)e.style.opacity=String(g2);
+      }
+    }
   });
 }
 
@@ -5302,8 +5360,17 @@ function updateNextPreviewLegend(elapsed){
   // Resaltar: Tónicas (Localiza la tónica, también en el círculo sin fondo de escala) → siempre del acorde.
   const isRootsQuality=typeof asState!=='undefined'&&asState&&asState.quality==='roots';
   const isPentaQuality=!isRootsQuality&&(!hasScaleBg||(typeof asState!=='undefined'&&asState&&asState.quality==='pentatonic'));
+  // Sin fondo de escala se suponía siempre "Pentatónica del acorde" (pestaña Arpegios), pero esa pestaña
+  // también envía arpegios normales ("C7 arpegio (auto, forma E)"): en "Cambios entre arpegios" la leyenda
+  // decía "Tónica de la pentatónica" sobre un C7 (2026-10-26). Si ningún fotograma es de pentatónica y hay
+  // alguno de arpegio, es la tónica del arpegio; con pentatónicas el texto no cambia.
+  const isArpFrames=!hasScaleBg&&!isRootsQuality&&(()=>{
+    let arp=false,penta=false;
+    getAllBars().forEach(b=>(b.imgs||[]).forEach(sl=>{const n=(sl&&sl.name)||'';if(/pentat/i.test(n))penta=true;else if(/\sarpegio\b/.test(n))arp=true;}));
+    return arp&&!penta;
+  })();
   const rootLabelEl=document.getElementById('legendRootLabel');
-  if(rootLabelEl)rootLabelEl.textContent=isPentaQuality?'Tónica de la pentatónica':'Tónica del acorde';
+  if(rootLabelEl)rootLabelEl.textContent=isArpFrames?'Tónica del arpegio':isPentaQuality?'Tónica de la pentatónica':'Tónica del acorde';
   const outsideLabelEl=document.getElementById('legendOutsideLabel');
   if(outsideLabelEl)outsideLabelEl.textContent=isPentaQuality?'Nota de la escala fuera de la pentatónica':'Nota de la escala fuera del acorde';
   const e=elapsed==null?(audioEl?.currentTime||0):elapsed;
@@ -11354,7 +11421,11 @@ function exArpeggiosBarChange(ctx){
       // la misma posición siguiente (p.ej. cambio de compás con el mismo acorde), NO se tocan —
       // borrarlas y repintarlas cada compás producía un flash (bug reportado).
       if(window._arpGhostChord!==nextDistinctChord){
-        const ov=document.getElementById('ghostCanvas');if(ov)ov.innerHTML='';window._arpGhostEls=null;window._arpGhostChord=null;
+        // Con "relevo sin hueco" no se vacía aquí la capa: paintArpeggioGhosts la rehace (al ver
+        // _arpGhostChord=null) en el MISMO fotograma en que pinta la fantasma nueva. Vaciarla aquí
+        // dejaba un fotograma sin eco ni fantasma: el leve parpadeo que aún veía Alberto (2026-10-26).
+        const keepLayer=getVisConfig().arpGhostSeamless===true&&getVisConfig().arpGhostAlways===true&&getArpShowGhost();
+        const ov=document.getElementById('ghostCanvas');if(ov&&!keepLayer)ov.innerHTML='';window._arpGhostEls=null;window._arpGhostChord=null;
       }
       const curSlot2=slot;
       const activeNotes=(vlCurrentNotes&&vlCurrentNotes.length)?vlCurrentNotes:(curSlot2?.svgParsed?.notes||null);
@@ -11377,6 +11448,21 @@ function exArpeggiosBarChange(ctx){
       // exactamente igual"). Llamarlo aquí también, justo tras el redibujado, lo cierra en el
       // mismo tick.
       if(activeNotes)markCommonNotes(activeNotes,nextNotes2,nextFretRange2);
+      // Relevo sin hueco: la nota que ENTRA no salta de fantasma translúcida a sólida en un fotograma
+      // (se leía como parpadeo), sino que se enciende en ~0,1 s empezando JUSTO en el tiempo 1 — el
+      // "¡ahora!" del cambio se conserva, nunca se adelanta (Alberto, 2026-10-26). Las comunes, que
+      // ya estaban sonando, no se tocan.
+      if(getVisConfig().arpGhostSeamless===true&&getVisConfig().arpGhostAlways===true&&getArpShowGhost()){
+        const prev=window._arpPrevShownNotes||null;
+        const was=(cx,cy)=>prev&&prev.some(n=>Math.abs(n.cx-cx)<6&&Math.abs(n.cy-cy)<6);
+        const cv=document.getElementById('svgCanvas');
+        if(prev&&cv)cv.querySelectorAll('.vl-note').forEach(g=>{
+          const c=g.querySelector('circle');if(!c)return;
+          if(was(parseFloat(c.getAttribute('cx')),parseFloat(c.getAttribute('cy'))))return;
+          try{g.animate([{opacity:0.82},{opacity:1}],{duration:110,easing:'ease-out'});}catch(e){} // 0.82 ≈ brillo de la fantasma justo antes del cambio (medido): sin bajón
+        });
+        window._arpPrevShownNotes=activeNotes?relayoutNotes(activeNotes):null;
+      }
       // data-stablewin (ver arpBuildZoneSVG/ashAutoGenerateForTheme): esta forma YA trae la
       // ventana definitiva (mismo ancho que TODAS las demás formas usadas en el ejercicio, cada
       // una centrada en sus propias notas) — "Zona ampliada" NO debe recortarla más según las
@@ -14141,7 +14227,11 @@ function tick(){
         keepFade=!(newNotes&&oldNotes)||(newNotes.length===oldNotes.length&&keyOf(newNotes)===keyOf(oldNotes));
       }
     }
-    if(!keepFade)clearGhostNotes();
+    // Relevo sin hueco (arpegios): no vaciar ni ocultar aquí la capa de fantasmas — la rehace
+    // paintArpeggioGhosts en el mismo fotograma; vaciarla aquí era el último fotograma sin fantasmas
+    // en el cambio (medido en el vídeo: las notas salientes caían al negro un fotograma).
+    const _keepGhostLayer=typeof _exBC!=='undefined'&&_exBC&&_exBC.onBarChange===exArpeggiosBarChange&&getVisConfig().arpGhostSeamless===true&&getVisConfig().arpGhostAlways===true&&getArpShowGhost();
+    if(!keepFade&&!_keepGhostLayer)clearGhostNotes();
     const curEl=document.getElementById('vChord');if(curEl)curEl.style.opacity='1';
     updateCarousel(prevShown,barChordNow,nextChord,fn);
     const fe=document.getElementById('vFn');const lbl=fnLbl(fn);
@@ -16865,6 +16955,7 @@ const VIS_ELEMENTS=[
   {id:'realisticNeck',label:'Mástil realista: cuerdas metálicas con volumen y trastes con brillo', def:false, group:'Franjas y elementos del mástil'},
   {id:'forceOwnNoteStyle',label:'Aplicar estilo propio a las notas: usa siempre rojo (tónica) y azul (resto), ignorando los colores del SVG', def:true, group:'Franjas y elementos del mástil'},
   {id:'intervalBadge',label:'Intervalo en pequeño junto a cada nota (el mástil muestra siempre el nombre de la nota)', def:false, group:'Franjas y elementos del mástil'},
+  {id:'intervalBadgeNoRoot',label:'Intervalo en pequeño: sin placa en la tónica (ya la marca el rojo)', def:false, group:'Franjas y elementos del mástil'},
   {id:'scaleFromChord',label:'Escala del acorde que suena (ignora tonalidad)', def:false, group:'Escala y notas'},
   // ── TRIADS: transition between positions ──
   {id:'triadShowGhost',label:'Mostrar notas fantasma de la siguiente posición antes del cambio', def:true, group:'Transición · Tríadas', xtype:'triads'},
@@ -16877,6 +16968,7 @@ const VIS_ELEMENTS=[
   {id:'legendIntro',label:'Leyenda de colores en la previsualización (rojo/anillo blanco/anillo dorado/fantasma) durante los primeros segundos, con fundido — para vídeos pensados para quien no conoce la app; necesita la previsualización activada', def:true, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'previewZoomToZone',label:'Previsualización: encuadrar y centrar en la zona de sus notas (independiente del mástil)', def:false, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'arpShowGhost',label:'Mostrar notas fantasma de la siguiente posición (fundido suave de aparición; las comunes se anclan)', def:true, group:'Transición · Arpegios', xtype:'arpeggios'},
+  {id:'arpGhostSeamless',label:'Fantasmas siempre visibles: relevo sin hueco — la nota que se apaga deja ver su fantasma debajo (sin parpadeo en el cambio)', def:false, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'arpGhostAlways',label:'Notas fantasma de la siguiente posición: mantenerlas SIEMPRE visibles (tenues desde el inicio, intensifican al acercarse el cambio) — necesita las fantasmas activadas', def:false, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'arpAnimations',label:'Animación de gotas y flechas en el cambio (movimientos posibles entre cuerdas)', def:false, group:'Transición · Arpegios', xtype:'arpeggios'},
   {id:'hintIntervalLabel',label:'Etiqueta del intervalo del movimiento (ej. 3→7) sobre las flechas', def:true, group:'Transición · Arpegios', xtype:'arpeggios'},

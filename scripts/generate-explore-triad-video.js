@@ -35,6 +35,7 @@ const { promisify } = require('util');
 const execFileP = promisify(execFile);
 const { acquireRenderLock } = require('./lib/batch-sessions');
 
+const { keyframeFix } = require('./lib/keyframe-fix');
 // Nombre de fichero final: <Acorde>_TodasTriadas_<Etiqueta>_<bpm>bpm.mp4 (p.ej.
 // Gm_TodasTriadas_Horizontal_90bpm.mp4) — convención pedida por Alberto para esta tanda de vídeos.
 const SEQ_LABEL = { A: 'Horizontal', B: 'Vertical', C: 'Azar', DROP2: 'AbiertaDrop2' };
@@ -428,7 +429,7 @@ async function main() {
     '-i', silentPath,
     '-i', audioPath,
     '-filter_complex',
-    `[0:v]trim=start=${trimOffsetSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    `[0:v]trim=start=${trimOffsetSec.toFixed(3)},setpts=PTS-STARTPTS${await keyframeFix(silentPath, trimOffsetSec)}[v];[1:a]apad=pad_dur=${extraSec}[a]`,
     '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',

@@ -117,6 +117,7 @@ const { parseTempoByMeasure, analyzeTempoProgression } = require('./lib/tempo-pr
 const { buildChapters, fmtChapter } = require('./generate-youtube-chapters');
 const { acquireRenderLock } = require('./lib/batch-sessions');
 
+const { keyframeFix } = require('./lib/keyframe-fix');
 const AUDIO_EXT_RE = /\.(m4a|mp3|wav|aac)$/i;
 const XML_EXT_RE = /\.xml$/i;
 
@@ -354,11 +355,11 @@ async function muxAndSync({ videoObj, tag, log, recordStartAt, playStartAt, audi
   const trimOffsetSec = Math.max(0, ((playStartAt || recordStartAt) - recordStartAt) / 1000);
 
   const outPath = path.join(outDir, `${tag}.mp4`);
-  const mux = (trimSec) => execFileP('ffmpeg', [
+  const mux = async (trimSec) => execFileP('ffmpeg', [
     '-y',
     '-i', silentPath,
     '-i', audioPath,
-    '-filter_complex', `[0:v]trim=start=${trimSec.toFixed(3)},setpts=PTS-STARTPTS[v];[1:a]apad=pad_dur=${extraSec}[a]`,
+    '-filter_complex', `[0:v]trim=start=${trimSec.toFixed(3)},setpts=PTS-STARTPTS${await keyframeFix(silentPath, trimSec)}[v];[1:a]apad=pad_dur=${extraSec}[a]`,
     '-map', '[v]', '-map', '[a]',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20',
     '-c:a', 'aac', '-b:a', '192k',

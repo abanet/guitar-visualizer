@@ -9,7 +9,7 @@ property appName : "Band-in-a-Box"
 -- COLA (2026-10-25): si no esta vacia, se ignoran los valores de abajo y se procesa cada ritmo:
 -- {nombre, bpmInicial, bpmFinal, incremento}. Abre carpetaRitmos/<nombre>.SGU (con su bateria y compas
 -- ya guardados; los crea scripts/make-biab-sgu.py) y deja los AIFF en fuentes-descargas/<nombre>/.
-property cola : {{"BluesRock128", 45, 120, 5}, {"SalsaBachata", 90, 145, 5}, {"Salsa", 80, 135, 5}, {"MerengueAlex", 105, 165, 5}, {"Tango", 80, 140, 5}, {"DjembeKeitaEv16", 60, 130, 5}}
+property cola : {{"JazzWaltzTerryClarke", 60, 200, 5}, {"PercValsCriollo", 70, 110, 5}, {"PercFestejoPeru", 100, 150, 5}, {"PartidoAltoWes", 80, 140, 5}, {"ReggaetonSlowSunset", 60, 125, 5}, {"Soca16thsWes", 95, 140, 5}, {"HipHop", 60, 120, 5}, {"ChillHopSlightSwing16", 45, 120, 5}, {"Tabla16ths", 50, 105, 5}, {"Tarantella", 110, 175, 5}, {"CajunZydeco", 165, 230, 5}, {"BluesRumbaEv", 110, 150, 5}}
 property carpetaRitmos : "/Volumes/BanetMasa/CanalGuitarra/BandInABox/Ritmos/"
 property carpetaBase : "/Users/alberto/guitar-visualizer-assets/fuentes-descargas/"
 

@@ -86,7 +86,9 @@ if (12 >= lo && 12 <= hi) h += inlay(12, (yOf(1) + yOf(2)) / 2) + inlay(12, (yOf
 for (let f = Math.max(1, lo); f <= hi; f++) h += `<text x="${xOf(f)}" y="${bot + 56}" text-anchor="middle" font-size="22" fill="rgba(255,255,255,.45)">${f}</text>`;
 const R = 26;
 if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarillo, lo tocado en blanco, lo pendiente en gris
-  const T = D.tab, X0 = 250, X1 = 1490, Y0 = 628, G = 20, RY = Y0 + 5 * G + 12, RB = RY + 26, FY = RB + 32, EPS = 1e-6;
+  // Paginado (vídeos del Spider, 2026-10-25): una vuelta de 48 notas no cabe legible en una línea, así que con
+  // tab.from se dibuja solo la página [from, from + beats) y el resto de la vuelta se salta; sin from, como antes.
+  const P0 = D.tab.from, T = P0 === undefined ? D.tab : { ...D.tab, items: D.tab.items.map(it => ({ ...it, at: it.at - P0 })) }, vis = it => P0 === undefined || (it.at > -1e-6 && it.at < T.beats - 1e-6), X0 = 250, X1 = 1490, Y0 = 628, G = 20, RY = Y0 + 5 * G + 12, RB = RY + 26, FY = RB + 32, EPS = 1e-6;
   const tx = at => X0 + at / T.beats * (X1 - X0), ly = st => Y0 + (5 - st) * G, OFF = Math.min(30, (X1 - X0) / T.beats * 0.3);
   const is = (d, v) => Math.abs(d - v) < 0.02, grey = 'rgba(255,255,255,.5)', colOf = i => i === T.cur ? '#ffd640' : T.cur >= 0 && i < T.cur ? '#fff' : grey;
   for (let i = 0; i < 6; i++) h += `<line x1="${X0 - OFF}" y1="${Y0 + i * G}" x2="${X1 - OFF}" y2="${Y0 + i * G}" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>`;
@@ -94,6 +96,7 @@ if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarill
   h += `<text x="${X0 - OFF - 16}" y="${Y0 + 2.5 * G + 8}" text-anchor="end" font-size="22" font-weight="700" fill="rgba(255,255,255,.5)">TAB</text><text x="${X0 - OFF - 16}" y="${FY}" text-anchor="end" font-size="16" font-weight="700" fill="rgba(255,255,255,.4)">${T.rowLabel || 'dedo'}</text>`;
   const wave = (x, y, n, c, w) => `<path d="M ${x} ${y} ${Array(n).fill('q 6 -9 12 0 q 6 9 12 0').join(' ')}" fill="none" stroke="${c}" stroke-width="${w}"/>`;
   T.items.forEach((it, i) => {
+    if (!vis(it)) return;
     const x = tx(it.at), col = colOf(i), m = (RY + RB) / 2;
     if (it.r) {   // silencios: blanca, negra (con o sin puntillo) o corchea
       const rc = 'rgba(255,255,255,.6)';
@@ -112,8 +115,8 @@ if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarill
     // Figuras: plica = negra, plica corta = blanca, puntillo, y barras/corchetes para corcheas, semicorcheas y tresillos.
     if (it.d < 4 - EPS) h += `<line x1="${x}" y1="${it.d >= 2 - EPS ? RY + 13 : RY}" x2="${x}" y2="${RB}" stroke="${col}" stroke-width="2.5"/>`;
     if (is(it.d, 0.75) || is(it.d, 1.5) || is(it.d, 3)) h += `<circle cx="${x + 9}" cy="${RB - 4}" r="3.2" fill="${col}"/>`;
-    if (it.lig && pv) { const xa = tx(pv.at) + 10, xb = x - 10, yy = y + 14; const tight = xb - xa < 24; h += `<path d="M ${xa - (tight ? 4 : 0)} ${yy} Q ${(xa + xb) / 2} ${yy + (tight ? 9 : 15)} ${xb + (tight ? 4 : 0)} ${yy}" fill="none" stroke="${col}" stroke-width="2.5"/>` + (tight ? '' : `<text x="${(xa + xb) / 2}" y="${yy + 3}" text-anchor="middle" font-size="13" font-weight="700" fill="${col}">${it.lig}</text>`); }
-    if (it.slide && pv) h += `<line x1="${tx(pv.at) + 13}" y1="${y + (pv.notes[0].f < it.notes[0].f ? 6 : -6)}" x2="${x - 13}" y2="${y + (pv.notes[0].f < it.notes[0].f ? -6 : 6)}" stroke="${col}" stroke-width="2.5"/>`;
+    if (it.lig && pv && vis(pv)) { const xa = tx(pv.at) + 10, xb = x - 10, yy = y + 14; const tight = xb - xa < 24; h += `<path d="M ${xa - (tight ? 4 : 0)} ${yy} Q ${(xa + xb) / 2} ${yy + (tight ? 9 : 15)} ${xb + (tight ? 4 : 0)} ${yy}" fill="none" stroke="${col}" stroke-width="2.5"/>` + (tight ? '' : `<text x="${(xa + xb) / 2}" y="${yy + 3}" text-anchor="middle" font-size="13" font-weight="700" fill="${col}">${it.lig}</text>`); }
+    if (it.slide && pv && vis(pv)) h += `<line x1="${tx(pv.at) + 13}" y1="${y + (pv.notes[0].f < it.notes[0].f ? 6 : -6)}" x2="${x - 13}" y2="${y + (pv.notes[0].f < it.notes[0].f ? -6 : 6)}" stroke="${col}" stroke-width="2.5"/>`;
     if (it.vib) h += wave(x + (it.bend ? 46 : -10), Y0 - 16, 4, col, 2.5);
     if (it.bend) {
       const top = Y0 - 22, ax = x + 32;
@@ -125,7 +128,7 @@ if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarill
   // Barras: las notas de menos de una negra que comparten pulso van unidas; sueltas llevan corchete.
   const groups = []; let g = null;
   T.items.forEach((it, i) => { const bt = Math.floor(it.at + EPS); if (!it.r && it.d < 1 - EPS) { if (g && g.bt === bt) g.ix.push(i); else groups.push(g = { bt, ix: [i] }); } else g = null; });
-  groups.forEach(gr => { const A = T.items[gr.ix[0]], Z = T.items[gr.ix[gr.ix.length - 1]], c = T.cur >= 0 && gr.ix[gr.ix.length - 1] < T.cur ? '#fff' : grey, six = d => d <= 0.25 + EPS;
+  groups.filter(gr => vis(T.items[gr.ix[0]])).forEach(gr => { const A = T.items[gr.ix[0]], Z = T.items[gr.ix[gr.ix.length - 1]], c = T.cur >= 0 && gr.ix[gr.ix.length - 1] < T.cur ? '#fff' : grey, six = d => d <= 0.25 + EPS;
     if (gr.ix.length === 1) { const x = tx(A.at), cc = colOf(gr.ix[0]); h += `<path d="M ${x} ${RB} q 11 -3 9 -16" fill="none" stroke="${cc}" stroke-width="2.5"/>` + (six(A.d) ? `<path d="M ${x} ${RB - 8} q 11 -3 9 -16" fill="none" stroke="${cc}" stroke-width="2.5"/>` : ''); return; }
     h += `<line x1="${tx(A.at) - 1}" y1="${RB - 2}" x2="${tx(Z.at) + 1}" y2="${RB - 2}" stroke="${c}" stroke-width="5"/>`;
     gr.ix.forEach((ix, k) => { const it = T.items[ix], nx = T.items[gr.ix[k + 1]], x = tx(it.at); if (!six(it.d)) return;

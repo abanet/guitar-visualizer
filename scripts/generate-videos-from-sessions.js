@@ -17,6 +17,8 @@
  *   --vis-config <path>   JSON con la configuración visual a aplicar (opcional)
  *   --concurrency <n>     Vídeos en paralelo (por defecto: 1 — más sube el riesgo de saltos en la animación en máquinas de pocos núcleos)
  *   --width/--height      Tamaño del viewport grabado (por defecto: 1600x900)
+ *   --con-borrones        NO corrige los fotogramas clave borrosos de la grabación (por defecto sí se
+ *                         corrigen: ver lib/keyframe-fix.js)
  */
 const path = require('path');
 const fs = require('fs');
@@ -72,7 +74,7 @@ async function main() {
     });
   };
 
-  const state = await runBatch({ appPath, dir, audioPath, outDir, extraSec, visConfig, visConfigPath, concurrency, width, height, onUpdate });
+  const state = await runBatch({ appPath, dir, audioPath, outDir, extraSec, visConfig, visConfigPath, concurrency, width, height, onUpdate, fixKeyframes: !args['con-borrones'] });
 
   if (state.fatalError) {
     console.error('Error: ' + state.fatalError);

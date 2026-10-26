@@ -1,0 +1,12 @@
+{
+  "_comentario": "Cambios entre arpegios de 7ª (2026-10-26, Alberto): nota + intervalo en placa pequeña a la vez (sin alternar por vueltas) y el otro arpegio siempre en fantasma para ver cómo empastan los dos. Sin placa en la tónica (ya es roja). Esquema pequeño del siguiente arpegio en la esquina (nextPreview, encuadrado en su zona). Relevo sin hueco: la nota que se apaga deja ver su fantasma (arpGhostSeamless).",
+  "vis": {
+    "intervalBadge": true,
+    "arpGhostAlways": true,
+    "intervalBadgeNoRoot": true,
+    "nextPreview": true,
+    "previewZoomToZone": true,
+    "arpGhostSeamless": true,
+    "hintCommonPulse": false
+  }
+}

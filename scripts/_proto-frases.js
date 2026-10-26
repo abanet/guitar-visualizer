@@ -8,6 +8,9 @@
  *
  * Uso: node scripts/_proto-frases.js --frase clasico --tempos 80,90 --backing ~/guitar-visualizer-assets/FrasesAm/biblioteca
  *        [--backing-vol 1.3] [--notes-vol 0.65] [--out <dir>] [--num 1]
+ *        [--datos scripts/_proto-spider-data.js] [--nombre Spider01_cuerda]
+ * --datos cambia el fichero de frases (por defecto las de La menor) y --nombre el del vídeo; sin ellos todo
+ * sale igual que antes. Lo usan los vídeos del Spider (2026-10-25), que no son pentatónica ni van en La.
  */
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -17,7 +20,6 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileP = promisify(execFile);
 const { renderToneTrackInPage } = require('./lib/_proto-pluck-audio');
-const PHRASES = require('./_proto-frases-data');
 
 const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
 const NAMES_STD = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'], NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
@@ -43,7 +45,7 @@ function parseArgs(argv) {
 }
 
 (async () => {
-  const args = parseArgs(process.argv), P = PHRASES[args.frase];
+  const args = parseArgs(process.argv), PHRASES = require(args.datos ? path.resolve(String(args.datos)) : './_proto-frases-data'), P = PHRASES[args.frase];
   if (!P) { console.error(`--frase: ${Object.keys(PHRASES).join(' | ')}`); process.exit(1); }
   const NAMES = P.flats ? NAMES_FLAT : NAMES_STD, ROOT_PC = P.rootPc === undefined ? 9 : P.rootPc;
   const tempos = String(args.tempos || '80,90').split(',').map(Number).filter(x => x > 0);
@@ -120,10 +122,15 @@ function parseArgs(argv) {
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   await page.goto('file://' + path.join(__dirname, 'lib', '_proto-frases-frame.html'));
+  // P.pagina (pulsos): la tablatura va por páginas y pasa a la de la nota en curso; los silencios del final se
+  // quedan en la última página y la cuenta inicial en la primera.
+  const tabOf = cur => { const tab = { beats: lapBeats, items: TAB, cur, rowLabel: P.rowLabel }; if (!P.pagina) return tab;
+    const at = cur < 0 ? 0 : cur < items.length ? items[cur].at : seqBeats - EPS;
+    return { ...tab, beats: P.pagina, from: Math.floor(at / P.pagina + EPS) * P.pagina }; };
   const cache = new Map(); let nPng = 0;
   for (const s of steps) {
     const data = { title: P.title || 'Vocabulario pentatónico · La menor', subtitle: (args.num ? `Frase ${args.num} · ` : '') + P.name, caption: s.caption, metro: s.metro,
-      ladder: s.lap === undefined ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: { beats: lapBeats, items: TAB, cur: s.cur, rowLabel: P.rowLabel },
+      ladder: s.lap === undefined ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: tabOf(s.cur),
       notes: N.map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, iv: fingerOf[key(n)], state: s.state.get(key(n)), bend: s.bend[key(n)], mx: !!(s.mx && s.mx.includes(key(n))), vib: s.vibKey === key(n),
         lig: s.lig && s.lig.key === key(n) ? s.lig : undefined, slide: s.slide && s.slide.key === key(n) ? s.slide : undefined })) };
     const sig = JSON.stringify(data);
@@ -165,7 +172,7 @@ function parseArgs(argv) {
   const list = path.join(tmp, 'list.txt');
   fs.writeFileSync(list, steps.map(s => `file '${s.png}'\nduration ${s.dur.toFixed(4)}`).join('\n') + `\nfile '${steps[steps.length - 1].png}'\n`);
   const bw = path.join(tmp, 'base.wav'); await buildBacking(backingDir, tempos, lapBeats * 2, 4, bw);
-  const out = path.join(outDir, `${args.num ? 'Frase' + String(args.num).padStart(2, '0') + '_' : 'Frase_'}${args.frase}_Am_${tempos[0]}-${tempos[tempos.length - 1]}bpm.mp4`);
+  const out = path.join(outDir, args.nombre ? `${args.nombre}_${tempos[0]}-${tempos[tempos.length - 1]}bpm.mp4` : `${args.num ? 'Frase' + String(args.num).padStart(2, '0') + '_' : 'Frase_'}${args.frase}_Am_${tempos[0]}-${tempos[tempos.length - 1]}bpm.mp4`);
   await execFileP('nice', ['-n', '19', 'ffmpeg', '-loglevel', 'error', '-y', '-threads', '2', '-f', 'concat', '-safe', '0', '-i', list, '-i', wav, '-i', bw,
     '-filter_complex', `[1:a]volume=${parseFloat(args['notes-vol'] || 0.65)}[n];[2:a]volume=${parseFloat(args['backing-vol'] || 1.3)}[b];[n][b]amix=inputs=2:normalize=0,alimiter=limit=0.95[a]`, '-map', '0:v', '-map', '[a]',
     '-vf', 'fps=25,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', out], { maxBuffer: 1 << 24 });
