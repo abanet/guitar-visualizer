@@ -64,7 +64,7 @@ const tilde = (p) => path.resolve(String(p).replace(/^~/, os.homedir()));
       // seguía colocando los arpegios del primero (10-26: las 12 tonalidades salían con A7-D7, los ciclos
       // ya convertidos a 'custom' sobreviven a loadXML). Recargar cuesta ~1 s y quita cualquier arrastre.
       await page.goto(appUrl);
-      const res = await page.evaluate(async ({ xmlText, name, form, ciclo }) => {
+      const res = await page.evaluate(async ({ xmlText, name, form, ciclo, tonica }) => {
         // loadXML lee con FileReader (asíncrono). Esperar a que `cycles` tenga contenido NO basta: desde la
         // segunda tonalidad ya lo tiene, el del XML anterior, y las sesiones salían con los acordes de otra
         // tonalidad (10-26: las de C traían A7-D7). Se vacía el rótulo "N compases" (#t3), que loadXML
@@ -79,16 +79,27 @@ const tilde = (p) => path.resolve(String(p).replace(/^~/, os.homedir()));
         document.getElementById('cycleLen').value = String(ciclo);
         showTab('generate');
         document.getElementById('ashStartPos').value = form;
+        // El I7 se queda en SU forma todo el vídeo (bug visto por Alberto el 10-27, "las dos posiciones en
+        // diferentes sitios"): #ashStartPos solo fija el PRIMER compás y luego la optimización global elige
+        // la posición más barata de toda la canción — en Forma C (las 12 tonalidades) y en Ab Forma D el I7
+        // se iba a otra forma (G7 de trastes 7-10 a 2-6) y el vídeo dejaba de ser "Forma C". Con la forma
+        // manual del I7 (el mismo mecanismo que el selector por acorde de la pestaña) el IV7 se elige junto
+        // a ella. Solo en memoria: no se llama a ashSavePosOverride.
+        ashPosOverride = { [noteToSt(tonica) + '|7']: form };
         ashSendToEditor(true);
         const s = buildSession();
         delete s.library; // la Librería ya no hace falta: los fotogramas van en la sesión
         return { s, status: document.getElementById('ashSendStatus')?.textContent || '' };
-      }, { xmlText, name: f, form, ciclo: parseInt(a.ciclo || 4, 10) });
+      }, { xmlText, name: f, form, ciclo: parseInt(a.ciclo || 4, 10), tonica: key.replace(/s$/, '#') });
       // Comprobación: el primer arpegio de la sesión tiene que ser el acorde I de la tonalidad del fichero.
       const tonica = key.replace(/s$/, '#');
       const primero = (JSON.stringify(res.s).match(/"name":"([A-G][#b]?)7 arpegio/) || [])[1];
       const enar = { 'C#': 'Db', 'D#': 'Eb', 'Gb': 'F#', 'G#': 'Ab', 'A#': 'Bb' };
       if ((enar[primero] || primero) !== (enar[tonica] || tonica)) throw new Error(`${f} forma ${form}: el primer arpegio es ${primero}7, no ${tonica}7`);
+      // Y el I7 tiene que estar en la forma pedida en TODOS los compases (ver ashPosOverride arriba).
+      const formasI = new Set([...JSON.stringify(res.s).matchAll(/"name":"([A-G][#b]?)7 arpegio \(auto, forma ([^)]*)\)"/g)]
+        .filter((m) => (enar[m[1]] || m[1]) === (enar[tonica] || tonica)).map((m) => m[2]));
+      if (formasI.size !== 1 || !formasI.has(form)) throw new Error(`${f} forma ${form}: el I7 sale en las formas ${[...formasI].join(', ')}`);
       const dir = path.join(out, key);
       fs.mkdirSync(dir, { recursive: true });
       const dest = path.join(dir, f.replace(/\.XML$/i, `_Forma${form}.json`));

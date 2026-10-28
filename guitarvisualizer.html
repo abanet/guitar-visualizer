@@ -1024,6 +1024,25 @@ body.presentation #channelWatermark{display:flex;}
               <div class="legend-scale-only" style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.14);border:2px dashed rgba(255,255,255,.6);box-sizing:border-box;"></span><span id="legendOutsideLabel">Nota de la escala fuera de la pentatónica</span></div>
               <div class="legend-ghost-only" style="display:flex;align-items:center;gap:10px;"><span style="flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.12);border:2px dashed rgba(38,198,218,.65);box-sizing:border-box;"></span>Se activará en la siguiente posición</div>
             </div>
+            <!-- Escalera de tempo (vis 'tempoLadder', ver updateTempoLadder): ocupa el sitio de la leyenda cuando
+                 esta se funde (Alberto, 2026-10-28), alto hasta el pie del mástil. -->
+            <div id="tempoLadder" style="position:absolute;left:0;right:0;display:none;opacity:0;">
+              <div style="height:100%;box-sizing:border-box;display:flex;flex-direction:column;background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px 14px;backdrop-filter:blur(3px);">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;font:600 12px Helvetica,Arial,sans-serif;letter-spacing:.05em;color:rgba(255,255,255,.75);">
+                  <span style="text-transform:uppercase;">Tempo</span><span id="tempoLadderRoute" style="color:rgba(255,255,255,.55);"></span>
+                </div>
+                <div id="tempoLadderChart" style="position:relative;flex:1 1 auto;min-height:40px;margin:26px 6px 10px;">
+                  <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;">
+                    <defs><clipPath id="tempoLadderClip"><rect id="tempoLadderClipRect" x="-10" y="-50" width="0" height="1100"/></clipPath></defs>
+                    <path id="tempoLadderAll" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+                    <path id="tempoLadderDone" fill="none" stroke="#26C6DA" stroke-width="4" stroke-linejoin="round" vector-effect="non-scaling-stroke" clip-path="url(#tempoLadderClip)"/>
+                  </svg>
+                  <div id="tempoLadderLabels" style="position:absolute;inset:0;"></div>
+                  <div id="tempoLadderHead" style="position:absolute;width:12px;height:12px;margin:-8px 0 0 -8px;border-radius:50%;background:#fff;border:2px solid #26C6DA;box-shadow:0 0 10px rgba(38,198,218,.8);"></div>
+                </div>
+                <div id="tempoLadderNext" style="align-self:stretch;text-align:center;padding:6px 10px;border-radius:999px;font:700 13px Helvetica,Arial,sans-serif;letter-spacing:.12em;color:rgba(255,255,255,.7);border:1.5px solid rgba(255,255,255,.25);"></div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="vis-bottom"><div class="strip" id="vStrip"></div></div>
@@ -3935,7 +3954,7 @@ function loadSession(input){
 
 // ── AUTOSAVE ─────────────────────────────────────────────────────────────────
 const AUTOSAVE_KEY='gv_autosave';
-const APP_VERSION='4.6.8';
+const APP_VERSION='4.6.9';
 console.log('%cGuitar Visualizer v'+APP_VERSION,'font-weight:bold');
 try{const _vb=document.getElementById('appVersionBadge');if(_vb)_vb.textContent='v'+APP_VERSION;}catch(e){}
 let _autosaveLast='';
@@ -5376,6 +5395,71 @@ function updateNextPreviewLegend(elapsed){
   const e=elapsed==null?(audioEl?.currentTime||0):elapsed;
   const op=e>=LEGEND_FADE_END?0:(e<=LEGEND_FADE_START?1:1-(e-LEGEND_FADE_START)/(LEGEND_FADE_END-LEGEND_FADE_START));
   el.style.opacity=String(op);
+}
+/* ---- Escalera de tempo en los vídeos de mástil (vis 'tempoLadder'). Alberto, 2026-10-28, sobre los
+   progresivos de Cambios entre arpegios: "no veo el dibujo de tiempo y el anuncio de incremento q hacemos en
+   los videos de ritmos progresivos". Lo mismo que el overlay de Ritmo (tvBuildTempoProfile + tvUpdateNextChange):
+   un escalón por tramo de BPM a escala de tiempo real, lo ya tocado en color con un punto en el instante actual,
+   y la pastilla "EN N COMPASES → X BPM" que se enciende a 4 compases del cambio. Va en el hueco de la columna
+   derecha bajo la previsualización ("para q no quede el dibujo de la guitarra muy pequeño"): no toca el mástil.
+   Solo con mapa de tempo de más de un valor (mismo criterio que hasTempoVar) y la opción encendida. ---- */
+const TEMPO_LADDER_CLOSE_BARS=4,TEMPO_LADDER_FADE_SEC=1;
+let _tempoLadderKey=null,_tempoLadderData=null;
+function updateTempoLadder(elapsed){
+  const el=document.getElementById('tempoLadder');if(!el)return;
+  const on=getVisConfig().tempoLadder===true&&window._tempoMap&&Object.keys(window._tempoMap).length>1&&totalBars>0;
+  if(!on){if(el.style.display!=='none')el.style.display='none';return;}
+  const key=totalBars+'|'+(getIntroSec()+getOffSec())+'|'+JSON.stringify(window._tempoMap);
+  if(key!==_tempoLadderKey){
+    _tempoLadderKey=key;
+    // Tramos: la cuenta de entrada va al tempo del primer compás (como en Ritmo); fin = final del último compás.
+    const end=getBarStartTime(totalBars);
+    const raw=[{t:0,bpm:Math.round(getBpmAtBar(0))}],changes=[];
+    for(let bi=1;bi<totalBars;bi++){const b=Math.round(getBpmAtBar(bi));if(b!==raw[raw.length-1].bpm){raw.push({t:getBarStartTime(bi),bpm:b});changes.push({barIdx:bi,bpm:b});}}
+    const bpms=raw.map(r=>r.bpm),lo=Math.min(...bpms),hi=Math.max(...bpms);
+    const yOf=b=>hi>lo?(hi-b)/(hi-lo)*1000:500;   // 0-1000 = alto del gráfico (arriba = más rápido)
+    const segs=raw.map((r,i)=>({x0:r.t/end*1000,x1:(i+1<raw.length?raw[i+1].t:end)/end*1000,y:yOf(r.bpm),bpm:r.bpm}));
+    const d=segs.map((g,i)=>(i?'L':'M')+g.x0.toFixed(1)+' '+g.y.toFixed(1)+'L'+g.x1.toFixed(1)+' '+g.y.toFixed(1)).join('');
+    document.getElementById('tempoLadderAll').setAttribute('d',d);
+    document.getElementById('tempoLadderDone').setAttribute('d',d);
+    // BPM de cada escalón encima de él (en HTML para que el texto no se deforme con el gráfico)
+    document.getElementById('tempoLadderLabels').innerHTML=segs.map(g=>'<span style="position:absolute;left:'+((g.x0+g.x1)/20).toFixed(2)+'%;top:'+(g.y/10).toFixed(2)+'%;transform:translate(-50%,-135%);font:600 11px Helvetica,Arial,sans-serif;color:rgba(255,255,255,.4);">'+g.bpm+'</span>').join('');
+    const first=bpms[0],last=bpms[bpms.length-1],mids=[];
+    if(hi!==first&&hi!==last)mids.push([bpms.indexOf(hi),hi]);if(lo!==first&&lo!==last)mids.push([bpms.indexOf(lo),lo]);
+    mids.sort((a,b)=>a[0]-b[0]);
+    document.getElementById('tempoLadderRoute').textContent=[first,...mids.map(m=>m[1]),last].join(' → ')+' BPM';
+    _tempoLadderData={end,segs,changes};
+  }
+  // Mismo sitio que la leyenda "Notación": entra en cuanto la leyenda termina de fundirse (LEGEND_FADE_END), sin
+  // fundido cruzado (los dos textos encima se leían mal). Alto hasta el pie del mástil, para que la columna derecha cuadre con él.
+  const legend=document.getElementById('nextPreviewLegend'),panel=document.getElementById('nextPreview');
+  const legendOn=getVisConfig().legendIntro===true&&legend&&legend.style.display!=='none';
+  const top=legendOn?legend.offsetTop:(panel.firstElementChild?panel.firstElementChild.offsetHeight+40:0);
+  const neck=document.getElementById('svgCanvas'),pr=panel.getBoundingClientRect();
+  const scale=pr.width&&panel.offsetWidth?pr.width/panel.offsetWidth:1;
+  // Pie del mástil = la 6ª cuerda (la línea larga más baja): la caja del svg incluye franjas vacías y el
+  // encuadre de zona (zoomToZone) cambia el viewBox, así que se mide la cuerda real.
+  let neckBottom=0;if(neck){const nw=neck.getBoundingClientRect().width;neck.querySelectorAll('line').forEach(l=>{const q=l.getBoundingClientRect();if(q.width>nw*.5)neckBottom=Math.max(neckBottom,(q.bottom-pr.top)/scale);});}
+  const h=Math.max(legendOn?legend.offsetHeight:150,neckBottom-top);
+  el.style.top=top+'px';el.style.height=h+'px';el.style.display='block';
+  const e=elapsed==null?(audioEl?.currentTime||0):elapsed;
+  el.style.opacity=String(!legendOn?1:Math.max(0,Math.min(1,(e-LEGEND_FADE_END)/TEMPO_LADDER_FADE_SEC)));
+  const {end,segs,changes}=_tempoLadderData;
+  const x=Math.max(0,Math.min(1000,e/end*1000));
+  const seg=segs.find(g=>x<g.x1)||segs[segs.length-1];
+  document.getElementById('tempoLadderClipRect').setAttribute('width',(x+10).toFixed(1));
+  const head=document.getElementById('tempoLadderHead');head.style.left=(x/10).toFixed(2)+'%';head.style.top=(seg.y/10).toFixed(2)+'%';
+  const spans=document.getElementById('tempoLadderLabels').children;
+  for(let i=0;i<spans.length;i++){const c=segs[i]===seg?'#fff':segs[i].x1<=x?'rgba(38,198,218,.85)':'rgba(255,255,255,.4)';if(spans[i].style.color!==c)spans[i].style.color=c;}
+  const bi=getBarIndexAt(e);
+  const next=changes.find(c=>c.barIdx>bi),pill=document.getElementById('tempoLadderNext');
+  let txt,close=false;
+  if(!next)txt='ÚLTIMO TEMPO';
+  else{const n=next.barIdx-Math.max(0,bi);close=n<=TEMPO_LADDER_CLOSE_BARS;txt=(n===1?'PRÓXIMO COMPÁS':'EN '+n+' COMPASES')+' → '+next.bpm+' BPM';}
+  if(pill.textContent!==txt)pill.textContent=txt;
+  pill.style.color=close?'#26C6DA':'rgba(255,255,255,.7)';
+  pill.style.borderColor=close?'rgba(38,198,218,.8)':'rgba(255,255,255,.25)';
+  pill.style.background=close?'rgba(38,198,218,.12)':'transparent';
 }
 function setNeckPreviewShown(v){
   const p=document.getElementById('nextPreview');if(!p)return;
@@ -13967,6 +14051,7 @@ function tick(){
   if(!audioEl){rafId=requestAnimationFrame(tick);return;}
   const elapsed=audioEl.currentTime;
   updateNextPreviewLegend(elapsed);
+  updateTempoLadder(elapsed);
   armEndFade();
   const introSec=getIntroSec()+getOffSec();
   const barSec=getBarSec();
@@ -16946,6 +17031,7 @@ const VIS_ELEMENTS=[
   {id:'showNotes',    label:'Notas del acorde',       def:false, group:'Información en pantalla'},
   {id:'showIntervalGaps',label:'Distancia en intervalos entre notas del acorde', def:false, group:'Información en pantalla'},
   {id:'showLap',      label:'Contador de vuelta', def:true, group:'Información en pantalla'},
+  {id:'tempoLadder',  label:'Escalera de tempo (tempo progresivo del XML): perfil, por dónde vas y aviso del próximo cambio', def:false, group:'Información en pantalla'},
   {id:'showMsg',      label:'Mensajes/consejos',        def:false, group:'Información en pantalla'},
   {id:'showScaleRow', label:'Franja de escala',       def:false, group:'Franjas y elementos del mástil'},
   {id:'showStrip',    label:'Tira de compases',       def:true, group:'Franjas y elementos del mástil'},
