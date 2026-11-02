@@ -42,6 +42,14 @@
  *   --name <texto>       Nombre base del archivo de salida (por defecto: se deriva del título o del audio)
  *   --extra <seg>        Segundos extra al final del vídeo, para el fundido a negro + logo (por defecto: 2)
  *   --width/--height     Tamaño del viewport grabado (por defecto: 1600x900)
+ *   --tips [<md>]        Consejos de improvisación ES + EN, de uno en uno (Alberto, 10-31). Sin valor usa
+ *                        ~/guitar-visualizer-assets/consejos-improvisacion.md. Sin --tips no sale ninguno
+ *                        (vídeos idénticos a los de antes). Elige los generales (bloques 1-9 y 11, sin el 75:
+ *                        aquí no hay vídeo por tempo) en orden fijo por tema + los de su estilo según genre/subgenre.
+ *   --tips-start <seg>   Segundo del audio en que sale el primer consejo (por defecto: 12)
+ *   --tips-span <seg>    Segundos que dura cada consejo. Por defecto se reparten por TODO el tema (Alberto, 10-31):
+ *                        tantos consejos como quepan a ~20 s cada uno, estirados para acabar 3 s antes del final.
+ *   --clip <seg>         Graba solo los primeros <seg> segundos (clips de prueba de ~30 s)
  */
 const { chromium } = require('playwright');
 const path = require('path');
@@ -71,6 +79,36 @@ function parseArgs(argv) {
 function sanitizeName(name) {
   return String(name || 'ritmo-real').replace(/[^\w\-]+/g, '_').slice(0, 60) || 'ritmo-real';
 }
+// Consejos: líneas "N. **Título** — l1 / l2" seguidas de "    EN: **Title** — l1 / l2" (ver el .md).
+function parseTips(mdPath) {
+  const out = {}; let last = null;
+  const split = (t, x) => { const [a, b = ''] = x.split(' / '); return [t, a.trim(), b.trim()]; };
+  for (const l of fs.readFileSync(mdPath, 'utf8').split('\n')) {
+    let m = l.match(/^(\d+)\. \*\*(.+?)\*\* — (.+?)(?: \*\(.*\)\*)?$/);
+    if (m) { last = +m[1]; out[last] = { es: split(m[2], m[3]) }; continue; }
+    m = l.match(/^\s+EN: \*\*(.+?)\*\* — (.+)$/);
+    if (m && last) out[last].en = split(m[1], m[2]);
+  }
+  return out;
+}
+// Reparto por estilo (bloque 10 del .md). Se mira primero el subestilo: "Pop Rock" no es "Rock" a secas.
+const TIP_STYLE_RULES = [[/pop rock/i, [59, 72]], [/disco pop/i, [72, 63]], [/funk|disco/i, [63, 64]],
+  [/rock|punk|grunge|metal/i, [59, 60]], [/blues/i, [61, 62]], [/jazz|swing/i, [65, 66]], [/bossa/i, [67]],
+  [/reggae/i, [68]], [/rumba|flamenc/i, [69]], [/latin|salsa|son\b/i, [70]], [/country/i, [71]],
+  [/vals|waltz/i, [73]], [/pop/i, [72, 63]]];
+function pickTips(all, { title, genre, subgenre, n }) {
+  let h = 2166136261; for (const ch of title) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0) / 4294967296);
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const rule = TIP_STYLE_RULES.find(([re]) => re.test(subgenre)) || TIP_STYLE_RULES.find(([re]) => re.test(genre));
+  const style = rule ? rule[1] : [];
+  const first = shuffle([1, 2, 3, 4, 5, 6])[0];   // el primero, siempre de "Escucha la batería primero"
+  const general = shuffle(Object.keys(all).map(Number).filter((k) => (k <= 58 || k >= 74) && k !== 75 && k !== first));
+  const ids = [first, ...general].slice(0, Math.max(0, n - style.length));
+  style.forEach((k, i) => ids.splice(Math.min(ids.length, i === 0 ? 1 : Math.floor(n / 2)), 0, k));
+  return ids.slice(0, n).map((k) => ({ id: k, ...all[k] }));
+}
+
 function findAudioInDir(dir) {
   const f = fs.readdirSync(dir).find((n) => AUDIO_EXT_RE.test(n));
   return f ? path.join(dir, f) : null;
@@ -165,8 +203,20 @@ async function main() {
       setExerciseType('realrhythm');
     });
 
-    const total = audioDuration + extraSec;
+    const clipSec = args.clip ? parseFloat(args.clip) : 0;
+    const total = clipSec ? Math.min(clipSec, audioDuration) : audioDuration + extraSec;
     console.log(`duración objetivo: ${total.toFixed(1)}s (audio ${audioDuration.toFixed(1)}s + ${extraSec}s extra)`);
+
+    if (args.tips) {
+      const mdPath = args.tips === true ? path.join(os.homedir(), 'guitar-visualizer-assets/consejos-improvisacion.md') : path.resolve(args.tips);
+      const start = args['tips-start'] !== undefined ? parseFloat(args['tips-start']) : 12;
+      const avail = audioDuration - start - 3;
+      const n = Math.max(0, args['tips-span'] !== undefined ? Math.floor(avail / parseFloat(args['tips-span'])) : Math.round(avail / 20));
+      const span = args['tips-span'] !== undefined ? parseFloat(args['tips-span']) : (n ? avail / n : 20);
+      const list = pickTips(parseTips(mdPath), { title, genre, subgenre, n });
+      console.log(`consejos: ${list.length} (cada ${span.toFixed(1)}s desde ${start}s): ${list.map((t) => t.id).join(', ')}`);
+      await page.evaluate((T) => { window.rrTips = T; }, { start, span, list });
+    }
 
     await page.evaluate(() => {
       showTab('player');

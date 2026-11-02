@@ -85,7 +85,21 @@ const tilde = (p) => path.resolve(String(p).replace(/^~/, os.homedir()));
         // se iba a otra forma (G7 de trastes 7-10 a 2-6) y el vídeo dejaba de ser "Forma C". Con la forma
         // manual del I7 (el mismo mecanismo que el selector por acorde de la pestaña) el IV7 se elige junto
         // a ella. Solo en memoria: no se llama a ashSavePosOverride.
-        ashPosOverride = { [noteToSt(tonica) + '|7']: form };
+        // Y el IV7 también va forzado a la forma de la MISMA ZONA (Alberto 10-28, A7-D7 en Forma D "mezclando dos
+        // posiciones"): la elección "más cercana" acertaba en C/A/G/E pero con el I7 en Forma D llevaba el IV7 a la
+        // Forma E, tres trastes más arriba (A7 en 6-10, D7 en 9-13), en las 12 tonalidades. En una misma zona del
+        // mástil las formas CAGED del I y del IV van siempre así: C→E, A→D, G→C, E→A, D→G.
+        const ivForm = { C: 'E', A: 'D', G: 'C', E: 'A', D: 'G' }[form];
+        ashPosOverride = { [noteToSt(tonica) + '|7']: form, [(noteToSt(tonica) + 5) % 12 + '|7']: ivForm };
+        // La forma manual de la app (ashPoolForChord) fija la octava de la Librería: con el IV7 forzado salía a veces
+        // una octava lejos del I7 (D7 en 11-15 y G7 en 0-3). Aquí, solo para este generador (la app no cambia), la
+        // forma forzada entra con sus variantes de ±1 octava y la optimización global elige la más cercana.
+        const poolOrig = ashPoolForChord;
+        ashPoolForChord = function (chordKey, byKey, forced, startPos) {
+          const c = ashPosOverride[chordKey] && (byKey[chordKey] || []).find((x) => x.pos === ashPosOverride[chordKey]);
+          if (c) return ashOctaveVariants(c.entry).map((v) => ({ entry: c.entry, shift: v.shift, notes: v.notes, pos: c.pos }));
+          return poolOrig(chordKey, byKey, forced, startPos);
+        };
         ashSendToEditor(true);
         const s = buildSession();
         delete s.library; // la Librería ya no hace falta: los fotogramas van en la sesión
@@ -99,7 +113,7 @@ const tilde = (p) => path.resolve(String(p).replace(/^~/, os.homedir()));
       // Y el I7 tiene que estar en la forma pedida en TODOS los compases (ver ashPosOverride arriba).
       const formasI = new Set([...JSON.stringify(res.s).matchAll(/"name":"([A-G][#b]?)7 arpegio \(auto, forma ([^)]*)\)"/g)]
         .filter((m) => (enar[m[1]] || m[1]) === (enar[tonica] || tonica)).map((m) => m[2]));
-      if (formasI.size !== 1 || !formasI.has(form)) throw new Error(`${f} forma ${form}: el I7 sale en las formas ${[...formasI].join(', ')}`);
+      if (formasI.size !== 1 || [...formasI][0].replace(/[+-]8va$/, '') !== form) throw new Error(`${f} forma ${form}: el I7 sale en las formas ${[...formasI].join(', ')}`);
       const dir = path.join(out, key);
       fs.mkdirSync(dir, { recursive: true });
       const dest = path.join(dir, f.replace(/\.XML$/i, `_Forma${form}.json`));

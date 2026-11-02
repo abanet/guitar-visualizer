@@ -3954,7 +3954,7 @@ function loadSession(input){
 
 // ── AUTOSAVE ─────────────────────────────────────────────────────────────────
 const AUTOSAVE_KEY='gv_autosave';
-const APP_VERSION='4.6.9';
+const APP_VERSION='4.6.11';
 console.log('%cGuitar Visualizer v'+APP_VERSION,'font-weight:bold');
 try{const _vb=document.getElementById('appVersionBadge');if(_vb)_vb.textContent='v'+APP_VERSION;}catch(e){}
 let _autosaveLast='';
@@ -11508,7 +11508,10 @@ function exArpeggiosBarChange(ctx){
         // Con "relevo sin hueco" no se vacía aquí la capa: paintArpeggioGhosts la rehace (al ver
         // _arpGhostChord=null) en el MISMO fotograma en que pinta la fantasma nueva. Vaciarla aquí
         // dejaba un fotograma sin eco ni fantasma: el leve parpadeo que aún veía Alberto (2026-10-26).
-        const keepLayer=getVisConfig().arpGhostSeamless===true&&getVisConfig().arpGhostAlways===true&&getArpShowGhost();
+        // ...salvo si ya no queda posición siguiente (último acorde del tema): entonces nadie va a repintar la capa
+        // y la fantasma vieja se quedaba congelada hasta el final del vídeo (Alberto, 2026-10-28: "en la posición
+        // final queda la posición del último acorde en estado fantasma y queda raro").
+        const keepLayer=nextDistinctChord!=null&&getVisConfig().arpGhostSeamless===true&&getVisConfig().arpGhostAlways===true&&getArpShowGhost();
         const ov=document.getElementById('ghostCanvas');if(ov&&!keepLayer)ov.innerHTML='';window._arpGhostEls=null;window._arpGhostChord=null;
       }
       const curSlot2=slot;
@@ -18288,6 +18291,17 @@ const CSS=`
 #rrBpmLbl{font-size:18px;font-weight:700;letter-spacing:.28em;color:var(--rr-c1);}
 #rrKeyLbl{font-size:18px;font-weight:700;letter-spacing:.28em;color:var(--rr-c2);}
 #channelWatermark img.rr-wm-logo{display:block;width:66px;height:auto;opacity:.95;}
+#rrOverlay.rr-has-tips #rrCard{top:34%;}
+#rrTip{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);width:1500px;display:none;
+  padding:30px 50px 32px;border-radius:22px;background:rgba(4,6,10,.62);
+  border:1.5px solid color-mix(in srgb, var(--rr-c1) 35%, transparent);
+  box-shadow:0 10px 50px rgba(0,0,0,.45);text-align:center;opacity:0;transition:opacity .7s ease;}
+#rrTip .rr-tip-tag{font-size:19px;font-weight:700;letter-spacing:.28em;color:var(--rr-c1);text-transform:uppercase;}
+#rrTip .rr-tip-es-t{margin-top:12px;font-size:52px;font-weight:800;color:#fff;line-height:1.15;}
+#rrTip .rr-tip-es-l{margin-top:10px;font-size:35px;font-weight:500;color:#dfe5ee;line-height:1.3;}
+#rrTip .rr-tip-en{margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);color:var(--rr-c2);}
+#rrTip .rr-tip-en-t{font-size:31px;font-weight:700;line-height:1.2;}
+#rrTip .rr-tip-en-l{margin-top:6px;font-size:26px;font-weight:500;line-height:1.3;opacity:.85;}
 `;
 const st=document.createElement('style'); st.id='rrStyles'; st.textContent=CSS; document.head.appendChild(st);
 
@@ -18328,12 +18342,14 @@ function rrBuild(){
         <div id="rrKeyPill"><span id="rrKeyVal">—</span><span id="rrKeyLbl">KEY</span></div>
       </div>
     </div>
+    <div id="rrTip"></div>
   </div>`;
   host.appendChild(ov);
   refs={ov, canvas:ov.querySelector('#rrCanvas'), title:ov.querySelector('#rrTitleText'),
     author:ov.querySelector('#rrAuthorText'), bpmVal:ov.querySelector('#rrBpmVal'), bpmPill:ov.querySelector('#rrBpmPill'),
     keyVal:ov.querySelector('#rrKeyVal'), keyPill:ov.querySelector('#rrKeyPill'),
-    genreBlock:ov.querySelector('.rr-genre-block'), genre:ov.querySelector('#rrGenreText'), subgenre:ov.querySelector('#rrSubgenreText')};
+    genreBlock:ov.querySelector('.rr-genre-block'), genre:ov.querySelector('#rrGenreText'), subgenre:ov.querySelector('#rrSubgenreText'),
+    tip:ov.querySelector('#rrTip')};
   ctx=refs.canvas.getContext('2d');
   built=true;
 }
@@ -18460,6 +18476,32 @@ function rrFrame(now){
   rrDraw(dt);
   const playingNow=(typeof isPlaying!=='undefined'&&isPlaying)&&getExerciseType()==='realrhythm'&&!!audioEl;
   if(playingNow) armEndFade();
+  rrUpdateTip();
+}
+
+/* ---- Consejos de improvisación (Alberto, 10-31: las pistas de batería de temas reales llevan
+   consejos, en español y debajo en inglés, "de uno en uno" como en la pentatónica sola). Los pone
+   scripts/render-real-rhythm-video.js en window.rrTips = {start, span, list:[{es:[título,l1,l2],
+   en:[…]}]} (segundos del audio); la lista sale de ~/guitar-visualizer-assets/consejos-improvisacion.md.
+   Sin rrTips no se muestra nada y la tarjeta no se mueve: los vídeos de antes salen idénticos. ---- */
+let rrTipShown=-2;
+function rrUpdateTip(){
+  const T=window.rrTips, el=refs.tip; if(!el)return;
+  const on=!!(T&&T.list&&T.list.length);
+  refs.ov.classList.toggle('rr-has-tips',on);
+  if(!on){ if(rrTipShown!==-2){el.style.display='none';rrTipShown=-2;} return; }
+  el.style.display='block';
+  const t=audioEl?audioEl.currentTime:0, k=Math.floor((t-T.start)/T.span);
+  const i=(t<T.start||k>=T.list.length)?-1:k;
+  // Fundido: visible dentro del tramo salvo el último segundo (deja respirar entre consejos).
+  const inSpan=i>=0&&(t-T.start-k*T.span)<T.span-1;
+  el.style.opacity=inSpan?'1':'0';
+  if(i<0||i===rrTipShown)return;
+  rrTipShown=i;
+  const c=T.list[i], esc=s=>String(s||'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+  el.innerHTML=`<div class="rr-tip-tag">Consejo ${i+1} de ${T.list.length} · Tip ${i+1} of ${T.list.length}</div>
+    <div class="rr-tip-es-t">${esc(c.es[0])}</div><div class="rr-tip-es-l">${esc(c.es[1])}<br>${esc(c.es[2])}</div>
+    <div class="rr-tip-en"><div class="rr-tip-en-t">${esc(c.en[0])}</div><div class="rr-tip-en-l">${esc(c.en[1])} ${esc(c.en[2])}</div></div>`;
 }
 function rrStartLoop(){ if(rrRaf)return; lastF=0; rrRaf=requestAnimationFrame(rrFrame); }
 function rrStopLoop(){ if(rrRaf){cancelAnimationFrame(rrRaf);rrRaf=0;} }
