@@ -20,17 +20,20 @@ const { renderToneTrackInPage } = require('./lib/_proto-pluck-audio');
 const PHRASES = require('./_proto-frases-data');
 
 const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
-const NAMES_STD = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'], NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+const NAMES_STD = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'], NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 const PENTA = [9, 0, 2, 4, 7];
 
 // Base: trozos de los renders a tempo fijo (2 compases de cuenta + música), uno por tempo.
-async function buildBacking(dir, tempos, lapBeats, tailBeats, out) {
+async function buildBacking(dir, tempos, lapBeats, tailBeats, out, formOff) {
   const files = fs.readdirSync(dir), sr = 44100, segs = [];
   const fileFor = bpm => { const f = files.find(x => new RegExp(`_Render_${bpm}\\.(aiff?|wav|m4a)$`, 'i').test(x)); if (!f) throw new Error(`Falta la base de ${bpm} bpm en ${dir}`); return path.join(dir, f); };
   let T = 0;
   const add = (bpm, fromBeat, beats, fade) => { const b = 60 / bpm, n = Math.round((T + beats * b) * sr) - Math.round(T * sr); segs.push({ file: fileFor(bpm), s0: Math.round(fromBeat * b * sr), n, fade }); T += beats * b; };
   add(tempos[0], 0, 8, 0.008);
-  tempos.forEach((bpm, i) => { const last = i === tempos.length - 1; add(bpm, 8, lapBeats + (last ? tailBeats : 0), last ? tailBeats * 60 / bpm : 0.008); });
+  // formOff (turnarounds, 11-01): las dos vueltas salen del mismo trozo del blues (p. ej. compases 9-12), para que la
+  // frase caiga siempre en su sitio de la forma; el compás 12 (V) enlaza bien con el 9 (V).
+  if (formOff !== undefined) tempos.forEach((bpm, i) => { const last = i === tempos.length - 1, h = lapBeats / 2; add(bpm, 8 + formOff, h, 0.008); add(bpm, 8 + formOff, h + (last ? tailBeats : 0), last ? tailBeats * 60 / bpm : 0.008); });
+  else tempos.forEach((bpm, i) => { const last = i === tempos.length - 1; add(bpm, 8, lapBeats + (last ? tailBeats : 0), last ? tailBeats * 60 / bpm : 0.008); });
   const fc = segs.map((g, k) => `[${k}:a]aresample=${sr},atrim=start_sample=${g.s0}:end_sample=${g.s0 + g.n},asetpts=PTS-STARTPTS,afade=t=out:st=${(g.n / sr - g.fade).toFixed(4)}:d=${g.fade.toFixed(4)}[a${k}]`).join(';')
     + ';' + segs.map((_, k) => `[a${k}]`).join('') + `concat=n=${segs.length}:v=0:a=1[a]`;
   await execFileP('ffmpeg', ['-loglevel', 'error', '-y', ...segs.flatMap(g => ['-i', g.file]), '-filter_complex', fc, '-map', '[a]', '-ar', String(sr), '-ac', '2', out]);
@@ -46,8 +49,12 @@ function parseArgs(argv) {
   const args = parseArgs(process.argv), P = PHRASES[args.frase];
   if (!P) { console.error(`--frase: ${Object.keys(PHRASES).join(' | ')}`); process.exit(1); }
   const NAMES = P.flats ? NAMES_FLAT : NAMES_STD, ROOT_PC = P.rootPc === undefined ? 9 : P.rootPc;
-  const tempos = String(args.tempos || '80,90').split(',').map(Number).filter(x => x > 0);
-  const backingDir = path.resolve(String(args.backing || '~/guitar-visualizer-assets/FrasesAm/biblioteca').replace(/^~/, os.homedir()));
+  // --tempos auto: el inicio sale de la figura más rápida de la frase, para tocar ~2,7 notas/s (lo que dan las
+  // corcheas a 80, que a Alberto le parece cómodo): corcheas 80, tresillos 55, semicorcheas 40. Luego +10 hasta 5 tempos (tope 120).
+  const autoTempos = () => { const dmin = Math.min(...P.items.filter(it => !it.r && !it.x).map(it => it.d)); const lo = P.form ? 50 : 40;
+    const t0 = Math.min(80, Math.max(lo, Math.round(2.7 * 60 * dmin / 5) * 5)), hi = P.form ? 100 : 120; const out = []; for (let t = t0; t <= hi && out.length < 5; t += 10) out.push(t); return out; };
+  const tempos = !args.tempos || args.tempos === 'auto' ? autoTempos() : String(args.tempos).split(',').map(Number).filter(x => x > 0);
+  const backingDir = path.resolve(String(args.backing || (P.form ? '~/guitar-visualizer-assets/FrasesAm/blues12-A' : '~/guitar-visualizer-assets/FrasesAm/biblioteca-roadhouse')).replace(/^~/, os.homedir()));
   const outDir = path.resolve(String(args.out || '~/Downloads/Bendings-prueba/demos').replace(/^~/, os.homedir()));
   fs.mkdirSync(outDir, { recursive: true });
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gv-frase-'));
@@ -58,15 +65,15 @@ function parseArgs(argv) {
   let at = 0, lastNote;
   items.forEach((it, i) => { it.at = at; at += it.d; if (!it.r) { it.prev = lastNote; lastNote = i; if ((it.lig || it.slide) && (it.prev === undefined || items[it.prev].s !== it.s)) throw new Error(`nota ${i}: ligado o deslizamiento sin nota anterior en la misma cuerda`); } });
   const seqBeats = Math.round(at * 1e6) / 1e6, lapBeats = P.noRest ? seqBeats : Math.ceil((seqBeats + 2 - EPS) / 4) * 4;   // noRest: patrón en bucle, sin compás de respiro
-  const bendTxt = s => (s === 2 ? '1' : s === 1 ? '½' : s === 0.5 ? '¼' : String(s / 2));
+  const bendTxt = s => (s === 2 ? '1' : s === 1 ? '½' : s === 0.5 ? '¼' : s === 3 ? '1½' : String(s / 2));
   const TAB = items.map(it => it.r ? { r: true, at: it.at, d: it.d } : { at: it.at, d: it.d, notes: [{ s: it.s, f: it.f }, ...(it.also || []).map(o => ({ s: o.s, f: o.f }))], fg: it.fg, prev: it.prev,
-    x: it.x, pick: it.strum, acc: it.acc, pm: it.pm, bend: it.bend ? (it.rel ? 'updown' : 'up') : undefined, txt: it.bend ? bendTxt(it.bend) : '', vib: it.vib, lig: it.lig, slide: it.slide });
+    x: it.x, pick: it.strum, acc: it.acc, pm: it.pm, bend: it.bend ? (it.rel || it.pre ? 'updown' : 'up') : undefined, txt: it.bend ? bendTxt(it.bend) : '', vib: it.vib, lig: it.lig, slide: it.slide });
   for (let a = seqBeats; a < lapBeats - EPS;) { const whole = Math.abs(a - Math.round(a)) < EPS, len = whole && Math.round(a) % 2 === 0 && lapBeats - a >= 2 - EPS ? 2 : whole && lapBeats - a >= 1 - EPS ? 1 : Math.min(0.5, Math.ceil(a - EPS) - a || 0.5); TAB.push({ r: true, at: a, d: len }); a += len; }
 
   // Notas del mástil: la pentatónica dentro de la ventana de trastes (fondo) más las de la frase.
   const notes = new Map();
-  const addNote = (s, f) => { const midi = OPEN_MIDI[s] + f, k = s + ':' + f; if (!notes.has(k)) notes.set(k, { s, f, midi, label: NAMES[midi % 12], isRoot: midi % 12 === ROOT_PC }); };
-  if (P.win) for (let s = 0; s < 6; s++) for (let f = P.win[0]; f <= P.win[1]; f++) if (PENTA.includes((OPEN_MIDI[s] + f) % 12)) addNote(s, f);
+  const addNote = (s, f) => { const midi = OPEN_MIDI[s] + f, k = s + ':' + f; if (!notes.has(k)) notes.set(k, { s, f, midi, label: NAMES[midi % 12], isRoot: midi % 12 === ROOT_PC, isBlue: !P.scale && midi % 12 === (ROOT_PC + 6) % 12 }); };   // isBlue: blue note (5ª disminuida), en violeta
+  if (P.win) for (let s = 0; s < 6; s++) for (let f = P.win[0]; f <= P.win[1]; f++) if ((P.scale || PENTA).includes((OPEN_MIDI[s] + f) % 12)) addNote(s, f);   // P.scale: fondo de otra escala (p. ej. dórica en las de jazz)
   const fingerOf = {};
   items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => { addNote(o.s, o.f); if (fingerOf[key(o)] === undefined) fingerOf[key(o)] = o.fg; }));
   const N = [...notes.values()];
@@ -75,20 +82,22 @@ function parseArgs(argv) {
 
   // Bending: sube rápido (0,2 s como mucho, a cualquier tempo) y, si vuelve, baja al final de la nota.
   const ease = x => x * x * (3 - 2 * x), ramp = (x, [a, b2]) => x <= a ? 0 : x >= b2 ? 1 : ease((x - a) / (b2 - a));
-  const bendOf = (it, b) => { const up1 = Math.min(0.42, it.d * 0.45, 0.04 + 0.2 / b), d1 = Math.min(it.d, 1) * 0.92; return { up: [0.04, up1], down: it.rel ? [Math.max(up1 + 0.04, d1 - 0.2 / b), d1] : undefined }; };
+  const bendOf = (it, b) => { const up1 = Math.min(0.42, it.d * 0.45, 0.04 + 0.2 / b), d1 = Math.min(it.d, 1) * 0.92;
+    if (it.pre) return { up: [0, 0.001], down: [Math.max(0.3, d1 - 0.35 / b), d1] };   // pre-bend (11-01): se estira ANTES de atacar y se baja
+    return { up: [0.04, up1], down: it.rel ? [Math.max(up1 + 0.04, d1 - 0.2 / b), d1] : undefined }; };
   const prog = (bd, x) => ramp(x, bd.up) * (bd.down ? 1 - ramp(x, bd.down) : 1);
-  const bendMark = (it, p) => ({ p, toFret: it.f + it.bend, txt: it.bend === 2 ? '1 tono' : it.bend === 1 ? '½ tono' : '¼ de tono', to: it.bend >= 1 ? NAMES[(OPEN_MIDI[it.s] + it.f + it.bend) % 12] : '', full: it.bend >= 1 });
+  const bendMark = (it, p) => ({ p, toFret: it.f + it.bend, txt: it.bend === 2 ? '1 tono' : it.bend === 1 ? '½ tono' : it.bend === 3 ? '1 tono y ½' : it.bend === 4 ? '2 tonos' : '¼ de tono', to: it.bend >= 1 ? NAMES[(OPEN_MIDI[it.s] + it.f + it.bend) % 12] : '', full: it.bend >= 1 });
 
   const steps = [];
   const pendState = () => { const st = new Map(N.map(n => [key(n), 'ghost'])); items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => st.set(key(o), 'pend'))); return st; };
   const first = items.find(it => !it.r);
   // Silencios pulso a pulso (el metrónomo visual sigue marcando); lead = avisa de la primera nota de la vuelta.
-  const rest = (beats, b, from, bpm, lap, next, cur) => { if (beats < EPS) return; const n = Math.max(1, Math.round(beats / 0.5)); for (let k = 0; k < n; k++) steps.push({ state: pendState(), dur: b * beats / n, caption: '', metro: { bpm, beat: Math.floor(from + k * beats / n + EPS) % 4, next }, lap, cur, bend: first.bend ? { [key(first)]: bendMark(first, 0) } : {} }); };
+  const rest = (beats, b, from, bpm, lap, next, cur) => { if (beats < EPS) return; const n = Math.max(1, Math.round(beats / 0.5)); for (let k = 0; k < n; k++) steps.push({ state: pendState(), dur: b * beats / n, caption: '', metro: { bpm, beat: Math.floor(from + k * beats / n + EPS) % 4, next }, lap, cur, pos: lap === 0 && from === 0 && cur === -1 ? undefined : from + k * beats / n, bend: first.bend ? { [key(first)]: bendMark(first, 0) } : {} }); };
   const pushLap = (b, bpm, lap, mute) => {
     const st = pendState();
     items.forEach((it, i) => {
       const metroAt = x => ({ bpm, beat: Math.floor(it.at + x + EPS) % 4 }), caption = mute ? 'TU TURNO' : 'ESCUCHA';
-      if (it.r) { const n = Math.max(1, Math.round(it.d / 0.5)); for (let k = 0; k < n; k++) steps.push({ state: new Map(st), dur: b * it.d / n, caption, metro: metroAt(k * it.d / n), lap, cur: i, bend: {} }); return; }
+      if (it.r) { const n = Math.max(1, Math.round(it.d / 0.5)); for (let k = 0; k < n; k++) steps.push({ state: new Map(st), dur: b * it.d / n, caption, metro: metroAt(k * it.d / n), lap, cur: i, pos: it.at + k * it.d / n, bend: {} }); return; }
       const keys = [it, ...(it.also || [])].map(key), n = Math.max(1, Math.round(it.bend ? it.d * 24 : it.d / 0.5)), slice = it.d / n, bd = it.bend ? bendOf(it, b) : null;
       const f = fq(OPEN_MIDI[it.s] + it.f), fT = f * Math.pow(2, (it.bend || 0) / 12);
       for (let k = 0; k < n; k++) {
@@ -100,7 +109,7 @@ function parseArgs(argv) {
           bend: bd ? [[bd.up[0] * b, f], [bd.up[1] * b, fT], ...(bd.down ? [[bd.down[0] * b, fT], [bd.down[1] * b, f]] : [])] : undefined,
           vib: it.vib ? { from: bd ? bd.up[1] * b + 0.08 : Math.min(0.35, 0.4 * b), rate: 5.5, cents: 22 } : undefined },
           ...(it.also || []).map(o => ({ freq: fq(OPEN_MIDI[o.s] + o.f) }))];
-        steps.push({ state: snap, dur: b * slice, caption, metro: metroAt(k * slice), lap, cur: i, sounds, mx: it.x ? keys : undefined, bend: bd ? { [key(it)]: bendMark(it, prog(bd, (k + 1) * slice)) } : {},
+        steps.push({ state: snap, dur: b * slice, caption, metro: metroAt(k * slice), lap, cur: i, pos: it.at + k * slice, sounds, mx: it.x ? keys : undefined, bend: bd ? { [key(it)]: bendMark(it, prog(bd, (k + 1) * slice)) } : {},
           vibKey: it.vib ? key(it) : undefined, lig: it.lig ? { key: key(it), t: it.lig, from: items[it.prev].f } : undefined, slide: it.slide ? { key: key(it), from: items[it.prev].f } : undefined });
       }
       keys.forEach(k2 => st.set(k2, 'active'));
@@ -122,9 +131,10 @@ function parseArgs(argv) {
   await page.goto('file://' + path.join(__dirname, 'lib', '_proto-frases-frame.html'));
   const cache = new Map(); let nPng = 0;
   for (const s of steps) {
-    const data = { title: P.title || 'Vocabulario pentatónico · La menor', subtitle: (args.num ? `Frase ${args.num} · ` : '') + P.name, caption: s.caption, metro: s.metro,
-      ladder: s.lap === undefined ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: { beats: lapBeats, items: TAB, cur: s.cur, rowLabel: P.rowLabel },
-      notes: N.map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, iv: fingerOf[key(n)], state: s.state.get(key(n)), bend: s.bend[key(n)], mx: !!(s.mx && s.mx.includes(key(n))), vib: s.vibKey === key(n),
+    const data = { title: P.title || (P.scale ? 'Vocabulario de jazz · La menor' : 'Vocabulario de blues y rock · La menor'), subtitle: (args.num ? `Frase ${args.num} · ` : '') + P.name, caption: s.caption, metro: s.metro,
+      ladder: s.lap === undefined ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: { beats: lapBeats, items: TAB, cur: s.cur >= items.length && s.pos !== undefined ? TAB.findIndex(t => s.pos > t.at - EPS && s.pos < t.at + t.d - EPS) : s.cur,   // en el respiro, el silencio de relleno que toca
+        rowLabel: P.rowLabel, pulse: s.pos === undefined ? undefined : Math.floor(s.pos + EPS) % lapBeats },
+      notes: N.map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, isBlue: n.isBlue, iv: fingerOf[key(n)], state: s.state.get(key(n)), bend: s.bend[key(n)], mx: !!(s.mx && s.mx.includes(key(n))), vib: s.vibKey === key(n),
         lig: s.lig && s.lig.key === key(n) ? s.lig : undefined, slide: s.slide && s.slide.key === key(n) ? s.slide : undefined })) };
     const sig = JSON.stringify(data);
     if (!cache.has(sig)) {
@@ -164,7 +174,7 @@ function parseArgs(argv) {
 
   const list = path.join(tmp, 'list.txt');
   fs.writeFileSync(list, steps.map(s => `file '${s.png}'\nduration ${s.dur.toFixed(4)}`).join('\n') + `\nfile '${steps[steps.length - 1].png}'\n`);
-  const bw = path.join(tmp, 'base.wav'); await buildBacking(backingDir, tempos, lapBeats * 2, 4, bw);
+  const bw = path.join(tmp, 'base.wav'); await buildBacking(backingDir, tempos, lapBeats * 2, 4, bw, P.form ? (P.form.fromBar - 1) * 4 : undefined);
   const out = path.join(outDir, `${args.num ? 'Frase' + String(args.num).padStart(2, '0') + '_' : 'Frase_'}${args.frase}_Am_${tempos[0]}-${tempos[tempos.length - 1]}bpm.mp4`);
   await execFileP('nice', ['-n', '19', 'ffmpeg', '-loglevel', 'error', '-y', '-threads', '2', '-f', 'concat', '-safe', '0', '-i', list, '-i', wav, '-i', bw,
     '-filter_complex', `[1:a]volume=${parseFloat(args['notes-vol'] || 0.65)}[n];[2:a]volume=${parseFloat(args['backing-vol'] || 1.3)}[b];[n][b]amix=inputs=2:normalize=0,alimiter=limit=0.95[a]`, '-map', '0:v', '-map', '[a]',

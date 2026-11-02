@@ -87,16 +87,30 @@ for (let f = Math.max(1, lo); f <= hi; f++) h += `<text x="${xOf(f)}" y="${bot +
 const R = 26;
 if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarillo, lo tocado en blanco, lo pendiente en gris
   const T = D.tab, X0 = 250, X1 = 1490, Y0 = 628, G = 20, RY = Y0 + 5 * G + 12, RB = RY + 26, FY = RB + 32, EPS = 1e-6;
-  const tx = at => X0 + at / T.beats * (X1 - X0), ly = st => Y0 + (5 - st) * G, OFF = Math.min(30, (X1 - X0) / T.beats * 0.3);
+  // Posición horizontal ELÁSTICA (Alberto, 11-01: en las frases de semicorcheas los números se pisaban): cada nota
+  // ocupa lo que dura, pero nunca menos de MINPX; el resto del ancho se reparte en proporción al tiempo.
+  const MINPX = 42, W = X1 - X0, durs = T.items.map(it => it.d);
+  let fixed = new Set(), u = W / T.beats;
+  for (let k = 0; k < 8; k++) { const free = durs.reduce((a, d, i) => fixed.has(i) ? a : a + d, 0); u = (W - fixed.size * MINPX) / Math.max(free, 1e-6); let ch = false; durs.forEach((d, i) => { if (!fixed.has(i) && d * u < MINPX) { fixed.add(i); ch = true; } }); if (!ch) break; }
+  const PTS = [[0, X0]]; T.items.forEach((it, i) => { const [a, x] = PTS[PTS.length - 1]; PTS.push([a + it.d, x + (fixed.has(i) ? MINPX : it.d * u)]); });
+  const tx = at => { for (let k = 1; k < PTS.length; k++) if (at <= PTS[k][0] + EPS) { const [a0, x0] = PTS[k - 1], [a1, x1] = PTS[k]; return x0 + (a1 > a0 ? (at - a0) / (a1 - a0) : 0) * (x1 - x0); } return X1; };
+  const ly = st => Y0 + (5 - st) * G, OFF = Math.min(30, (X1 - X0) / T.beats * 0.3);
   const is = (d, v) => Math.abs(d - v) < 0.02, grey = 'rgba(255,255,255,.5)', colOf = i => i === T.cur ? '#ffd640' : T.cur >= 0 && i < T.cur ? '#fff' : grey;
   for (let i = 0; i < 6; i++) h += `<line x1="${X0 - OFF}" y1="${Y0 + i * G}" x2="${X1 - OFF}" y2="${Y0 + i * G}" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>`;
+  // Indicador de pulso (Alberto, 11-02: "sobre todo cuando hay un silencio de redonda no se sabe dónde se está"):
+  // marcas tenues en cada pulso y, debajo de la tablatura, el tramo del pulso en curso brilla (más en el 1).
+  // Primera versión con la columna entera sombreada en color: "dificulta algo la lectura" → solo la línea inferior.
+  for (let b = 1; b < T.beats; b++) if (b % 4) h += `<line x1="${tx(b) - OFF}" y1="${Y0 + 5 * G}" x2="${tx(b) - OFF}" y2="${Y0 + 5 * G - 8}" stroke="rgba(255,255,255,.35)" stroke-width="2"/><line x1="${tx(b) - OFF}" y1="${Y0}" x2="${tx(b) - OFF}" y2="${Y0 + 8}" stroke="rgba(255,255,255,.35)" stroke-width="2"/>`;
+  if (T.pulse !== undefined) { const pa = tx(T.pulse) - OFF, pb = tx(T.pulse + 1) - OFF, one = T.pulse % 4 === 0, yb = Y0 + 5 * G;
+    h += `<line x1="${pa}" y1="${yb}" x2="${pb}" y2="${yb}" stroke="rgba(255,255,255,${one ? .35 : .18})" stroke-width="${one ? 14 : 10}" stroke-linecap="round"/>`
+      + `<line x1="${pa}" y1="${yb}" x2="${pb}" y2="${yb}" stroke="rgba(255,255,255,${one ? 1 : .75})" stroke-width="${one ? 4 : 3}" stroke-linecap="round"/>`; }
   for (let b = 0; b <= T.beats; b += 4) h += `<line x1="${tx(b) - OFF}" y1="${Y0}" x2="${tx(b) - OFF}" y2="${Y0 + 5 * G}" stroke="rgba(255,255,255,.45)" stroke-width="2"/>`;
   h += `<text x="${X0 - OFF - 16}" y="${Y0 + 2.5 * G + 8}" text-anchor="end" font-size="22" font-weight="700" fill="rgba(255,255,255,.5)">TAB</text><text x="${X0 - OFF - 16}" y="${FY}" text-anchor="end" font-size="16" font-weight="700" fill="rgba(255,255,255,.4)">${T.rowLabel || 'dedo'}</text>`;
   const wave = (x, y, n, c, w) => `<path d="M ${x} ${y} ${Array(n).fill('q 6 -9 12 0 q 6 9 12 0').join(' ')}" fill="none" stroke="${c}" stroke-width="${w}"/>`;
   T.items.forEach((it, i) => {
     const x = tx(it.at), col = colOf(i), m = (RY + RB) / 2;
     if (it.r) {   // silencios: blanca, negra (con o sin puntillo) o corchea
-      const rc = 'rgba(255,255,255,.6)';
+      const rc = colOf(i);   // los silencios se colorean como las notas: amarillo el que suena, blanco lo ya tocado (Alberto, 11-02)
       if (it.d >= 2 - EPS) h += `<line x1="${x - 13}" y1="${m + 4}" x2="${x + 13}" y2="${m + 4}" stroke="${rc}" stroke-width="2"/><rect x="${x - 8}" y="${m - 4}" width="16" height="8" fill="${rc}"/>`;
       else if (it.d >= 1 - EPS) h += `<path d="M ${x - 4} ${RY} l 8 9 l -8 7 l 8 9 q -10 -4 -5 6" fill="none" stroke="${rc}" stroke-width="3" stroke-linejoin="round"/>` + (is(it.d, 1.5) ? `<circle cx="${x + 12}" cy="${m}" r="3" fill="${rc}"/>` : '');
       else h += `<circle cx="${x - 4}" cy="${m - 4}" r="3.5" fill="${rc}"/><path d="M ${x - 4} ${m - 2} q 6 2 9 -4 l -7 20" fill="none" stroke="${rc}" stroke-width="2.5"/>`;
@@ -161,8 +175,10 @@ D.notes.forEach(nt => {
       h += `<circle cx="${cx}" cy="${y0}" r="${R + (on ? 12 : 0)}" fill="rgba(255,138,48,${on ? .28 : 0})"/><circle cx="${cx}" cy="${y0}" r="${R}" fill="rgba(255,138,48,${(.45 + .5 * B.p).toFixed(2)})" stroke="#fff" stroke-width="${on ? 3 : 1.5}"/>`;
       if (on) h += `<text x="${cx}" y="${y0 + 8}" text-anchor="middle" font-size="24" font-weight="700" fill="#111">${B.to}</text>`; }
   }
-  const fill = nt.isRoot ? `rgba(229,57,53,${flash ? .95 : pend ? .12 : .45})` : `rgba(38,198,218,${flash ? .95 : pend ? .12 : .5})`;
-  if (flash) h += `<circle cx="${x}" cy="${y}" r="${R + 14}" fill="${nt.isRoot ? 'rgba(229,57,53,.25)' : 'rgba(38,198,218,.25)'}"/>`;
+  // Blue note en violeta, el mismo de las escalas de blues (penta-mix-frame.html, #c77dff) — Alberto, 11-01.
+  const rgb = nt.isRoot ? '229,57,53' : nt.isBlue ? '199,125,255' : '38,198,218';
+  const fill = `rgba(${rgb},${flash ? .95 : pend ? .12 : nt.isRoot ? .45 : .5})`;
+  if (flash) h += `<circle cx="${x}" cy="${y}" r="${R + 14}" fill="rgba(${rgb},.25)"/>`;
   h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="${fill}" stroke="${flash ? '#fff' : 'rgba(255,255,255,.25)'}" stroke-width="${flash ? 3 : 1.2}"/>`;
   h += `<text x="${x}" y="${y + 8}" text-anchor="middle" font-size="24" font-weight="700" font-family="Helvetica,Arial,sans-serif" fill="${pend ? 'rgba(255,255,255,.6)' : '#fff'}">${nt.label}</text>`;
   if (nt.mx) h += `<path d="M ${x - 13} ${y - 13} L ${x + 13} ${y + 13} M ${x + 13} ${y - 13} L ${x - 13} ${y + 13}" stroke="#ffd640" stroke-width="5" stroke-linecap="round"/>`;   // golpe apagado
