@@ -19,6 +19,10 @@
   html, body { width: 1600px; height: 900px; background: #0d0d0d; overflow: hidden; font-family: Arial, Helvetica, sans-serif; }
   #title { position: absolute; top: 46px; left: 0; right: 0; text-align: center; font: 700 52px Arial; color: #8ab4ff; text-shadow: 0 0 18px rgba(120,160,255,.45); }
   #subtitle { position: absolute; top: 112px; left: 0; right: 0; text-align: center; font: 700 22px Arial; color: rgba(255,255,255,.6); letter-spacing: .04em; }
+  /* aviso (11-03, Alberto: la anacrusa de la escala de blues mayor "convendría indicarlo en el vídeo además de en la
+     descripción para llamar la atención"): recuadro entre el mástil y la escalera de tempos; sin aviso no se dibuja. */
+  #aviso { position: absolute; top: 768px; left: 0; right: 0; text-align: center; }
+  #aviso span { display: inline-block; padding: 6px 18px; border-radius: 9px; border: 2px solid rgba(199,125,255,.75); background: rgba(199,125,255,.12); font: 700 21px Arial; color: #e6ccff; }
   #caption { position: absolute; top: 172px; left: 0; right: 0; text-align: center; font: 700 20px Arial; color: #e2b34f; min-height: 24px; }
   #big { position: absolute; top: 150px; left: 0; right: 0; text-align: center; font: 700 64px Arial; color: #8ab4ff; text-shadow: 0 0 20px rgba(120,160,255,.5); }
   #metro { position: absolute; right: 44px; top: 34px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
@@ -48,7 +52,7 @@
   svg { position: absolute; left: 0; top: 0; }
 </style></head>
 <body>
-<div id="title"></div><div id="subtitle"></div><div id="caption"></div><div id="strip"></div><div id="big"></div>
+<div id="title"></div><div id="subtitle"></div><div id="caption"></div><div id="aviso"></div><div id="strip"></div><div id="big"></div>
 <svg id="neck" width="1600" height="900"></svg>
 <div id="metro"></div><div id="ladder"></div>
 <div id="brand">@banetmasa</div>
@@ -59,6 +63,8 @@ function render(D) {
 document.getElementById('title').textContent = D.title;
 document.getElementById('subtitle').textContent = D.subtitle;
 document.getElementById('caption').textContent = D.caption || '';
+document.getElementById('aviso').textContent = '';   // la página se reutiliza: vaciar el de la llamada anterior
+if (D.aviso) { const sp = document.createElement('span'); sp.textContent = D.aviso; document.getElementById('aviso').appendChild(sp); }
 document.getElementById('big').textContent = D.big || '';
 document.getElementById('metro').innerHTML = !D.metro ? '' : `<span class="bpm">${D.metro.bpm}<small>bpm</small></span><span class="dots">`
   + [0, 1, 2, 3].map(i => `<span class="dot${i === D.metro.beat ? ' on' + (i === 0 ? ' one' : '') : ''}"></span>`).join('') + '</span>'
@@ -90,7 +96,11 @@ D.notes.forEach(nt => {
   if (nt.state === 'hidden') return;
   const x = xOf(nt.fret), y = yOf(nt.string);
   if (nt.state === 'ghost' || nt.state === 'next' || nt.state === 'soon') {
-    h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="rgba(255,255,255,.1)" stroke="rgba(255,255,255,.5)" stroke-width="2" stroke-dasharray="6 4"/>`;
+    // La tónica, SIEMPRE roja también de fantasma (Alberto, 11-03: "para no perder la tónica nunca de vista"; lo ya
+    // publicado no lo tenía): relleno y borde discontinuo rojos, los mismos del vocabulario de licks.
+    const gFill = nt.isRoot ? 'rgba(229,57,53,.3)' : nt.isBlue ? 'rgba(199,125,255,.14)' : 'rgba(255,255,255,.1)';
+    const gStroke = nt.isRoot ? 'rgba(255,120,110,.8)' : nt.isBlue ? 'rgba(199,125,255,.7)' : 'rgba(255,255,255,.5)';
+    h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="${gFill}" stroke="${gStroke}" stroke-width="2" stroke-dasharray="6 4"/>`;
     h += `<text x="${x}" y="${y + 8}" text-anchor="middle" font-size="22" font-weight="700" fill="rgba(255,255,255,${nt.ring ? 1 : .6})">${nt.label}</text>`;
     if (nt.state !== 'ghost') h += `<circle cx="${x}" cy="${y}" r="${R + 6}" fill="none" stroke="#e2b34f" stroke-width="${nt.state === 'next' ? 4 : 2.5}" opacity="${nt.state === 'next' ? .95 : .5}"/>`;
     h += ringOf(nt, x, y);
@@ -98,8 +108,10 @@ D.notes.forEach(nt => {
     return;
   }
   const flash = nt.state === 'flash', pend = nt.state === 'pend';
-  const fill = nt.isRoot ? `rgba(229,57,53,${flash ? .95 : pend ? .12 : .45})` : `rgba(38,198,218,${flash ? .95 : pend ? .12 : .5})`;
-  if (flash) h += `<circle cx="${x}" cy="${y}" r="${R + 14}" fill="${nt.isRoot ? 'rgba(229,57,53,.25)' : 'rgba(38,198,218,.25)'}"/>`;
+  // Blue note (escala de blues) en violeta, el mismo #c77dff de las escalas de blues y del vocabulario (11-03).
+  const rgb = nt.isRoot ? '229,57,53' : nt.isBlue ? '199,125,255' : '38,198,218';
+  const fill = `rgba(${rgb},${flash ? .95 : pend ? .12 : nt.isRoot ? .45 : .5})`;
+  if (flash) h += `<circle cx="${x}" cy="${y}" r="${R + 14}" fill="rgba(${rgb},.25)"/>`;
   h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="${fill}" stroke="${flash ? '#fff' : 'rgba(255,255,255,.25)'}" stroke-width="${flash ? 3 : 1.2}"/>`;
   h += `<text x="${x}" y="${y + 8}" text-anchor="middle" font-size="24" font-weight="700" font-family="Helvetica,Arial,sans-serif" fill="${pend ? 'rgba(255,255,255,.6)' : '#fff'}">${nt.label}</text>`;
   h += ringOf(nt, x, y);

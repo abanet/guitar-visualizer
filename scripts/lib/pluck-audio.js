@@ -11,7 +11,7 @@ function renderToneTrackInPage({ events, total }) {
   bus.connect(ctx.destination);
   const len = Math.floor(rate * 1.4), imp = ctx.createBuffer(2, len, rate);
   for (let ch = 0; ch < 2; ch++) { const d = imp.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5); }
-  events.forEach(({ t, freq }) => {
+  events.forEach(({ t, freq, vel = 1 }) => {   // vel: volumen relativo de la nota (acentos); 1 = como siempre
     const now = t + 0.01, sustain = 2.0, sum = ctx.createGain();
     [{ mult: 1, gain: 1.0, detune: 0 }, { mult: 1, gain: 0.5, detune: 6 }, { mult: 2, gain: 0.45, detune: 0 }, { mult: 3, gain: 0.22, detune: 0 }, { mult: 4, gain: 0.10, detune: 0 }].forEach(h => {
       const osc = ctx.createOscillator(); osc.type = 'triangle'; osc.frequency.value = freq * h.mult; osc.detune.value = h.detune;
@@ -24,7 +24,7 @@ function renderToneTrackInPage({ events, total }) {
     const cg = ctx.createGain(); cg.gain.value = 0.5; click.connect(cf); cf.connect(cg); cg.connect(sum); click.start(now);
     const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.Q.value = 0.7;
     filt.frequency.setValueAtTime(Math.min(9000, freq * 10), now); filt.frequency.exponentialRampToValueAtTime(Math.max(400, freq * 1.5), now + sustain);
-    const env = ctx.createGain(); env.gain.setValueAtTime(0, now); env.gain.linearRampToValueAtTime(0.9, now + 0.004); env.gain.exponentialRampToValueAtTime(0.001, now + sustain);
+    const env = ctx.createGain(); env.gain.setValueAtTime(0, now); env.gain.linearRampToValueAtTime(0.9 * vel, now + 0.004); env.gain.exponentialRampToValueAtTime(0.001, now + sustain);
     sum.connect(filt); filt.connect(env);
     const dry = ctx.createGain(); dry.gain.value = 0.8; dry.connect(bus);
     const conv = ctx.createConvolver(); conv.buffer = imp; const wet = ctx.createGain(); wet.gain.value = 0.16; conv.connect(wet); wet.connect(bus);

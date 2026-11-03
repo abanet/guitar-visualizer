@@ -50,6 +50,14 @@ const SEQS = {
   zigzag:     { name: 'Triadas en zigzag',     span: [0, 2, 4], alt: true, roman: 'triadas', file: 'EscalasPorTriadasZigzag', suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },   // C-E-G, A-F-D, E-G-B…
   saltos:     { name: 'Saltando una nota',     span: [0, 2], file: 'EscalasSaltandoUnaNota', pfile: 'SaltandoUnaNota' },   // pentatónica: A-D, C-E, D-G… (cuartas y alguna tercera)
   terceras:   { name: 'Terceras',              span: [0, 2], file: 'EscalasPorTerceras' },
+  // Patrones del "Manual didáctico de patrones melódicos" (11-03, elegidos por Alberto: familias 04 y 07).
+  // sub: las notas corren a esa subdivisión FIJA (4 = semicorcheas) sin que el grupo coincida con el pulso, y la
+  // 1ª nota de cada grupo va acentuada: así se oye el grupo cruzando el pulso (grupos de 5 a lo Eric Johnson).
+  grupos5:    { name: 'Grupos de 5 en semicorcheas', span: [0, 1, 2, 3, 4], sub: 4, file: 'EscalasPorGruposDe5', pfile: 'GruposDe5' },
+  grupos3x4:  { name: 'Grupos de 3 en semicorcheas', span: [0, 1, 2], sub: 4, file: 'EscalasPorGruposDe3Semicorcheas', pfile: 'GruposDe3Semicorcheas' },
+  bordadura:  { name: 'Bordadura',             span: [0, 1, 0], file: 'EscalasPorBordadura', pfile: 'Bordadura' },              // A C A, C D C… en tresillos
+  repeticion: { name: 'Repetición de nota',    span: [0, 0, 1, 2], file: 'EscalasRepitiendoNota', pfile: 'RepeticionDeNota' },  // A A C D, C C D E… en semicorcheas
+  linea:      { name: 'La blue note de paso',  span: [0], sub: 2, file: 'EscalaLinea', pfile: 'BlueNoteDePaso' },              // la escala seguida en corcheas
   triadas:    { name: 'Triadas diatónicas',    span: [0, 2, 4], file: 'EscalasPorTriadas',   suffix: ['', 'm', 'm', '', '', 'm', 'dim'] },
   cuatriadas: { name: 'Arpegios de 7ª diatónicos', span: [0, 2, 4, 6], file: 'EscalasPorSeptimas', progBeats: 2, suffix: ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'] },
 };
@@ -59,8 +67,18 @@ const SEQS = {
 const PENTA = {
   'penta-menor': { name: 'Pentatónica menor', file: 'PentatonicaMenor', f: [0, 3, 5, 7, 10], iv: ['1', '3m', '4', '5', '7m'] },
   'penta-mayor': { name: 'Pentatónica mayor', file: 'PentatonicaMayor', f: [0, 2, 4, 7, 9], iv: ['1', '2M', '3M', '5', '6M'] },
+  // Escala de blues: la caja de la pentatónica menor más la 5ª disminuida un traste por encima de cada 4ª, en su
+  // misma cuerda (la digitación de siempre: en A, Eb en el traste 6 de la 5ª cuerda y en el 8 de la 3ª).
+  // blue: { tras: grado de la pentatónica junto al que va (en su misma cuerda, un traste por encima), iv: semitonos
+  // de la blue note, ord: los 6 sonidos de la escala, para renumerar los grados }.
+  'blues':       { name: 'Escala de blues', file: 'EscalaBlues', f: [0, 3, 5, 7, 10], iv: ['1', '3m', '4', 'b5', '5', '7m'], blue: { tras: 2, iv: 6, ord: [0, 3, 5, 6, 7, 10] } },
+  // Escala de blues mayor (11-03, Alberto: "hay que hacerlos para las escalas que sean pertinentes"): la caja de la
+  // pentatónica mayor más la 3ª menor un traste por encima de cada 2ª (en A, la C entre B y C#).
+  // anacrusa: en la línea seguida (span [0] con sub) se empieza con esa cantidad de notas de silencio, para que la
+  // blue note caiga a contratiempo y resuelva en la 3ª a tiempo (sin ella la ♭3 caía siempre en el pulso).
+  'blues-mayor': { name: 'Escala de blues mayor', file: 'EscalaBluesMayor', f: [0, 2, 4, 7, 9], iv: ['1', '2M', 'b3', '3M', '5', '6M'], blue: { tras: 1, iv: 3, ord: [0, 2, 3, 4, 7, 9], anacrusa: 1 } },
 };
-const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }, LETTERS = 'CDEFGAB', IV_DEG = { 0: 0, 2: 1, 3: 2, 4: 2, 5: 3, 7: 4, 9: 5, 10: 6 };
+const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }, LETTERS = 'CDEFGAB', IV_DEG = { 0: 0, 2: 1, 3: 2, 4: 2, 5: 3, 6: 4, 7: 4, 9: 5, 10: 6 };
 function pentaBox(root, sc, start) {
   const rootPc = ((PC[root[0]] + (root.includes('#') ? 1 : 0) - (root.slice(1).includes('b') ? 1 : 0)) % 12 + 12) % 12;
   const name = iv => { const L = LETTERS[(LETTERS.indexOf(root[0]) + IV_DEG[iv]) % 7], d = (((rootPc + iv) - PC[L]) % 12 + 18) % 12 - 6; return L + (d > 0 ? '#'.repeat(d) : 'b'.repeat(-d)); };
@@ -69,6 +87,11 @@ function pentaBox(root, sc, start) {
   for (let string = 0, d = start; string < 6; string++) for (let k = 0; k < 2; k++, d++) {
     out.push({ string, fret: midi - OPEN_MIDI[string], label: name(sc.f[d % 5]), isRoot: d % 5 === 0, degree: d % 5 });
     midi += sc.f[(d + 1) % 5] + 12 * Math.floor((d + 1) / 5) - sc.f[d % 5] - 12 * Math.floor(d / 5);
+  }
+  if (sc.blue) {   // blue note (♭5 en la menor, ♭3 en la mayor) junto a su grado; los grados pasan a ser los 6 de la escala de blues
+    const { tras, iv, ord } = sc.blue;
+    out.filter(n => n.degree === tras).forEach(n => out.push({ string: n.string, fret: n.fret + 1, label: name(iv), isRoot: false, degree: -1 }));
+    out.forEach(n => { n.degree = ord.indexOf(((OPEN_MIDI[n.string] + n.fret - rootPc) % 12 + 12) % 12); n.isBlue = ord[n.degree] === iv; });
   }
   if (out.some(n => n.fret < 0)) out.forEach(n => { n.fret += 12; });      // la caja no cabe junto a la cejuela: una octava arriba
   return out;
@@ -153,7 +176,7 @@ function parseArgs(argv) {
   // vuelta hasta la tónica. Ruta 'caja': tónica grave → arriba → nota más grave de la caja → tónica
   // (recorre la posición entera y dura lo mismo en todas las formas).
   const buildGroups = (sq) => {
-    const top = sq.span[sq.span.length - 1], up = i => ({ idx: sq.span.map(o => i + o) }), down = i => ({ idx: sq.span.map(o => i + o).reverse() });
+    const top = Math.max(...sq.span), up = i => ({ idx: sq.span.map(o => i + o) }), down = i => ({ idx: sq.span.map(o => i + o).reverse() });
     const starts = []; for (let i = first; i + top < notes.length; i++) starts.push(i);
     if (ruta !== 'caja' || first === 0) return [...starts.map(up), ...starts.slice(0, -1).reverse().map(down)];
     const bajada = []; for (let i = starts[starts.length - 1] - 1; i >= 0; i--) bajada.push(down(i));
@@ -168,7 +191,11 @@ function parseArgs(argv) {
   const ROMAN = { triadas: ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'], cuatriadas: ['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viiø'] };
   const degLabel = d => notes.find(n => n.degree === d).label;
   const stripItems = sk => scale ? scale.iv.map((iv, d) => ({ label: degLabel(d), sub: iv })) : [0, 1, 2, 3, 4, 5, 6].map(d => SEQS[sk].suffix ? { label: degLabel(d) + SEQS[sk].suffix[d], sub: ROMAN[SEQS[sk].roman || sk][d] } : { label: degLabel(d), sub: String(d + 1) });
+  const anaOf = sq => sq.sub && sq.span.length === 1 && scale && scale.blue && scale.blue.anacrusa || 0;   // notas de silencio antes de la línea
   const pushGroups = (sq, groups, b, base, bpm, gb = 1, lap) => {
+    let nCount = anaOf(sq);   // sq.sub: notas tocadas en la vuelta (cada una dura 1/sub de pulso, crucen o no el pulso)
+    if (nCount) { const st = baseState(); if (bpm && antic !== 'no') groups[0].idx.forEach(ix => st.set(key(notes[ix]), antic === 'todo' ? 'next' : 'pend'));
+      steps.push({ state: st, dur: b * nCount / sq.sub, caption: bpm ? '' : base, metro: bpm ? { bpm, beat: 0 } : undefined, strip: bpm ? { on: [] } : undefined, lap }); }
     groups.forEach((g, gi) => {
       const chordRoot = notes[Math.min(...g.idx)];
       const chord = sq.suffix && g.idx.length > 1 ? `${chordRoot.label}${sq.suffix[chordRoot.degree]}` : '';
@@ -180,23 +207,27 @@ function parseArgs(argv) {
       else if (bpm && antic === 'grupo') g.idx.forEach(ix => st.set(key(notes[ix]), 'pend'));
       g.idx.forEach((ix, j) => {
         st.set(key(notes[ix]), 'active');
-        const caption = bpm ? '' : chord ? `${base} · ${chord}` : base, nb = gb / g.idx.length, at = gi * gb + j * nb;   // pulsos que dura la nota / pulso en que cae
+        const caption = bpm ? '' : chord ? `${base} · ${chord}` : base, nb = sq.sub ? 1 / sq.sub : gb / g.idx.length, at = sq.sub ? nCount++ * nb : gi * gb + j * nb;   // pulsos que dura la nota / pulso en que cae
         const metro = k => bpm ? { bpm, beat: Math.floor(at + k + 1e-9) % 4 } : undefined;
         const nextIx = groups[gi + 1] ? groups[gi + 1].idx[0] : undefined;                // 1ª nota del grupo SIGUIENTE, durante todo el grupo
         const ring = bpm && antic === 'grupo' && args.pista && nextIx !== undefined && j * (gb / g.idx.length) >= gb - 1 - 1e-9 ? key(notes[nextIx]) : undefined;   // solo en el último pulso del grupo
         const strip = !bpm ? undefined : sq.suffix ? { on: [g.idx.length > 1 ? chordRoot.degree : notes[ix].degree] }
           : { on: g.idx.slice(0, j + 1).map(i => notes[i].degree), q: g.idx.length === 2 ? ([4, 9].includes(Math.abs(notes[g.idx[0]].midi - notes[g.idx[1]].midi)) ? 'may' : 'men') : undefined };   // 3ª/6ª mayor (4/9 semitonos) o menor (3/8)
         const snap = new Map(st); if (bpm && antic === 'grupo') snap.set(key(notes[ix]), 'flash');   // tres niveles: AHORA (brillo + halo) / ya tocada / pendiente (tenue)
-        if (nb <= 1) steps.push({ state: snap, dur: b * nb, caption, sound: notes[ix], metro: metro(0), strip, lap, ring });
+        const vel = sq.sub && sq.span.length > 1 ? (j === 0 ? 1 : 0.55) : undefined;   // acento en la 1ª nota de cada grupo (solo con sub)
+        if (nb <= 1) steps.push({ state: snap, dur: b * nb, caption, sound: notes[ix], vel, metro: metro(0), strip, lap, ring });
         else for (let k = 0; k < nb; k++) steps.push({ state: new Map(snap), dur: b, caption, sound: k ? undefined : notes[ix], metro: metro(k), strip, lap, ring });   // nota larga: un paso por pulso (metrónomo)
       });
     });
+    // sub: si la vuelta no acaba en pulso entero, la última nota se alarga hasta el pulso (el respiro empieza en pulso).
+    if (sq.sub) { const rem = Math.ceil(nCount / sq.sub - 1e-9) - nCount / sq.sub; if (rem > 1e-9) steps[steps.length - 1].dur += b * rem; }
   };
+  const seqBeatsOf = (sq, groups, gb) => sq.sub ? Math.ceil((anaOf(sq) + groups.reduce((a, g) => a + g.idx.length, 0)) / sq.sub - 1e-9) : groups.length * gb;
   const clicks = []; let lapBeats = 0;
   if (tempos) {
     // Progresivo: UNA secuencia, una vuelta entera por tempo; el tempo sube al volver a empezar en graves.
     // La vuelta se redondea a compases de 4/4 con al menos 2 pulsos de respiro (aviso del tempo siguiente).
-    const sq = SEQS[seqKeys[0]], groups = buildSeq(sq), gb = sq.progBeats || 1, seqBeats = groups.length * gb;
+    const sq = SEQS[seqKeys[0]], groups = buildSeq(sq), gb = sq.progBeats || 1, seqBeats = seqBeatsOf(sq, groups, gb);
     lapBeats = Math.ceil((seqBeats + 2) / 4) * 4;
     let tt = 0;
     const tick = (n, b, from) => { if (!backingDir) for (let k = 0; k < n; k++) clicks.push({ t: tt + k * b, accent: (from + k) % 4 === 0 }); tt += n * b; };
@@ -210,6 +241,10 @@ function parseArgs(argv) {
       pushGroups(sq, groups, b, sq.name, bpmL, gb, li); tick(seqBeats, b, 0);
       rest(lapBeats - seqBeats, b, seqBeats, next, bpmL, li, !!next); tick(lapBeats - seqBeats, b, seqBeats);
     });
+    // Anacrusa: aviso en pantalla durante la cuenta y la primera vuelta (luego ya se sabe y estorbaría).
+    const ana = anaOf(sq);
+    if (ana) { const bi = scale.blue.ord.indexOf(scale.blue.iv), aviso = `Empieza a contratiempo: la ${scale.iv[bi]} cae en el «y» y resuelve en la ${scale.iv[bi + 1]} a tiempo`;
+      steps.forEach(s => { if (s.lap === undefined || s.lap === 0) s.aviso = aviso; }); }
     steps.push({ state: baseState(), dur: backingDir ? 4 * 60 / tempos[tempos.length - 1] : 1, caption: '' });   // con base: un compás más, en fundido
     console.log(`Vuelta: ${seqBeats} pulsos de secuencia + ${lapBeats - seqBeats} de respiro = ${lapBeats / 4} compases`);
   } else {
@@ -222,6 +257,9 @@ function parseArgs(argv) {
     steps.push({ state: baseState(), dur: 3 * beat, caption: '' });
   }
 
+  // --solo-pasos: vuelca los pasos (duración, nota, acento, metrónomo, estado del mástil) y sale sin renderizar
+  // nada; sirve para los tests de regresión de los patrones (comparar contra master sin hacer vídeos).
+  if (args['solo-pasos']) { console.log(JSON.stringify(steps.map(s => [+s.dur.toFixed(6), s.sound ? s.sound.midi : null, s.vel === undefined ? null : s.vel, s.metro || null, s.strip || null, s.ring || null, notes.map(n => s.state.get(key(n))).join(',')]))); await browser.close(); return; }
   // Fotogramas: se reutiliza el dibujo del capítulo 1; los estados repetidos se renderizan una vez.
   const frameUrl = 'file://' + path.join(__dirname, 'lib', 'scale-intro-frame.html');
   const frets = notes.map(n => n.fret);
@@ -229,12 +267,12 @@ function parseArgs(argv) {
   const cache = new Map(); let nPng = 0, framePage = null;
   const t0 = Date.now(), lap = []; const mark = n => lap.push(`${n} ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   for (const s of steps) {
-    const sig = s.caption + '|' + (s.metro ? `${s.metro.bpm}:${s.metro.beat}:${s.metro.next || ''}` : '') + '|' + (s.strip ? s.strip.on.join(',') + (s.strip.q || '') : '') + '|' + (s.lap === undefined ? '' : s.lap) + '|' + (s.ring || '') + '|' + notes.map(n => s.state.get(key(n))[0]).join('');
+    const sig = s.caption + '|' + (s.aviso || '') + '|' + (s.metro ? `${s.metro.bpm}:${s.metro.beat}:${s.metro.next || ''}` : '') + '|' + (s.strip ? s.strip.on.join(',') + (s.strip.q || '') : '') + '|' + (s.lap === undefined ? '' : s.lap) + '|' + (s.ring || '') + '|' + notes.map(n => s.state.get(key(n))[0]).join('');
     if (!cache.has(sig)) {
-      const data = { title: `${scale ? `${scale.name} de ${root}` : `Escala de ${root} mayor`} · Forma ${posLabel}${args.closed ? ' cerrada' : ''}`, subtitle: tempos ? `Patrones melódicos · ${SEQS[seqKeys[0]].name}` : 'Secuencias dentro de la posición', caption: s.caption, metro: s.metro,
+      const data = { title: `${scale ? `${scale.name} de ${root}` : `Escala de ${root} mayor`} · Forma ${posLabel}${args.closed ? ' cerrada' : ''}`, subtitle: tempos ? `Patrones melódicos · ${SEQS[seqKeys[0]].name}` : 'Secuencias dentro de la posición', caption: s.caption, ...(s.aviso ? { aviso: s.aviso } : {}), metro: s.metro,
         ladder: tempos && s.lap !== undefined ? { tempos: ladderTempos, cur: ladderTempos.indexOf(tempos[s.lap]) } : undefined,
         strip: s.strip && tempos ? { items: stripItems(seqKeys[0]), on: s.strip.on, q: s.strip.q, pill: SEQS[seqKeys[0]].span.length === 2, iv: SEQS[seqKeys[0]].span[1] === 5 ? '6ª' : '3ª', qText: scale && s.strip.q ? (s.strip.q === 'may' ? '3ª mayor' : '4ª justa') : undefined } : undefined, fretMin, fretMax,
-        notes: notes.map(n => ({ string: n.string, fret: n.fret, label: n.label, isRoot: n.isRoot, state: s.state.get(key(n)), ring: s.ring === key(n) })) };
+        notes: notes.map(n => ({ string: n.string, fret: n.fret, label: n.label, isRoot: n.isRoot, ...(n.isBlue ? { isBlue: true } : {}), state: s.state.get(key(n)), ring: s.ring === key(n) })) };
       if (!framePage) { framePage = await browser.newPage({ viewport: { width: 1600, height: 900 } }); await framePage.goto(frameUrl); }
       await framePage.evaluate(d => render(d), data);                               // una sola página para todos los fotogramas
       const png = path.join(tmp, `f${String(nPng++).padStart(4, '0')}.png`);
@@ -246,14 +284,14 @@ function parseArgs(argv) {
 
   mark('fotogramas');
   let t = 0; const events = [];
-  steps.forEach(s => { if (s.sound) events.push({ t, freq: 82.4069 * Math.pow(2, (s.sound.midi - 40) / 12) }); t += s.dur; });
+  steps.forEach(s => { if (s.sound) events.push({ t, freq: 82.4069 * Math.pow(2, (s.sound.midi - 40) / 12), ...(s.vel !== undefined ? { vel: s.vel } : {}) }); t += s.dur; });
   const total = t;
   // Las notas se sintetizan POR TRAMOS (un vídeo de 6 min de una sola vez tumba la pestaña: cientos de
   // notas con su reverb en un único OfflineAudioContext) y se suman con su desfase; cada tramo lleva
   // 3 s de cola para que la última nota termine de sonar.
   const wav = path.join(tmp, 'notas.wav'), CHUNK = 40, parts = [];
   for (let a = 0; a < total; a += CHUNK) {
-    const ev = events.filter(e => e.t >= a && e.t < a + CHUNK).map(e => ({ t: e.t - a, freq: e.freq }));
+    const ev = events.filter(e => e.t >= a && e.t < a + CHUNK).map(e => ({ ...e, t: e.t - a }));
     if (!ev.length) continue;
     const w = path.join(tmp, `notas-${parts.length}.wav`);
     fs.writeFileSync(w, Buffer.from(await app.evaluate(renderToneTrackInPage, { events: ev, total: Math.min(CHUNK, total - a) + 3 }), 'base64'));
