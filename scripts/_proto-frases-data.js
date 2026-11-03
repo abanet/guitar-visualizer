@@ -224,47 +224,48 @@ module.exports = {
     n(3, 7, 0.25, { fg: 3 }), n(3, 5, 0.25, { lig: 'P', fg: 1 }), n(4, 7, 0.25, { fg: 3 }), n(4, 5, 0.25, { lig: 'P', fg: 1 }),
     n(5, 7, 0.25, { fg: 3 }), n(5, 6, 0.25, { lig: 'P', fg: 2 }), n(5, 5, 0.25, { lig: 'P', fg: 1 }), n(6, 8, 0.25, { fg: 4 }),
     n(6, 5, 0.5, { lig: 'P', fg: 1 }), n(5, 7, 0.5, { fg: 3 }), n(6, 5, 2, { vib: true, fg: 1 })] },
-  // ── Sección T: turnarounds sobre el blues de 12 compases en La (swing lento: se escriben en tresillos).
+  // ── Sección T: turnarounds sobre el blues de 12 compases en La (swing lento). swing: true = se ESCRIBEN en corcheas
+  // y se TOCAN en swing (2/3 + 1/3), como en cualquier partitura de blues: antes iban en tresillos ligados y se leían peor (11-02).
   // Cada vuelta = compases 9-12; la frase suena en el 11 (A7) y el 12 (E7). form.fromBar: compás de la base.
-  t01: { name: 'Turnaround cromático descendente', form: { fromBar: 9 }, noRest: true, win: [5, 9], items: [
+  t01: { name: 'Turnaround cromático descendente', form: { fromBar: 9 }, noRest: true, swing: true, win: [5, 9], items: [
     r(4), r(4),
-    n(3, 9, 2 * T, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 9, T, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }),
-    n(3, 8, 2 * T, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 8, T, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }),
-    n(3, 7, 2 * T, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 7, T, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
-    n(3, 6, 2 * T, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 6, T, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 9, 0.5, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 9, 0.5, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 8, 0.5, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 8, 0.5, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 7, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 7, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 6, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 6, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
     n(5, 7, 1, { fg: 3, also: [{ s: 2, f: 6, fg: 2 }, { s: 3, f: 7, fg: 4 }] }), r(1), r(2)] },
-  t02: { name: 'Turnaround cromático ascendente', form: { fromBar: 9 }, noRest: true, win: [5, 9], items: [
+  t02: { name: 'Turnaround cromático ascendente', form: { fromBar: 9 }, noRest: true, swing: true, win: [5, 9], items: [
     r(4), r(4),
-    n(3, 6, 2 * T, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 6, T, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
-    n(3, 7, 2 * T, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 7, T, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
-    n(3, 8, 2 * T, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 8, T, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }),
-    n(3, 9, 2 * T, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 9, T, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 6, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 6, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 7, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 7, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 8, 0.5, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 8, 0.5, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 9, 0.5, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 9, 0.5, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }),
     n(5, 7, 1, { fg: 3, also: [{ s: 2, f: 6, fg: 2 }, { s: 3, f: 7, fg: 4 }] }), r(1), r(2)] },
-  t03: { name: 'Turnaround en sextas', form: { fromBar: 9 }, noRest: true, win: [5, 9], items: [
+  t03: { name: 'Turnaround en sextas', form: { fromBar: 9 }, noRest: true, swing: true, win: [5, 9], items: [
     r(4), r(4),
-    n(3, 9, 2 * T, { fg: 3, also: [{ s: 5, f: 9, fg: 4 }] }), n(3, 9, T, { fg: 3, also: [{ s: 5, f: 9, fg: 4 }] }),
-    n(3, 8, 2 * T, { fg: 2, also: [{ s: 5, f: 8, fg: 3 }] }), n(3, 8, T, { fg: 2, also: [{ s: 5, f: 8, fg: 3 }] }),
-    n(3, 7, 2 * T, { fg: 1, also: [{ s: 5, f: 7, fg: 2 }] }), n(3, 7, T, { fg: 1, also: [{ s: 5, f: 7, fg: 2 }] }),
-    n(3, 6, 2 * T, { fg: 1, also: [{ s: 5, f: 6, fg: 1 }] }), n(3, 6, T, { fg: 1, also: [{ s: 5, f: 6, fg: 1 }] }),
+    n(3, 9, 0.5, { fg: 3, also: [{ s: 5, f: 9, fg: 4 }] }), n(3, 9, 0.5, { fg: 3, also: [{ s: 5, f: 9, fg: 4 }] }),
+    n(3, 8, 0.5, { fg: 2, also: [{ s: 5, f: 8, fg: 3 }] }), n(3, 8, 0.5, { fg: 2, also: [{ s: 5, f: 8, fg: 3 }] }),
+    n(3, 7, 0.5, { fg: 1, also: [{ s: 5, f: 7, fg: 2 }] }), n(3, 7, 0.5, { fg: 1, also: [{ s: 5, f: 7, fg: 2 }] }),
+    n(3, 6, 0.5, { fg: 1, also: [{ s: 5, f: 6, fg: 1 }] }), n(3, 6, 0.5, { fg: 1, also: [{ s: 5, f: 6, fg: 1 }] }),
     n(3, 7, 2, { fg: 1, also: [{ s: 5, f: 7, fg: 2 }] }), r(2)] },
-  t04: { name: 'Turnaround con la 1ª cuerda al aire', form: { fromBar: 9 }, noRest: true, win: [0, 8], items: [
+  t04: { name: 'Turnaround con la 1ª cuerda al aire', form: { fromBar: 9 }, noRest: true, swing: true, win: [0, 8], items: [
     r(4), r(4),
-    n(2, 8, 2 * T, { fg: 4, also: [{ s: 5, f: 0 }] }), n(2, 8, T, { fg: 4, also: [{ s: 5, f: 0 }] }),
-    n(2, 7, 2 * T, { fg: 3, also: [{ s: 5, f: 0 }] }), n(2, 7, T, { fg: 3, also: [{ s: 5, f: 0 }] }),
-    n(2, 6, 2 * T, { fg: 2, also: [{ s: 5, f: 0 }] }), n(2, 6, T, { fg: 2, also: [{ s: 5, f: 0 }] }),
-    n(2, 5, 2 * T, { fg: 1, also: [{ s: 5, f: 0 }] }), n(2, 5, T, { fg: 1, also: [{ s: 5, f: 0 }] }),
+    n(2, 8, 0.5, { fg: 4, also: [{ s: 5, f: 0 }] }), n(2, 8, 0.5, { fg: 4, also: [{ s: 5, f: 0 }] }),
+    n(2, 7, 0.5, { fg: 3, also: [{ s: 5, f: 0 }] }), n(2, 7, 0.5, { fg: 3, also: [{ s: 5, f: 0 }] }),
+    n(2, 6, 0.5, { fg: 2, also: [{ s: 5, f: 0 }] }), n(2, 6, 0.5, { fg: 2, also: [{ s: 5, f: 0 }] }),
+    n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 0 }] }), n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 0 }] }),
     n(6, 0, 1, { also: [{ s: 2, f: 0 }, { s: 3, f: 1, fg: 1 }] }), r(1), r(2)] },
-  t05: { name: 'Turnaround en tresillos', form: { fromBar: 9 }, noRest: true, win: [3, 8], items: [
+  t05: { name: 'Turnaround en tresillos', form: { fromBar: 9 }, noRest: true, swing: true, win: [3, 8], items: [
     r(4), r(4),
     n(1, 5, T, { fg: 1 }), n(2, 8, T, { fg: 4 }), n(2, 5, T, { fg: 1 }),
     n(3, 8, T, { fg: 4 }), n(3, 7, T, { fg: 3 }), n(3, 6, T, { fg: 2 }),
     n(3, 5, T, { fg: 1 }), n(4, 7, T, { fg: 3 }), n(4, 6, T, { fg: 2 }),
     n(4, 5, T, { fg: 1 }), n(4, 4, T, { fg: 1 }), n(4, 3, T, { fg: 1 }),
     n(5, 7, 1, { fg: 3, also: [{ s: 2, f: 6, fg: 2 }, { s: 3, f: 7, fg: 4 }] }), r(1), r(2)] },
-  t06: { name: 'Turnaround de rock', form: { fromBar: 9 }, noRest: true, win: [5, 9], items: [
+  t06: { name: 'Turnaround de rock', form: { fromBar: 9 }, noRest: true, swing: true, win: [5, 9], items: [
     r(4), r(4),
-    n(2, 5, 2 * T, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 5, T, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }),
-    n(2, 5, 2 * T, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 5, T, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }),
-    n(3, 8, 2 * T, { fg: 4 }), n(3, 7, T, { fg: 3 }), n(3, 6, 2 * T, { fg: 2 }), n(3, 5, T, { fg: 1 }),
+    n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 8, 0.5, { fg: 4 }), n(3, 7, 0.5, { fg: 3 }), n(3, 6, 0.5, { fg: 2 }), n(3, 5, 0.5, { fg: 1 }),
     n(5, 7, 1, { fg: 3, also: [{ s: 2, f: 6, fg: 2 }, { s: 3, f: 7, fg: 4 }] }), r(1), r(2)] },
 };

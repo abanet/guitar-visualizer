@@ -17,6 +17,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileP = promisify(execFile);
 const { renderToneTrackInPage } = require('./lib/_proto-pluck-audio');
+const { renderGuitarTrack } = require('./lib/_proto-guitar-ks');
 const PHRASES = require('./_proto-frases-data');
 
 const OPEN_MIDI = [40, 45, 50, 55, 59, 64];
@@ -50,9 +51,9 @@ function parseArgs(argv) {
   if (!P) { console.error(`--frase: ${Object.keys(PHRASES).join(' | ')}`); process.exit(1); }
   const NAMES = P.flats ? NAMES_FLAT : NAMES_STD, ROOT_PC = P.rootPc === undefined ? 9 : P.rootPc;
   // --tempos auto: el inicio sale de la figura más rápida de la frase, para tocar ~2,7 notas/s (lo que dan las
-  // corcheas a 80, que a Alberto le parece cómodo): corcheas 80, tresillos 55, semicorcheas 40. Luego +10 hasta 5 tempos (tope 120).
-  const autoTempos = () => { const dmin = Math.min(...P.items.filter(it => !it.r && !it.x).map(it => it.d)); const lo = P.form ? 50 : 40;
-    const t0 = Math.min(80, Math.max(lo, Math.round(2.7 * 60 * dmin / 5) * 5)), hi = P.form ? 100 : 120; const out = []; for (let t = t0; t <= hi && out.length < 5; t += 10) out.push(t); return out; };
+  // corcheas a 80, que a Alberto le parece cómodo): corcheas 80, tresillos 55, semicorcheas 40. Luego +5 hasta 9 tempos (40 bpm de recorrido, tope 120).
+  const autoTempos = () => { const dmin = Math.min(...P.items.filter(it => !it.r && !it.x).map(it => (P.swing && Math.abs(it.d - 0.5) < 1e-6 ? 1 / 3 : it.d))); const lo = P.form ? 50 : 40;   // en swing la corchea corta dura 1/3
+    const t0 = Math.min(80, Math.max(lo, Math.round(2.7 * 60 * dmin / 5) * 5)), hi = P.form ? 100 : 120; const out = []; for (let t = t0; t <= Math.min(hi, t0 + 40); t += 5) out.push(t); return out; };   // de 5 en 5 (Alberto 11-02: de 10 en 10 era demasiado salto)
   const tempos = !args.tempos || args.tempos === 'auto' ? autoTempos() : String(args.tempos).split(',').map(Number).filter(x => x > 0);
   const backingDir = path.resolve(String(args.backing || (P.form ? '~/guitar-visualizer-assets/FrasesAm/blues12-A' : '~/guitar-visualizer-assets/FrasesAm/biblioteca-roadhouse')).replace(/^~/, os.homedir()));
   const outDir = path.resolve(String(args.out || '~/Downloads/Bendings-prueba/demos').replace(/^~/, os.homedir()));
@@ -66,14 +67,34 @@ function parseArgs(argv) {
   items.forEach((it, i) => { it.at = at; at += it.d; if (!it.r) { it.prev = lastNote; lastNote = i; if ((it.lig || it.slide) && (it.prev === undefined || items[it.prev].s !== it.s)) throw new Error(`nota ${i}: ligado o deslizamiento sin nota anterior en la misma cuerda`); } });
   const seqBeats = Math.round(at * 1e6) / 1e6, lapBeats = P.noRest ? seqBeats : Math.ceil((seqBeats + 2 - EPS) / 4) * 4;   // noRest: patrón en bucle, sin compás de respiro
   const bendTxt = s => (s === 2 ? '1' : s === 1 ? '½' : s === 0.5 ? '¼' : s === 3 ? '1½' : String(s / 2));
-  const TAB = items.map(it => it.r ? { r: true, at: it.at, d: it.d } : { at: it.at, d: it.d, notes: [{ s: it.s, f: it.f }, ...(it.also || []).map(o => ({ s: o.s, f: o.f }))], fg: it.fg, prev: it.prev,
+  // Intervalo de cada nota respecto a la tónica (mejora nº 3, 11-02: "entender qué está pasando"): va en la fila de
+  // debajo de la tablatura (los dedos ya están en el mástil). Con bending, "4→5": de dónde sale y a qué nota llega.
+  // Nota de LLEGADA: la que cierra una idea (antes de un pulso o más de silencio, o al final): se recuadra.
+  const IVN = ['T', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7'], ivOf = midi => IVN[(midi % 12 - ROOT_PC + 12) % 12];
+  const landOf = i => { let rest = 0; for (let j = i + 1; j < items.length; j++) { if (!items[j].r) return rest >= 1 - EPS; rest += items[j].d; } return true; };
+  // Acordes (Alberto 11-02: "cuando suena un acorde poner cuál es"): el de la base en cada compás de la vuelta
+  // (P.chords, o el blues en La de la sección T: compases 9-12 = E7 D7 A7 E7, o Am7 en el vamp) y, sobre la tablatura,
+  // el nombre del acorde que toca la frase cuando suenan 3 notas o más (el de la base en ese compás).
+  const lapBars = Math.round((P.noRest ? seqBeats : Math.ceil((seqBeats + 2 - EPS) / 4) * 4) / 4);
+  const CHORDS = P.chords || (P.form ? ['E7', 'D7', 'A7', 'E7'] : P.scale ? null : Array(lapBars).fill('Am7'));
+  const TAB = items.map((it, i) => it.r ? { r: true, at: it.at, d: it.d } : { at: it.at, d: it.d, iv: it.x ? '' : ivOf(OPEN_MIDI[it.s] + it.f) + (it.bend >= 1 ? '→' + ivOf(OPEN_MIDI[it.s] + it.f + it.bend) : ''), land: !it.x && landOf(i), chord: CHORDS && (it.also || []).length >= 2 ? CHORDS[Math.floor(it.at / 4 + EPS) % CHORDS.length] : undefined, notes: [{ s: it.s, f: it.f }, ...(it.also || []).map(o => ({ s: o.s, f: o.f }))], fg: it.fg, prev: it.prev,
     x: it.x, pick: it.strum, acc: it.acc, pm: it.pm, bend: it.bend ? (it.rel || it.pre ? 'updown' : 'up') : undefined, txt: it.bend ? bendTxt(it.bend) : '', vib: it.vib, lig: it.lig, slide: it.slide });
   for (let a = seqBeats; a < lapBeats - EPS;) { const whole = Math.abs(a - Math.round(a)) < EPS, len = whole && Math.round(a) % 2 === 0 && lapBeats - a >= 2 - EPS ? 2 : whole && lapBeats - a >= 1 - EPS ? 1 : Math.min(0.5, Math.ceil(a - EPS) - a || 0.5); TAB.push({ r: true, at: a, d: len }); a += len; }
 
+  // Swing (mejora nº 5, 11-02): la tablatura se queda en corcheas; para el sonido y los fotogramas, cada pulso cuyas
+  // notas caen solo en la parte fuerte o en la "y" se reparte 2/3 + 1/3. Los pulsos con tresillos o semicorcheas no se tocan.
+  if (P.swing) {
+    const straight = new Set(); items.forEach(it => { const fr = it.at - Math.floor(it.at + EPS); if (fr > EPS && Math.abs(fr - 0.5) > EPS) straight.add(Math.floor(it.at + EPS)); });
+    const sw = x => { const b = Math.floor(x + EPS), fr = x - b; if (straight.has(b) || fr < EPS) return x; return b + (fr <= 0.5 + EPS ? fr * 4 / 3 : 2 / 3 + (fr - 0.5) * 2 / 3); };
+    items.forEach(it => { const a0 = sw(it.at), a1 = sw(it.at + it.d); it.at = a0; it.d = a1 - a0; });
+  }
   // Notas del mástil: la pentatónica dentro de la ventana de trastes (fondo) más las de la frase.
   const notes = new Map();
   const addNote = (s, f) => { const midi = OPEN_MIDI[s] + f, k = s + ':' + f; if (!notes.has(k)) notes.set(k, { s, f, midi, label: NAMES[midi % 12], isRoot: midi % 12 === ROOT_PC, isBlue: !P.scale && midi % 12 === (ROOT_PC + 6) % 12 }); };   // isBlue: blue note (5ª disminuida), en violeta
   if (P.win) for (let s = 0; s < 6; s++) for (let f = P.win[0]; f <= P.win[1]; f++) if ((P.scale || PENTA).includes((OPEN_MIDI[s] + f) % 12)) addNote(s, f);   // P.scale: fondo de otra escala (p. ej. dórica en las de jazz)
+  // Dedos: ya NO se muestran por defecto (Alberto 11-02: "muchas veces no sale lo que me parece más cómodo"; los
+  // escribí sin guitarra). Con --dedos vuelven a salir en el mástil. En su lugar, la placa lleva el INTERVALO de cada
+  // nota respecto a la tónica (Alberto, 11-03: "yo pondría el intervalo o nada"); --sin-intervalos la quita.
   const fingerOf = {};
   items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => { addNote(o.s, o.f); if (fingerOf[key(o)] === undefined) fingerOf[key(o)] = o.fg; }));
   const N = [...notes.values()];
@@ -91,6 +112,15 @@ function parseArgs(argv) {
   const steps = [];
   const pendState = () => { const st = new Map(N.map(n => [key(n), 'ghost'])); items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => st.set(key(o), 'pend'))); return st; };
   const first = items.find(it => !it.r);
+  // Rótulo de presentación durante la cuenta (mejora nº 3): "qué trabaja" sale de la lista de frases
+  // (~/guitar-visualizer-assets/vocabulario-blues-rock-lista.md, por el número de la frase) y la nota final de la frase.
+  let intro;
+  try { const md = fs.readFileSync(path.join(os.homedir(), 'guitar-visualizer-assets', 'vocabulario-blues-rock-lista.md'), 'utf8');
+    const row = args.num && md.split('\n').find(l => l.startsWith(`| ${String(args.num).replace(/^0+(?=\d)/, '')} |`));
+    const que = row ? row.split('|')[3].replace(/\*\(.*?\)\*/g, '').trim() : P.que;
+    const last = [...items].reverse().find(it => !it.r && !it.x), lastMidi = OPEN_MIDI[last.s] + last.f + (last.bend && !last.rel ? last.bend : 0);
+    if (que) intro = { que, end: `${ivOf(lastMidi) === 'T' ? 'la tónica' : 'la ' + ivOf(lastMidi)} (${NAMES[lastMidi % 12]})` };
+  } catch (e) { /* sin lista: sin rótulo */ }
   // Silencios pulso a pulso (el metrónomo visual sigue marcando); lead = avisa de la primera nota de la vuelta.
   const rest = (beats, b, from, bpm, lap, next, cur) => { if (beats < EPS) return; const n = Math.max(1, Math.round(beats / 0.5)); for (let k = 0; k < n; k++) steps.push({ state: pendState(), dur: b * beats / n, caption: '', metro: { bpm, beat: Math.floor(from + k * beats / n + EPS) % 4, next }, lap, cur, pos: lap === 0 && from === 0 && cur === -1 ? undefined : from + k * beats / n, bend: first.bend ? { [key(first)]: bendMark(first, 0) } : {} }); };
   const pushLap = (b, bpm, lap, mute) => {
@@ -116,7 +146,10 @@ function parseArgs(argv) {
     });
   };
   const b0 = 60 / tempos[0];
-  rest(8, b0, 0, tempos[0], 0, undefined, -1);                                    // la base trae 2 compases de cuenta
+  // Rótulo "QUÉ TRABAJA" solo en el PRIMER compás de la cuenta (Alberto, 11-03: "tapa la figura del mástil que el
+  // estudiante tiene que ver para posicionar la mano"): en el segundo compás ya se ve la figura limpia antes de entrar.
+  const nIntro = steps.length; rest(8, b0, 0, tempos[0], 0, undefined, -1);                                    // la base trae 2 compases de cuenta
+  for (let k = nIntro, t = 0; k < steps.length; t += steps[k].dur, k++) if (t < 4 * b0 - 1e-4) steps[k].intro = true;
   tempos.forEach((bpm, li) => {
     const b = 60 / bpm, gap = lapBeats - seqBeats;
     pushLap(b, bpm, li, false); rest(gap, b, seqBeats, bpm, li, undefined, items.length);
@@ -130,11 +163,12 @@ function parseArgs(argv) {
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   await page.goto('file://' + path.join(__dirname, 'lib', '_proto-frases-frame.html'));
   const cache = new Map(); let nPng = 0;
-  for (const s of steps) {
-    const data = { title: P.title || (P.scale ? 'Vocabulario de jazz · La menor' : 'Vocabulario de blues y rock · La menor'), subtitle: (args.num ? `Frase ${args.num} · ` : '') + P.name, caption: s.caption, metro: s.metro,
+  // --audio-only: sin fotogramas ni vídeo (pruebas de sonido mientras otro vídeo se está renderizando).
+  for (const s of (args['audio-only'] ? [] : steps)) {
+    const data = { title: P.title || (P.scale ? 'Vocabulario de jazz · La menor' : 'Vocabulario de blues y rock · La menor'), subtitle: (args.num ? `Frase ${args.num} · ` : '') + P.name, caption: s.caption, metro: s.metro, intro: s.intro ? intro : undefined, chord: CHORDS && s.pos !== undefined ? CHORDS[Math.floor(s.pos / 4 + EPS) % CHORDS.length] : undefined,
       ladder: s.lap === undefined ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: { beats: lapBeats, items: TAB, cur: s.cur >= items.length && s.pos !== undefined ? TAB.findIndex(t => s.pos > t.at - EPS && s.pos < t.at + t.d - EPS) : s.cur,   // en el respiro, el silencio de relleno que toca
-        rowLabel: P.rowLabel, pulse: s.pos === undefined ? undefined : Math.floor(s.pos + EPS) % lapBeats },
-      notes: N.map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, isBlue: n.isBlue, iv: fingerOf[key(n)], state: s.state.get(key(n)), bend: s.bend[key(n)], mx: !!(s.mx && s.mx.includes(key(n))), vib: s.vibKey === key(n),
+        rowLabel: P.rowLabel || 'intervalo', swing: !!P.swing, pulse: s.pos === undefined ? undefined : Math.floor(s.pos + EPS) % lapBeats },
+      notes: N.map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, isBlue: n.isBlue, iv: args.dedos ? fingerOf[key(n)] : args['sin-intervalos'] ? undefined : ivOf(n.midi), state: s.state.get(key(n)), bend: s.bend[key(n)], mx: !!(s.mx && s.mx.includes(key(n))), vib: s.vibKey === key(n),
         lig: s.lig && s.lig.key === key(n) ? s.lig : undefined, slide: s.slide && s.slide.key === key(n) ? s.slide : undefined })) };
     const sig = JSON.stringify(data);
     if (!cache.has(sig)) {
@@ -160,18 +194,27 @@ function parseArgs(argv) {
   }
   const evs = events.filter(e => !e.gone);
   const wav = path.join(tmp, 'notas.wav'), CHUNK = 40, parts = [];
-  for (let a = 0; a < total; a += CHUNK) {
+  // --tone ks (por defecto): guitarra por modelo físico de cuerda (lib/_proto-guitar-ks.js); --tone synth: el pluck antiguo.
+  const KS = String(args.tone || 'ks') !== 'synth';
+  if (KS) fs.writeFileSync(wav, renderGuitarTrack(evs, total + 4));
+  for (let a = 0; !KS && a < total; a += CHUNK) {
     const ev = evs.filter(e => e.t >= a && e.t < a + CHUNK).map(e => ({ t: e.t - a, freq: e.freq, bend: e.bend, vib: e.vib, ligs: e.ligs, mute: e.mute, cut: e.cut }));
     if (!ev.length) continue;
     const w = path.join(tmp, `notas-${parts.length}.wav`);
     fs.writeFileSync(w, Buffer.from(await page.evaluate(renderToneTrackInPage, { events: ev, total: Math.min(CHUNK, total - a) + 4 }), 'base64'));
     parts.push({ w, a });
   }
-  await execFileP('ffmpeg', ['-loglevel', 'error', '-y', ...parts.flatMap(p => ['-i', p.w]), '-filter_complex',
+  if (!KS) await execFileP('ffmpeg', ['-loglevel', 'error', '-y', ...parts.flatMap(p => ['-i', p.w]), '-filter_complex',
     parts.map((p, k) => `[${k}:a]adelay=${Math.round(p.a * 44100)}S|${Math.round(p.a * 44100)}S[p${k}]`).join(';') + ';' + parts.map((_, k) => `[p${k}]`).join('') + `amix=inputs=${parts.length}:normalize=0[a]`,
     '-map', '[a]', '-ar', '44100', '-ac', '2', wav]);
   await browser.close();
 
+  if (args['audio-only']) {
+    const bw0 = path.join(tmp, 'base.wav'); await buildBacking(backingDir, tempos, lapBeats * 2, 4, bw0, P.form ? (P.form.fromBar - 1) * 4 : undefined);
+    const outA = path.join(outDir, `Frase_${args.frase}_sonido.m4a`);
+    await execFileP('ffmpeg', ['-loglevel', 'error', '-y', '-i', wav, '-i', bw0, '-filter_complex', `[0:a]volume=${parseFloat(args['notes-vol'] || 0.65)}[n];[1:a]volume=${parseFloat(args['backing-vol'] || 1.3)}[b];[n][b]amix=inputs=2:normalize=0:duration=shortest,alimiter=limit=0.95[a]`, '-map', '[a]', '-c:a', 'aac', '-b:a', '192k', outA]);
+    fs.rmSync(tmp, { recursive: true, force: true }); console.log(`✓ ${outA}`); return;
+  }
   const list = path.join(tmp, 'list.txt');
   fs.writeFileSync(list, steps.map(s => `file '${s.png}'\nduration ${s.dur.toFixed(4)}`).join('\n') + `\nfile '${steps[steps.length - 1].png}'\n`);
   const bw = path.join(tmp, 'base.wav'); await buildBacking(backingDir, tempos, lapBeats * 2, 4, bw, P.form ? (P.form.fromBar - 1) * 4 : undefined);

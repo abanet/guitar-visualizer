@@ -20,6 +20,8 @@
   #title { position: absolute; top: 46px; left: 0; right: 0; text-align: center; font: 700 52px Arial; color: #8ab4ff; text-shadow: 0 0 18px rgba(120,160,255,.45); }
   #subtitle { position: absolute; top: 112px; left: 0; right: 0; text-align: center; font: 700 22px Arial; color: rgba(255,255,255,.6); letter-spacing: .04em; }
   #caption { position: absolute; top: 52px; left: 60px; font: 700 30px Arial; color: #111; background: #e2b34f; border-radius: 10px; padding: 8px 18px; letter-spacing: 1px; } #caption:empty { display: none; }
+  #chord { position: absolute; top: 112px; left: 60px; display: flex; align-items: baseline; gap: 10px; } #chord:empty { display: none; }
+  #chord small { font: 700 15px Arial; letter-spacing: .15em; color: rgba(255,255,255,.5); } #chord b { font: 700 40px Arial; color: #e2b34f; }
   #big { position: absolute; top: 150px; left: 0; right: 0; text-align: center; font: 700 64px Arial; color: #8ab4ff; text-shadow: 0 0 20px rgba(120,160,255,.5); }
   #metro { position: absolute; right: 44px; top: 34px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
   #metro .bpm { font: 700 46px Arial; color: #e2b34f; line-height: 46px; }
@@ -44,13 +46,19 @@
   #ladder .t.done { background: rgba(38,198,218,.28); border-color: rgba(38,198,218,.55); color: rgba(255,255,255,.8); }
   #ladder .t.cur { background: #e2b34f; border-color: #fff; color: #111; box-shadow: 0 0 16px rgba(226,179,79,.7); }
   #ladder .lbl { font: 700 15px Arial; color: rgba(255,255,255,.45); margin: 0 8px; letter-spacing: .04em; }
+  #intro { position: absolute; left: 50%; top: 250px; transform: translateX(-50%); max-width: 1100px; padding: 22px 40px 24px; border-radius: 18px;
+    background: rgba(13,13,13,.9); border: 2px solid rgba(226,179,79,.6); box-shadow: 0 10px 40px rgba(0,0,0,.6); text-align: center; }
+  #intro:empty { display: none; }
+  #intro .lbl { font: 700 17px Arial; letter-spacing: .2em; color: #e2b34f; }
+  #intro .que { margin-top: 8px; font: 700 34px Arial; color: #fff; line-height: 1.25; }
+  #intro .end { margin-top: 12px; font: 700 22px Arial; color: rgba(255,255,255,.7); }
   #brand { position: absolute; right: 26px; bottom: 18px; font: 700 15px Arial; color: #fff; }
   svg { position: absolute; left: 0; top: 0; }
 </style></head>
 <body>
-<div id="title"></div><div id="subtitle"></div><div id="caption"></div><div id="strip"></div><div id="big"></div>
+<div id="title"></div><div id="subtitle"></div><div id="caption"></div><div id="chord"></div><div id="strip"></div><div id="big"></div>
 <svg id="neck" width="1600" height="900"></svg>
-<div id="metro"></div><div id="ladder"></div>
+<div id="metro"></div><div id="intro"></div><div id="ladder"></div>
 <div id="brand">@banetmasa</div>
 <script>
 // render(D) se puede volver a llamar con otros datos sobre la misma página (los generadores con muchos
@@ -59,7 +67,10 @@ function render(D) {
 document.getElementById('title').textContent = D.title;
 document.getElementById('subtitle').textContent = D.subtitle;
 document.getElementById('caption').textContent = D.caption || '';
+document.getElementById('chord').innerHTML = D.chord ? `<small>ACORDE</small><b>${D.chord}</b>` : '';   // acorde de la base en este compás
 document.getElementById('big').textContent = D.big || '';
+// Rótulo de presentación durante la cuenta (qué trabaja la frase y dónde termina).
+document.getElementById('intro').innerHTML = D.intro ? `<div class="lbl">QUÉ TRABAJA</div><div class="que">${D.intro.que}</div><div class="end">Termina en ${D.intro.end}</div>` : '';
 document.getElementById('metro').innerHTML = !D.metro ? '' : `<span class="bpm">${D.metro.bpm}<small>bpm</small></span><span class="dots">`
   + [0, 1, 2, 3].map(i => `<span class="dot${i === D.metro.beat ? ' on' + (i === 0 ? ' one' : '') : ''}"></span>`).join('') + '</span>'
   + (D.metro.next ? `<span class="next">siguiente vuelta: ${D.metro.next} bpm</span>` : '');
@@ -86,7 +97,7 @@ if (12 >= lo && 12 <= hi) h += inlay(12, (yOf(1) + yOf(2)) / 2) + inlay(12, (yOf
 for (let f = Math.max(1, lo); f <= hi; f++) h += `<text x="${xOf(f)}" y="${bot + 56}" text-anchor="middle" font-size="22" fill="rgba(255,255,255,.45)">${f}</text>`;
 const R = 26;
 if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarillo, lo tocado en blanco, lo pendiente en gris
-  const T = D.tab, X0 = 250, X1 = 1490, Y0 = 628, G = 20, RY = Y0 + 5 * G + 12, RB = RY + 26, FY = RB + 32, EPS = 1e-6;
+  const T = D.tab, X0 = 250, X1 = 1490, Y0 = 612, G = 20, CY = Y0 + 5 * G + 25, RY = Y0 + 5 * G + 34, RB = RY + 26, FY = RB + 30, EPS = 1e-6;   // CY: fila del conteo
   // Posición horizontal ELÁSTICA (Alberto, 11-01: en las frases de semicorcheas los números se pisaban): cada nota
   // ocupa lo que dura, pero nunca menos de MINPX; el resto del ancho se reparte en proporción al tiempo.
   const MINPX = 42, W = X1 - X0, durs = T.items.map(it => it.d);
@@ -101,6 +112,13 @@ if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarill
   // marcas tenues en cada pulso y, debajo de la tablatura, el tramo del pulso en curso brilla (más en el 1).
   // Primera versión con la columna entera sombreada en color: "dificulta algo la lectura" → solo la línea inferior.
   for (let b = 1; b < T.beats; b++) if (b % 4) h += `<line x1="${tx(b) - OFF}" y1="${Y0 + 5 * G}" x2="${tx(b) - OFF}" y2="${Y0 + 5 * G - 8}" stroke="rgba(255,255,255,.35)" stroke-width="2"/><line x1="${tx(b) - OFF}" y1="${Y0}" x2="${tx(b) - OFF}" y2="${Y0 + 8}" stroke="rgba(255,255,255,.35)" stroke-width="2"/>`;
+  // Conteo (mejora nº 4, 11-02): el número de cada pulso del compás siempre (también dentro de notas largas y silencios)
+  // y "y" en las corcheas que empiezan a contratiempo; el pulso en curso se enciende, a la vez que su raya.
+  const halfs = new Set(T.items.filter(it => Math.abs(it.at - Math.floor(it.at + EPS) - 0.5) < 0.02).map(it => Math.floor(it.at + EPS)));
+  for (let b = 0; b < T.beats; b++) { const on = T.pulse === b;
+    h += `<text x="${tx(b)}" y="${CY}" text-anchor="middle" font-size="${on ? 19 : 16}" font-weight="700" fill="${on ? '#fff' : 'rgba(255,255,255,.38)'}">${b % 4 + 1}</text>`;
+    if (halfs.has(b)) h += `<text x="${tx(b + 0.5)}" y="${CY}" text-anchor="middle" font-size="14" font-weight="700" fill="rgba(255,255,255,.3)">y</text>`; }
+  if (T.swing) h += `<text x="${X0 - OFF - 16}" y="${Y0 + 2.5 * G + 32}" text-anchor="end" font-size="15" font-style="italic" font-weight="700" fill="#e2b34f">swing</text>`;
   if (T.pulse !== undefined) { const pa = tx(T.pulse) - OFF, pb = tx(T.pulse + 1) - OFF, one = T.pulse % 4 === 0, yb = Y0 + 5 * G;
     h += `<line x1="${pa}" y1="${yb}" x2="${pb}" y2="${yb}" stroke="rgba(255,255,255,${one ? .35 : .18})" stroke-width="${one ? 14 : 10}" stroke-linecap="round"/>`
       + `<line x1="${pa}" y1="${yb}" x2="${pb}" y2="${yb}" stroke="rgba(255,255,255,${one ? 1 : .75})" stroke-width="${one ? 4 : 3}" stroke-linecap="round"/>`; }
@@ -120,9 +138,15 @@ if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarill
     it.notes.forEach(nt => { const yy = ly(nt.s), w = String(nt.f).length > 1 ? 34 : 26;
       h += `<rect x="${x - w / 2}" y="${yy - 10}" width="${w}" height="20" fill="#0d0d0d"/>` + (i === T.cur ? `<rect x="${x - w / 2 - 3}" y="${yy - 13}" width="${w + 6}" height="26" rx="6" fill="rgba(255,214,64,.16)" stroke="#ffd640" stroke-width="2"/>` : '');
       h += `<text x="${x}" y="${yy + 8}" text-anchor="middle" font-size="22" font-weight="700" fill="${col}">${it.x ? 'x' : nt.f}</text>`; });
+    if (it.chord) h += `<text x="${x}" y="${Y0 - 12}" text-anchor="middle" font-size="20" font-weight="700" fill="${i === T.cur ? '#ffd640' : '#e2b34f'}">${it.chord}</text>`;   // acorde que toca la frase
     if (it.pm) h += `<text x="${x}" y="${Y0 - 10}" text-anchor="middle" font-size="14" font-weight="700" fill="${col}">P.M.</text>`;
     if (it.acc) h += `<text x="${x}" y="${Y0 - 8}" text-anchor="middle" font-size="20" font-weight="700" fill="${col}">&gt;</text>`;
-    h += `<text x="${x}" y="${FY}" text-anchor="middle" font-size="18" font-weight="700" fill="${i === T.cur ? '#ffd640' : grey}">${it.pick ? (it.pick === 'd' ? '↓' : '↑') : (it.fg || '')}</text>`;
+    // Fila de abajo: intervalo (T en rojo, blue note en violeta) y la nota de llegada recuadrada; púa si es un rasgueo.
+    { const lab = it.pick ? (it.pick === 'd' ? '↓' : '↑') : (it.iv !== undefined ? it.iv : (it.fg || '')), on = i === T.cur, past = T.cur >= 0 && i < T.cur;
+      const base = /^T/.test(lab) ? '255,110,98' : /^b5/.test(lab) ? '199,125,255' : '255,255,255', fc = on ? '#ffd640' : `rgba(${base},${past ? 1 : .6})`;
+      const wl = Math.max(30, lab.length * 11 + 14);
+      if (it.land && lab) h += `<rect x="${x - wl / 2}" y="${FY - 19}" width="${wl}" height="26" rx="7" fill="none" stroke="${on ? '#ffd640' : 'rgba(226,179,79,.75)'}" stroke-width="2"/>`;
+      h += `<text x="${x}" y="${FY}" text-anchor="middle" font-size="${lab.length > 3 ? 16 : 18}" font-weight="700" fill="${fc}">${lab}</text>`; }
     // Figuras: plica = negra, plica corta = blanca, puntillo, y barras/corchetes para corcheas, semicorcheas y tresillos.
     if (it.d < 4 - EPS) h += `<line x1="${x}" y1="${it.d >= 2 - EPS ? RY + 13 : RY}" x2="${x}" y2="${RB}" stroke="${col}" stroke-width="2.5"/>`;
     if (is(it.d, 0.75) || is(it.d, 1.5) || is(it.d, 3)) h += `<circle cx="${x + 9}" cy="${RB - 4}" r="3.2" fill="${col}"/>`;
