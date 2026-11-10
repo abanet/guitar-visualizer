@@ -1,0 +1,91 @@
+// Ejercicios de LECTURA RÍTMICA (prototipo, 11-02). Escritos por nosotros siguiendo la progresión de los métodos que
+// recomendó el profe de Alberto (Benedict, "Sight Reading for the Classical Guitar", nivel 1; Leavitt para los niveles
+// 2-3) y la de acentos del curso de Miky Moreno — sin copiar sus ejercicios.
+//
+// Notación de compases: "q q q q | h h | ..." — figuras: w (redonda), hd (blanca con puntillo), h (blanca),
+// qd (negra con puntillo), q (negra), 8d, 8 (corchea), 16 (semicorchea). Sufijos: r = silencio ("qr"),
+// ~ = ligada a la siguiente ("h~"), > = acento ("8>").
+const T2 = [60, 65, 70, 75, 80, 85, 90], T3 = [50, 55, 60, 65, 70, 75, 80];   // 11-10: niveles 2 y 3 con 8 compases (más largos) y más lentos
+const E = (name, que, ts, bars, extra = {}) => ({ name, que, ts, bars, ...extra });
+
+module.exports = {
+  // ── NIVEL 1 · Primeras figuras (4 compases, 60 → 100 bpm) ─────────────────────────────────────────────────
+  n1_01: E('La negra', 'La negra dura un pulso: una palmada en cada clic', [4, 4],
+    'q q q q | q q q q | q q q q | q q q q', { how: 'Una <b>palmada</b> en cada <b>negra</b> (1 pulso) · cuenta en voz alta' }),
+  n1_02: E('La blanca', 'La blanca dura dos pulsos: suena en el 1 y en el 3', [4, 4],
+    'h h | q q h | h q q | h h', { how: '<b>Blanca</b> = 2 pulsos: da la palmada y sigue contando' }),
+  n1_03: E('La redonda', 'La redonda ocupa el compás entero: cuatro pulsos', [4, 4],
+    'w | h h | q q q q | w', { how: '<b>Redonda</b> = 4 pulsos: una palmada y cuenta hasta 4' }),
+  n1_04: E('Negras, blancas y redondas', 'Las tres primeras figuras mezcladas', [4, 4],
+    'q q h | h q q | q h q | w', { how: 'Mira la figura antes de tocarla · cuenta siempre los 4 pulsos' }),
+  n1_05: E('El silencio de negra', 'Un pulso sin tocar: el silencio también se cuenta', [4, 4],
+    'q qr q qr | q q q qr | qr q qr q | q q h', { how: 'En el <b>silencio</b> no toques, pero cuenta el pulso' }),
+  n1_06: E('Silencios de blanca y redonda', 'Silencios largos sin perder la cuenta', [4, 4],
+    'h hr | q q hr | hr h | wr', { how: 'Cuenta en voz alta durante los <b>silencios largos</b>' }),
+  n1_07: E('La blanca con puntillo', 'El puntillo suma la mitad: tres pulsos', [4, 4],
+    'hd q | q hd | hd qr | w', { how: '<b>Blanca con puntillo</b> = 3 pulsos' }),
+  n1_08: E('En tres por cuatro', 'Compás de 3 pulsos: el 1 manda', [3, 4],
+    'q q q | h q | q h | hd', { how: 'Compás de <b>3/4</b>: cuenta 1 2 3' }),
+  n1_09: E('Las corcheas', 'Dos corcheas en cada pulso: "1 y 2 y"', [4, 4],
+    '8 8 8 8 8 8 8 8 | q q 8 8 q | 8 8 q 8 8 q | h h', { how: '<b>Corcheas</b>: dos por pulso · cuenta "1 y 2 y"' }),
+  n1_10: E('Corcheas y negras', 'Cambiar entre uno y dos golpes por pulso', [4, 4],
+    'q 8 8 q 8 8 | 8 8 8 8 h | q q 8 8 8 8 | w', { how: 'Di la <b>"y"</b> en voz alta aunque no toques en ella' }),
+  n1_11: E('El silencio de corchea', 'Tocar solo en la "y": el primer contratiempo', [4, 4],
+    'q 8r 8 q 8r 8 | 8r 8 8r 8 h | q q 8r 8 q | w', { how: '<b>Silencio de corchea</b>: la palmada cae en la "y"' }),
+  n1_12: E('Acentos en corcheas', 'Corcheas seguidas con el acento cambiando de sitio', [4, 4],
+    '8> 8 8 8 8 8 8 8 | 8> 8 8 8 8> 8 8 8 | 8> 8 8> 8 8> 8 8> 8 | 8 8> 8 8> 8 8> 8 8>', { how: 'Toca todas las corcheas y <b>marca más fuerte</b> las del acento (&gt;)' }),
+
+  // ── NIVEL 2 · Corcheas, puntillos, ligaduras y semicorcheas (8 compases, 60 → 90 bpm) — 11-10, progresión de Benedict
+  //    (niveles 2-3: 2/4, negra con puntillo, ligaduras) y principio de la de Leavitt (semicorcheas). Ejercicios propios.
+  n2_01: E('El compás de dos por cuatro', 'Compás de 2 pulsos: negras, corcheas y blancas', [2, 4],
+    'q q | 8 8 q | q 8 8 | h | 8 8 8 8 | q qr | 8 8 q | h', { how: 'Compás de <b>2/4</b>: cuenta 1 2', tempos: T2 }),
+  n2_02: E('Silencio en la parte fuerte', 'El silencio cae en el pulso y la nota en la "y"', [4, 4],
+    '8r 8 8r 8 8r 8 8r 8 | q 8r 8 q 8r 8 | 8r 8 q 8r 8 q | h h | 8 8 8r 8 8 8 8r 8 | q q 8r 8 q | 8r 8 8r 8 h | w', { how: 'Cuenta <b>"1 y"</b> y toca solo en la <b>"y"</b>', tempos: T2 }),
+  n2_03: E('La negra con puntillo', 'Negra con puntillo y corchea: pulso y medio más medio', [4, 4],
+    'qd 8 h | qd 8 q q | q qd 8 q | w | qd 8 qd 8 | h qd 8 | qd 8 q qr | w', { how: '<b>Negra con puntillo</b> = 1 pulso y medio: la corchea cae en la "y"', tempos: T2 }),
+  n2_04: E('La corchea antes del puntillo', 'Corchea y negra con puntillo: el golpe largo empieza en la "y"', [4, 4],
+    '8 qd h | q 8 qd q | 8 qd 8 qd | w | q q 8 qd | 8 qd q q | h 8 qd | w', { how: 'La <b>negra con puntillo</b> arranca en la "y" y dura hasta el pulso siguiente', tempos: T2 }),
+  n2_05: E('La ligadura', 'La nota ligada no se vuelve a tocar: suma su duración', [4, 4],
+    'h~ q q | q q~ q q | q h~ q | w | q~ 8 8 h | h~ h | 8 8 q~ q q | w', { how: '<b>Ligadura</b>: toca la primera y aguanta la segunda sin volver a tocar', tempos: T2 }),
+  n2_06: E('La síncopa con ligadura', 'Corcheas ligadas por encima del pulso', [4, 4],
+    '8 8~ 8 8 q q | q 8 8~ 8 8 q | 8 8~ 8 8~ 8 8 q | w | q 8 8~ 8 8 q | 8 8~ 8 8 h | 8 8~ 8 8~ 8 8~ 8 8 | w', { how: 'La nota de la "y" <b>se alarga</b> por encima del pulso siguiente', tempos: T2 }),
+  n2_07: E('La síncopa corchea-negra-corchea', 'El golpe largo en medio, desplazado del pulso', [4, 4],
+    '8 q 8 q q | q 8 q 8 q | 8 q 8 8 q 8 | w | 8 q 8 h | q q 8 q 8 | 8 q 8 8 q 8 | w', { how: '<b>Corchea - negra - corchea</b>: cuenta "1 y 2 y" sin parar', tempos: T2 }),
+  n2_08: E('Las semicorcheas', 'Cuatro notas en cada pulso: "1 e y a"', [4, 4],
+    '16 16 16 16 q 16 16 16 16 q | q q 16 16 16 16 q | 16 16 16 16 16 16 16 16 h | w | 16 16 16 16 8 8 16 16 16 16 8 8 | q 16 16 16 16 q q | 16 16 16 16 16 16 16 16 16 16 16 16 q | w', { how: '<b>Semicorcheas</b>: cuatro por pulso · cuenta "1 e y a"', tempos: T2 }),
+  n2_09: E('Corchea y dos semicorcheas', 'Galope: largo-corto-corto en cada pulso', [4, 4],
+    '8 16 16 8 16 16 q q | q 8 16 16 q 8 16 16 | 8 16 16 8 16 16 8 16 16 8 16 16 | w | 8 8 8 16 16 q q | 8 16 16 q 8 16 16 q | 8 16 16 8 8 8 16 16 8 8 | w', { how: 'Golpes en <b>"1 · y a"</b>', tempos: T2 }),
+  n2_10: E('Dos semicorcheas y corchea', 'Galope al revés: corto-corto-largo', [4, 4],
+    '16 16 8 16 16 8 q q | q 16 16 8 q 16 16 8 | 16 16 8 16 16 8 16 16 8 16 16 8 | w | 16 16 8 8 16 16 q q | 8 8 16 16 8 16 16 8 q | 16 16 8 16 16 16 16 h | w', { how: 'Golpes en <b>"1 e y"</b>', tempos: T2 }),
+  n2_11: E('Corchea con puntillo y semicorchea', 'El ritmo saltado: largo y muy corto', [4, 4],
+    '8d 16 8d 16 q q | q 8d 16 q 8d 16 | 8d 16 8d 16 8d 16 8d 16 | w | 8 8 8d 16 q 8d 16 | 8d 16 q h | 8d 16 8d 16 8 8 q | w', { how: 'Golpes en <b>"1 · · a"</b>: la semicorchea pegada al pulso siguiente', tempos: T2 }),
+  n2_12: E('Silencio de corchea y dos semicorcheas', 'Entrar en la "y" con dos notas rápidas', [4, 4],
+    '8r 16 16 q 8r 16 16 q | q 8r 16 16 q q | 8r 16 16 8r 16 16 8r 16 16 8r 16 16 | w | 8 8 8r 16 16 h | 8r 16 16 8 8 8r 16 16 q | q q 8r 16 16 q | w', { how: 'Silencio en el pulso y golpes en <b>"y a"</b>', tempos: T2 }),
+  n2_13: E('Mezcla de semicorcheas', 'Todas las figuras de semicorchea seguidas', [4, 4],
+    '16 16 16 16 8 16 16 16 16 8 8d 16 | 8d 16 8 8 16 16 8 q | q 8 16 16 8d 16 q | w | 8 16 16 16 16 8 8d 16 16 16 16 16 | 16 16 16 16 8d 16 h | 8 16 16 8d 16 16 16 8 q | w', { how: 'Mira <b>un pulso por delante</b> de lo que tocas', tempos: T2 }),
+  n2_14: E('Acentos en semicorcheas', 'Semicorcheas seguidas con el acento cambiando de sitio', [4, 4],
+    '16> 16 16 16 16> 16 16 16 16> 16 16 16 16> 16 16 16 | 16 16> 16 16 16 16> 16 16 16 16> 16 16 16 16> 16 16 | 16 16 16> 16 16 16 16> 16 16 16 16> 16 16 16 16> 16 | 16 16 16 16> 16 16 16 16> 16 16 16 16> 16 16 16 16> | 16> 16 16> 16 16> 16 16> 16 16> 16 16> 16 16> 16 16> 16 | 16> 16 16 16> 16 16 16> 16 16> 16 16 16> 16 16 16> 16 | 16> 16 16 16 16 16 16> 16 16 16 16 16 16> 16 16 16 | w', { how: 'Toca todas y <b>marca más fuerte</b> las del acento (&gt;)', tempos: T2 }),
+  n2_15: E('Semicorcheas en tres por cuatro', 'Las figuras nuevas en compás de 3', [3, 4],
+    'q 8 8 q | 16 16 16 16 q q | 8 16 16 8 16 16 q | hd | 8d 16 q 8 8 | 16 16 8 8 16 16 q | q 16 16 16 16 8 8 | hd', { how: 'Compás de <b>3/4</b>: cuenta "1 e y a 2 e y a 3 e y a"', tempos: T2 }),
+  n2_16: E('Repaso del nivel 2', 'Puntillos, ligaduras y semicorcheas juntos', [4, 4],
+    'qd 8 8 16 16 q | 8 q 8 16 16 8 q | 8d 16 8 8~ 8 8 q | w | 16 16 8 8r 16 16 q 8 8 | 8 8~ 8 16 16 8d 16 q | q 8 16 16 16 16 16 16 q | w', { how: 'Lee <b>despacio</b> la primera vez: cuenta siempre en voz alta', tempos: T2 }),
+
+  // ── NIVEL 3 · Síncopas de semicorchea y ritmos de estilo (8 compases, 50 → 80 bpm) — 11-10, progresión de Leavitt
+  //    (sin tresillos ni 6/8: el motor aún cuenta los pulsos en negras). Ejercicios propios.
+  n3_01: E('Síncopas de semicorchea', 'Semicorchea - corchea - semicorchea: el golpe largo en la "e"', [4, 4],
+    '16 8 16 q 16 8 16 q | q 16 8 16 q 16 8 16 | 16 8 16 16 8 16 16 8 16 16 8 16 | w | 8 8 16 8 16 h | 16 8 16 8 16 16 q q | 16 8 16 16 8 16 8 8 q | w', { how: 'Golpes en <b>"1 e · a"</b>', tempos: T3 }),
+  n3_02: E('Silencio de semicorchea', 'Empezar el pulso callado y entrar en la "e"', [4, 4],
+    '16r 16 8 q 16r 16 8 q | q 16r 16 8 q q | 16r 16 8 16r 16 8 16r 16 8 16r 16 8 | w | 16r 16 16 16 q 16r 16 16 16 q | 8 8 16r 16 8 h | 16r 16 16 16 16r 16 16 16 16r 16 8 q | w', { how: 'Silencio en el pulso, golpe en la <b>"e"</b>', tempos: T3 }),
+  n3_03: E('Contratiempo de semicorchea', 'Golpes largos que nacen en la "e"', [4, 4],
+    '16r 8d 16r 8d q q | q 16r 8d q 16r 8d | 16r 8d 16r 8d 16r 8d 16r 8d | w | 8 8 16r 8d h | 16r 8d 8 8 16r 16 8 q | 16r 8d 16r 16 16 16 16r 8d q | w', { how: 'Cuenta <b>"1 e y a"</b> y toca solo en la "e"', tempos: T3 }),
+  n3_04: E('Ligaduras con semicorcheas', 'La última semicorchea del pulso se alarga sobre el siguiente', [4, 4],
+    '8 16 16~ 8 8 q q | q 16 16 16 16~ 8 8 q | 8d 16~ 8 8 q q | w | 16 8 16~ 16 8 16 h | 8 16 16~ 16 16 16 16~ 8 8 q | 8d 16~ 8d 16~ 8 8 q | w', { how: 'La nota en la <b>"a"</b> se aguanta: no vuelvas a tocar en el pulso', tempos: T3 }),
+  n3_05: E('La clave de son', 'El patrón 3-2 de la música cubana, y luego al revés', [4, 4],
+    'qd qd q | qr q h | qd qd q | qr q h | qr q h | qd qd q | qr q h | qd qd q', { how: 'Tres golpes en un compás y dos en el otro: <b>3-2</b> y después <b>2-3</b>', tempos: T3 }),
+  n3_06: E('La clave de bossa nova', 'Como la de son, pero el último golpe se retrasa', [4, 4],
+    'qd qd q | qr qd qd | qd qd q | qr qd qd | 8 8 8 8 8 8 8 8 | qd qd q | qr qd qd | w', { how: 'El segundo compás: golpes en el <b>2</b> y en la <b>"y" del 3</b>', tempos: T3 }),
+  n3_07: E('Semicorcheas de funk', 'Semicorcheas con huecos, como una guitarra rítmica de funk', [4, 4],
+    '16 16r 16 16 16r 16 16 16r 8 16 16 16r 16 8 | 8 16r 16 16r 16 8 q 16 16 16r 16 | 16 16r 16 16 16r 16 16 16r 8 16 16 16r 16 8 | q 16r 16 8 h | 16 16r 16 16 16r 16 16 16r 8 16 16 16r 16 8 | 8 16r 16 16r 16 8 q 16 16 16r 16 | 16 16r 16 16 16r 16 16 16r 8 16 16 16r 16 8 | 16 16 16 16 16r 16 8 h', { how: 'Cuenta <b>todas</b> las semicorcheas, también las que no tocas', tempos: T3 }),
+  n3_08: E('Repaso del nivel 3', 'Síncopas, silencios y ligaduras de semicorchea mezclados', [4, 4],
+    '8d 16 16 8 16 8 8 q | 16r 8d 8 8~ 8 16 16 q | 16 8 16 8d 16 h | w | 8 16 16~ 16 8 16 16r 16 8 q | 16 16 16 16 16 8 16 8d 16 q | 16r 16 8 16 8 16 8 8 q | w', { how: 'Lee <b>un pulso por delante</b> y cuenta en voz alta', tempos: T3 }),
+};

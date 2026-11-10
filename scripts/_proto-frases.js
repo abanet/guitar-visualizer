@@ -26,13 +26,13 @@ const NAMES_STD = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', '
 const PENTA = [9, 0, 2, 4, 7];
 
 // Base: trozos de los renders a tempo fijo (2 compases de cuenta + música), uno por tempo.
-async function buildBacking(dir, tempos, lapBeats, tailBeats, out) {
+async function buildBacking(dir, tempos, lapBeats, tailBeats, out, entrada = 8, entreVueltas = 0) {
   const files = fs.readdirSync(dir), sr = 44100, segs = [];
   const fileFor = bpm => { const f = files.find(x => new RegExp(`_Render_${bpm}\\.(aiff?|wav|m4a)$`, 'i').test(x)); if (!f) throw new Error(`Falta la base de ${bpm} bpm en ${dir}`); return path.join(dir, f); };
   let T = 0;
   const add = (bpm, fromBeat, beats, fade) => { const b = 60 / bpm, n = Math.round((T + beats * b) * sr) - Math.round(T * sr); segs.push({ file: fileFor(bpm), s0: Math.round(fromBeat * b * sr), n, fade }); T += beats * b; };
-  add(tempos[0], 0, 8, 0.008);
-  tempos.forEach((bpm, i) => { const last = i === tempos.length - 1; add(bpm, 8, lapBeats + (last ? tailBeats : 0), last ? tailBeats * 60 / bpm : 0.008); });
+  add(tempos[0], 8 - entrada, entrada, 0.008);   // entrada = pulsos de cuenta (8 de la base, o solo el último compás)
+  tempos.forEach((bpm, i) => { const last = i === tempos.length - 1, pre = i ? entreVueltas : 0; add(bpm, 8, pre + lapBeats + (last ? tailBeats : 0), last ? tailBeats * 60 / bpm : 0.008); });
   const fc = segs.map((g, k) => `[${k}:a]aresample=${sr},atrim=start_sample=${g.s0}:end_sample=${g.s0 + g.n},asetpts=PTS-STARTPTS,afade=t=out:st=${(g.n / sr - g.fade).toFixed(4)}:d=${g.fade.toFixed(4)}[a${k}]`).join(';')
     + ';' + segs.map((_, k) => `[a${k}]`).join('') + `concat=n=${segs.length}:v=0:a=1[a]`;
   await execFileP('ffmpeg', ['-loglevel', 'error', '-y', ...segs.flatMap(g => ['-i', g.file]), '-filter_complex', fc, '-map', '[a]', '-ar', String(sr), '-ac', '2', out]);
@@ -47,7 +47,8 @@ function parseArgs(argv) {
 (async () => {
   const args = parseArgs(process.argv), PHRASES = require(args.datos ? path.resolve(String(args.datos)) : './_proto-frases-data'), P = PHRASES[args.frase];
   if (!P) { console.error(`--frase: ${Object.keys(PHRASES).join(' | ')}`); process.exit(1); }
-  const NAMES = P.flats ? NAMES_FLAT : NAMES_STD, ROOT_PC = P.rootPc === undefined ? 9 : P.rootPc;
+  // P.sostenidos: todo con sostenidos (cromática a octavas, 11-05: la partitura de Alberto va con C# D# F# G# A#).
+  const NAMES = P.flats ? NAMES_FLAT : P.sostenidos ? ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] : NAMES_STD, ROOT_PC = P.rootPc === undefined ? 9 : P.rootPc;
   const tempos = String(args.tempos || '80,90').split(',').map(Number).filter(x => x > 0);
   const backingDir = path.resolve(String(args.backing || '~/guitar-visualizer-assets/FrasesAm/biblioteca').replace(/^~/, os.homedir()));
   const outDir = path.resolve(String(args.out || '~/Downloads/Bendings-prueba/demos').replace(/^~/, os.homedir()));
@@ -73,7 +74,7 @@ function parseArgs(argv) {
   items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => { addNote(o.s, o.f); if (fingerOf[key(o)] === undefined) fingerOf[key(o)] = o.fg; }));
   const N = [...notes.values()];
   const frets = [...N.map(n => n.f), ...items.filter(it => it.bend >= 1).map(it => it.f + it.bend)];
-  const fretMin = Math.max(1, Math.min(...frets) - 1), fretMax = Math.max(...frets) + 1;
+  const fretMin = P.fretMin || Math.max(1, Math.min(...frets) - 1), fretMax = P.fretMax || Math.max(...frets) + 1;
 
   // Bending: sube rápido (0,2 s como mucho, a cualquier tempo) y, si vuelve, baja al final de la nota.
   const ease = x => x * x * (3 - 2 * x), ramp = (x, [a, b2]) => x <= a ? 0 : x >= b2 ? 1 : ease((x - a) / (b2 - a));
@@ -82,15 +83,30 @@ function parseArgs(argv) {
   const bendMark = (it, p) => ({ p, toFret: it.f + it.bend, txt: it.bend === 2 ? '1 tono' : it.bend === 1 ? '½ tono' : '¼ de tono', to: it.bend >= 1 ? NAMES[(OPEN_MIDI[it.s] + it.f + it.bend) % 12] : '', full: it.bend >= 1 });
 
   const steps = [];
-  const pendState = () => { const st = new Map(N.map(n => [key(n), 'ghost'])); items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => st.set(key(o), 'pend'))); return st; };
+  const pendState = () => { const st = new Map(N.map(n => [key(n), 'ghost'])); if (P.proximas) return st; items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => st.set(key(o), 'pend'))); return st; };
   const first = items.find(it => !it.r);
   // Silencios pulso a pulso (el metrónomo visual sigue marcando); lead = avisa de la primera nota de la vuelta.
-  const rest = (beats, b, from, bpm, lap, next, cur) => { if (beats < EPS) return; const n = Math.max(1, Math.round(beats / 0.5)); for (let k = 0; k < n; k++) steps.push({ state: pendState(), dur: b * beats / n, caption: '', metro: { bpm, beat: Math.floor(from + k * beats / n + EPS) % 4, next }, lap, cur, bend: first.bend ? { [key(first)]: bendMark(first, 0) } : {} }); };
+  const rest = (beats, b, from, bpm, lap, next, cur) => { if (beats < EPS) return; const n = Math.max(1, Math.round(beats / 0.5)); for (let k = 0; k < n; k++) steps.push({ beat: cur >= 0 ? from + k * beats / n : undefined, state: pendState(), dur: b * beats / n, caption: '', metro: { bpm, beat: Math.floor(from + k * beats / n + EPS) % 4, next }, lap, cur, bend: first.bend ? { [key(first)]: bendMark(first, 0) } : {} }); };
+  // P.proximas = K (Alberto 11-05, cromática a octavas): solo se destacan las K notas que vienen; las ya tocadas vuelven
+  // a fantasma. Si no, en un ejercicio que recorre todo el mástil acaban todas marcadas y "es un poco lioso".
+  const keysOf = it => [it, ...(it.also || [])].map(key);
+  // P.anticipaPar (11-05, cromática a octavas: "las notas van a pares, solo hay que anticipar la segunda del par de forma
+  // sutil… el brillo solo cuando suena"): mientras suena la 1ª del par, la 2ª deja de ser fantasma (sólida, sin brillo
+  // ni anillo); todo lo demás, fantasma.
+  const notaIdx = []; items.forEach((it, i) => { if (!it.r) notaIdx.push(i); });
+  const parState = i => { const st = new Map(N.map(n => [key(n), 'ghost'])), q = notaIdx.indexOf(i);
+    if (q >= 0 && q % 2 === 0 && notaIdx[q + 1] !== undefined) keysOf(items[notaIdx[q + 1]]).forEach(x => st.set(x, 'active'));
+    return st; };
+  const proxState = i => { if (P.anticipaPar) return parState(i); const st = new Map(N.map(n => [key(n), 'ghost'])); let k = 0;
+    // la siguiente con anillo dorado fuerte ('next') y la de después más tenue ('soon'): se ve ANTES qué toca.
+    for (let j = i + 1; j < items.length && k < P.proximas; j++) if (!items[j].r) { keysOf(items[j]).forEach(x => st.set(x, k === 0 ? 'next' : 'soon')); k++; }
+    return st; };
   const pushLap = (b, bpm, lap, mute) => {
     const st = pendState();
     items.forEach((it, i) => {
-      const metroAt = x => ({ bpm, beat: Math.floor(it.at + x + EPS) % 4 }), caption = mute ? 'TU TURNO' : 'ESCUCHA';
-      if (it.r) { const n = Math.max(1, Math.round(it.d / 0.5)); for (let k = 0; k < n; k++) steps.push({ state: new Map(st), dur: b * it.d / n, caption, metro: metroAt(k * it.d / n), lap, cur: i, bend: {} }); return; }
+      if (P.proximas) { const p0 = proxState(i); st.clear(); p0.forEach((v, k2) => st.set(k2, v)); }
+      const metroAt = x => ({ bpm, beat: Math.floor(it.at + x + EPS) % 4 }), caption = it.cap || (P.seguido ? '' : mute ? 'TU TURNO' : 'ESCUCHA');   // it.cap (11-09): aviso propio de la nota ("DÍA 7" en las 24 digitaciones del Spider)
+      if (it.r) { const n = Math.max(1, Math.round(it.d / 0.5)); for (let k = 0; k < n; k++) steps.push({ beat: it.at + k * it.d / n, state: new Map(st), dur: b * it.d / n, caption, metro: metroAt(k * it.d / n), lap, cur: i, bend: {} }); return; }
       const keys = [it, ...(it.also || [])].map(key), n = Math.max(1, Math.round(it.bend ? it.d * 24 : it.d / 0.5)), slice = it.d / n, bd = it.bend ? bendOf(it, b) : null;
       const f = fq(OPEN_MIDI[it.s] + it.f), fT = f * Math.pow(2, (it.bend || 0) / 12);
       for (let k = 0; k < n; k++) {
@@ -102,18 +118,31 @@ function parseArgs(argv) {
           bend: bd ? [[bd.up[0] * b, f], [bd.up[1] * b, fT], ...(bd.down ? [[bd.down[0] * b, fT], [bd.down[1] * b, f]] : [])] : undefined,
           vib: it.vib ? { from: bd ? bd.up[1] * b + 0.08 : Math.min(0.35, 0.4 * b), rate: 5.5, cents: 22 } : undefined },
           ...(it.also || []).map(o => ({ freq: fq(OPEN_MIDI[o.s] + o.f) }))];
-        steps.push({ state: snap, dur: b * slice, caption, metro: metroAt(k * slice), lap, cur: i, sounds, mx: it.x ? keys : undefined, bend: bd ? { [key(it)]: bendMark(it, prog(bd, (k + 1) * slice)) } : {},
+        // Marcas de la cromática a octavas (11-05): it.crom = nota grave anterior (flecha de medio tono) e it.octDe =
+        // nota grave del par (línea de octava). Solo las llevan los datos que las definen.
+        const marks = it.crom || it.octDe ? { crom: it.crom ? { a: it.crom, b: { s: it.s, f: it.f } } : undefined, oct: it.octDe ? { a: it.octDe, b: { s: it.s, f: it.f } } : undefined } : undefined;
+        steps.push({ beat: it.at + k * slice, pc: it.x ? undefined : (OPEN_MIDI[it.s] + it.f) % 12, marks, state: snap, dur: b * slice, caption, metro: metroAt(k * slice), lap, cur: i, sounds, mx: it.x ? keys : undefined, bend: bd ? { [key(it)]: bendMark(it, prog(bd, (k + 1) * slice)) } : {},
           vibKey: it.vib ? key(it) : undefined, lig: it.lig ? { key: key(it), t: it.lig, from: items[it.prev].f } : undefined, slide: it.slide ? { key: key(it), from: items[it.prev].f } : undefined });
       }
-      keys.forEach(k2 => st.set(k2, 'active'));
+      if (!P.proximas) keys.forEach(k2 => st.set(k2, 'active'));
     });
   };
   const b0 = 60 / tempos[0];
-  rest(8, b0, 0, tempos[0], 0, undefined, -1);                                    // la base trae 2 compases de cuenta
+  // Entrada (11-05): si el primer tempo es 60 o menos, UN compás de cuenta (a 40 bpm dos compases eran 12 s de espera)
+  // y se avisa con una cuenta atrás discreta bajo el metrónomo ("entra en 4… 1"). Si no, los dos compases de siempre.
+  const ENTRADA = tempos[0] <= 60 && P.entradaCorta ? 4 : 8;
+  if (ENTRADA === 4) { for (let k = 0; k < 4; k++) steps.push({ state: pendState(), dur: b0, caption: '', metro: { bpm: tempos[0], beat: k, cuenta: 4 - k }, lap: 0, cur: -1, bend: {} }); }
+  else rest(8, b0, 0, tempos[0], 0, undefined, -1);                                    // la base trae 2 compases de cuenta
+  // P.rotulo (11-09, Spider): una indicación que se lee durante la cuenta de entrada ("corre un traste y repite…").
+  // Sin él, la entrada queda sin rótulo como siempre.
+  if (P.rotulo) steps.forEach(s => { s.rotulo = P.rotulo; });
   tempos.forEach((bpm, li) => {
     const b = 60 / bpm, gap = lapBeats - seqBeats;
-    pushLap(b, bpm, li, false); rest(gap, b, seqBeats, bpm, li, undefined, items.length);
-    pushLap(b, bpm, li, true); rest(gap, b, seqBeats, bpm, li, tempos[li + 1], items.length);
+    // P.seguido: una sola vuelta por tempo y sonando (ejercicio técnico, sin "escucha / tu turno").
+    // P.compasEntreVueltas (11-05): antes de cada subida, un compás sin notas ya al tempo nuevo, con la cuenta atrás.
+    if (li && P.compasEntreVueltas) for (let k = 0; k < 4; k++) steps.push({ state: pendState(), dur: b, caption: '', metro: { bpm, beat: k, cuenta: 4 - k }, lap: li, cur: -1, bend: {} });
+    pushLap(b, bpm, li, false); rest(gap, b, seqBeats, bpm, li, P.seguido ? tempos[li + 1] : undefined, items.length);
+    if (!P.seguido) { pushLap(b, bpm, li, true); rest(gap, b, seqBeats, bpm, li, tempos[li + 1], items.length); }
   });
   steps.push({ state: pendState(), dur: 4 * 60 / tempos[tempos.length - 1], caption: '', cur: -1, bend: {} });   // un compás más, en fundido
   console.log(`${P.name}: ${seqBeats} pulsos de frase + ${lapBeats - seqBeats} de respiro = ${lapBeats / 4} compases por vuelta`);
@@ -124,14 +153,28 @@ function parseArgs(argv) {
   await page.goto('file://' + path.join(__dirname, 'lib', '_proto-frases-frame.html'));
   // P.pagina (pulsos): la tablatura va por páginas y pasa a la de la nota en curso; los silencios del final se
   // quedan en la última página y la cuenta inicial en la primera.
-  const tabOf = cur => { const tab = { beats: lapBeats, items: TAB, cur, rowLabel: P.rowLabel }; if (!P.pagina) return tab;
-    const at = cur < 0 ? 0 : cur < items.length ? items[cur].at : seqBeats - EPS;
-    return { ...tab, beats: P.pagina, from: Math.floor(at / P.pagina + EPS) * P.pagina }; };
+  // pos (11-05, Alberto: "en la notación se tiene que ver cómo corre el tiempo siempre", también en los silencios): pulso
+  // en curso, para la línea de tiempo de la tablatura. Solo con P.cabezal, para no cambiar los vídeos ya hechos.
+  const tabOf = (cur, beat) => { const tab = { beats: lapBeats, items: TAB, cur, rowLabel: P.rowLabel, pos: P.cabezal ? beat : undefined }; if (!P.pagina) return tab;
+    const at = beat !== undefined ? Math.min(beat, lapBeats - EPS) : cur < 0 ? 0 : cur < items.length ? items[cur].at : seqBeats - EPS;
+    const from = Math.floor(at / P.pagina + EPS) * P.pagina;
+    return { ...tab, beats: P.pagina, from, pos: tab.pos === undefined ? undefined : tab.pos - from }; };
   const cache = new Map(); let nPng = 0;
   for (const s of steps) {
-    const data = { title: P.title || 'Vocabulario pentatónico · La menor', subtitle: (args.num ? `Frase ${args.num} · ` : '') + P.name, caption: s.caption, metro: s.metro,
-      ladder: s.lap === undefined ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: tabOf(s.cur),
-      notes: N.map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, iv: fingerOf[key(n)], state: s.state.get(key(n)), bend: s.bend[key(n)], mx: !!(s.mx && s.mx.includes(key(n))), vib: s.vibKey === key(n),
+    // sinSubtitulo (11-05): sin subtítulo, para dar aire arriba.
+    // Tira cromática: el enarmónico de cada sostenido debajo (solo en la tira, no en el mástil; Alberto 11-05).
+    // La tira empieza en la primera nota del ejercicio (E en la abierta, A en la cerrada).
+    const pc0 = (OPEN_MIDI[first.s] + first.f) % 12, CROM_PC = [...Array(12)].map((_, k) => (pc0 + k) % 12), CROM = CROM_PC.map(pc => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][pc]);
+    const tira = P.tiraCromatica ? { top: 132, chico: true, items: CROM.map(l => ({ label: l, sub: { 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb' }[l] || '', nat: !l.includes('#') })), on: s.pc === undefined ? [] : [CROM_PC.indexOf(s.pc)] } : undefined;
+    // Los silencios añadidos (el respiro del final de vuelta) no llevan pos: se mantiene la de la última nota anterior
+    // (11-10: sin esto, items[cur].pos era undefined y el render del recorrido petaba).
+    let posAct;
+    if (P.porPosicion) { for (let i = Math.min(s.cur >= 0 ? s.cur : 0, items.length - 1); i >= 0 && posAct === undefined; i--) posAct = items[i] && items[i].pos; if (posAct === undefined) posAct = (items.find(it => it.pos !== undefined) || {}).pos; }
+    const data = { strip: tira, neckTop: P.tiraCromatica ? 258 : undefined, tabY: P.tiraCromatica ? 648 : undefined, crece: !!P.crece, maxFretW: P.maxFretW, marks: s.marks, title: P.title || 'Vocabulario pentatónico · La menor', subtitle: P.sinSubtitulo ? '' : (args.num ? `Frase ${args.num} · ` : '') + P.name, caption: s.caption, rotulo: s.rotulo, metro: s.metro,
+      ladder: s.lap === undefined ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: tabOf(s.cur, s.beat),
+      // P.porPosicion (11-09, recorrido del Spider): solo se ven las notas de la posición que se toca (it.pos … it.pos+3)
+      // y el dedo sale de esa posición; sin ello, todas las notas con su primer dedo, como siempre.
+      notes: (posAct === undefined ? N : N.filter(n => n.f >= posAct && n.f <= posAct + 3)).map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, nat: !!P.naturales && [0, 2, 4, 5, 7, 9, 11].includes(n.midi % 12), iv: posAct === undefined ? fingerOf[key(n)] : n.f - posAct + 1, state: s.state.get(key(n)), bend: s.bend[key(n)], mx: !!(s.mx && s.mx.includes(key(n))), vib: s.vibKey === key(n),
         lig: s.lig && s.lig.key === key(n) ? s.lig : undefined, slide: s.slide && s.slide.key === key(n) ? s.slide : undefined })) };
     const sig = JSON.stringify(data);
     if (!cache.has(sig)) {
@@ -171,10 +214,10 @@ function parseArgs(argv) {
 
   const list = path.join(tmp, 'list.txt');
   fs.writeFileSync(list, steps.map(s => `file '${s.png}'\nduration ${s.dur.toFixed(4)}`).join('\n') + `\nfile '${steps[steps.length - 1].png}'\n`);
-  const bw = path.join(tmp, 'base.wav'); await buildBacking(backingDir, tempos, lapBeats * 2, 4, bw);
+  const bw = path.join(tmp, 'base.wav'); await buildBacking(backingDir, tempos, P.seguido ? lapBeats : lapBeats * 2, 4, bw, ENTRADA, P.compasEntreVueltas ? 4 : 0);   // seguido: una vuelta por tempo
   const out = path.join(outDir, args.nombre ? `${args.nombre}_${tempos[0]}-${tempos[tempos.length - 1]}bpm.mp4` : `${args.num ? 'Frase' + String(args.num).padStart(2, '0') + '_' : 'Frase_'}${args.frase}_Am_${tempos[0]}-${tempos[tempos.length - 1]}bpm.mp4`);
   await execFileP('nice', ['-n', '19', 'ffmpeg', '-loglevel', 'error', '-y', '-threads', '2', '-f', 'concat', '-safe', '0', '-i', list, '-i', wav, '-i', bw,
-    '-filter_complex', `[1:a]volume=${parseFloat(args['notes-vol'] || 0.65)}[n];[2:a]volume=${parseFloat(args['backing-vol'] || 1.3)}[b];[n][b]amix=inputs=2:normalize=0,alimiter=limit=0.95[a]`, '-map', '0:v', '-map', '[a]',
+    '-filter_complex', `[1:a]volume=${parseFloat(args['notes-vol'] || P.notesVol || 0.65)}[n];[2:a]volume=${parseFloat(args['backing-vol'] || P.backingVol || 1.3)}[b];[n][b]amix=inputs=2:normalize=0,alimiter=limit=0.95[a]`, '-map', '0:v', '-map', '[a]',
     '-vf', 'fps=25,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', out], { maxBuffer: 1 << 24 });
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`✓ ${out} (${total.toFixed(1)} s, ${steps.length} pasos, ${nPng} fotogramas distintos)`);

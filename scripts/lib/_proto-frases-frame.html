@@ -20,6 +20,8 @@
   #title { position: absolute; top: 46px; left: 0; right: 0; text-align: center; font: 700 52px Arial; color: #8ab4ff; text-shadow: 0 0 18px rgba(120,160,255,.45); }
   #subtitle { position: absolute; top: 112px; left: 0; right: 0; text-align: center; font: 700 22px Arial; color: rgba(255,255,255,.6); letter-spacing: .04em; }
   #caption { position: absolute; top: 52px; left: 60px; font: 700 30px Arial; color: #111; background: #e2b34f; border-radius: 10px; padding: 8px 18px; letter-spacing: 1px; } #caption:empty { display: none; }
+  /* Rótulo (11-09, Spider): indicación centrada sobre el mástil durante la cuenta de entrada; sin él, no se ve. */
+  #rotulo { position: absolute; top: 330px; left: 50%; transform: translateX(-50%); white-space: nowrap; font: 700 36px Arial; color: #111; background: #e2b34f; border-radius: 12px; padding: 12px 26px; box-shadow: 0 6px 24px rgba(0,0,0,.6); z-index: 5; } #rotulo:empty { display: none; }
   #big { position: absolute; top: 150px; left: 0; right: 0; text-align: center; font: 700 64px Arial; color: #8ab4ff; text-shadow: 0 0 20px rgba(120,160,255,.5); }
   #metro { position: absolute; right: 44px; top: 34px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
   #metro .bpm { font: 700 46px Arial; color: #e2b34f; line-height: 46px; }
@@ -33,6 +35,8 @@
   #strip .it { min-width: 84px; height: 58px; padding: 0 10px; border-radius: 10px; border: 2px solid rgba(255,255,255,.28); background: rgba(255,255,255,.06); display: flex; flex-direction: column; justify-content: center; align-items: center; }
   #strip .it b { font: 700 24px Arial; color: rgba(255,255,255,.72); line-height: 26px; }
   #strip .it small { font: 700 13px Arial; color: rgba(255,255,255,.42); line-height: 15px; }
+  #strip.chico { gap: 8px; } #strip.chico .it { min-width: 56px; height: 54px; padding: 0 6px; } #strip.chico .it small { font-size: 14px; line-height: 15px; color: rgba(255,255,255,.55); } #strip.chico .it.nat b { line-height: 30px; }
+  #strip.chico .it.nat b { color: rgba(255,255,255,.95); } #strip.chico .it.nat { border-color: rgba(120,220,235,.6); }
   #strip .it.on { background: #e2b34f; border-color: #fff; box-shadow: 0 0 18px rgba(226,179,79,.7); }
   #strip .it.on b { color: #111; } #strip .it.on small { color: rgba(0,0,0,.6); }
   #strip .it.on.may { background: #ffa726; box-shadow: 0 0 18px rgba(255,167,38,.75); }
@@ -48,7 +52,7 @@
   svg { position: absolute; left: 0; top: 0; }
 </style></head>
 <body>
-<div id="title"></div><div id="subtitle"></div><div id="caption"></div><div id="strip"></div><div id="big"></div>
+<div id="title"></div><div id="subtitle"></div><div id="caption"></div><div id="rotulo"></div><div id="strip"></div><div id="big"></div>
 <svg id="neck" width="1600" height="900"></svg>
 <div id="metro"></div><div id="ladder"></div>
 <div id="brand">@banetmasa</div>
@@ -59,19 +63,28 @@ function render(D) {
 document.getElementById('title').textContent = D.title;
 document.getElementById('subtitle').textContent = D.subtitle;
 document.getElementById('caption').textContent = D.caption || '';
+document.getElementById('rotulo').textContent = D.rotulo || '';
 document.getElementById('big').textContent = D.big || '';
 document.getElementById('metro').innerHTML = !D.metro ? '' : `<span class="bpm">${D.metro.bpm}<small>bpm</small></span><span class="dots">`
   + [0, 1, 2, 3].map(i => `<span class="dot${i === D.metro.beat ? ' on' + (i === 0 ? ' one' : '') : ''}"></span>`).join('') + '</span>'
-  + (D.metro.next ? `<span class="next">siguiente vuelta: ${D.metro.next} bpm</span>` : '');
+  + (D.metro.next ? `<span class="next">siguiente vuelta: ${D.metro.next} bpm</span>` : '')
+  // metro.cuenta (11-05): cuenta atrás discreta bajo el metrónomo en el compás de entrada ("entra en 3"…).
+  + (D.metro.cuenta ? `<span class="next">entra en ${D.metro.cuenta}</span>` : '');
 const L = D.ladder;
 document.getElementById('ladder').innerHTML = !L ? '' : '<span class="lbl">bpm</span>' + L.tempos.map((t, i) => `<span class="t${i < L.cur ? ' done' : i === L.cur ? ' cur' : ''}">${t}</span>`).join('');
 const S = D.strip;
-document.getElementById('strip').innerHTML = !S ? '' : S.items.map((it, i) => `<span class="it${S.on.includes(i) ? ' on' + (S.q ? ' ' + S.q : '') : ''}"><b>${it.label}</b><small>${it.sub}</small></span>`).join('')
+// S.top / S.chico (cromática a octavas, 11-05): la tira de la escala cromática, más arriba y con casillas más pequeñas.
+const stripEl = document.getElementById('strip'); stripEl.style.top = S && S.top ? S.top + 'px' : ''; stripEl.className = S && S.chico ? 'chico' : '';
+document.getElementById('strip').innerHTML = !S ? '' : S.items.map((it, i) => `<span class="it${it.nat ? ' nat' : ''}${S.on.includes(i) ? ' on' + (S.q ? ' ' + S.q : '') : ''}"><b>${it.label}</b><small>${it.sub}</small></span>`).join('')
   + (S.pill ? `<span class="q ${S.q || ''}">${S.q ? (S.iv || '3ª') + ' ' + (S.q === 'may' ? 'mayor' : 'menor') : ''}</span>` : '');
 // Placa pequeña con el intervalo (como appendIntervalBadge del reproductor / el dedo de los Drop2): círculo arriba a la derecha.
 const badge = (x, y, iv, dim) => iv ? `<circle cx="${x + 22}" cy="${y - 22}" r="13" fill="rgba(20,20,20,.75)" stroke="rgba(255,255,255,.4)" stroke-width="1" opacity="${dim ? .55 : 1}"/><text x="${x + 22}" y="${y - 22 + 5}" text-anchor="middle" font-size="${iv.length > 1 ? 12 : 15}" font-weight="700" fill="#ffd640" opacity="${dim ? .55 : 1}" font-family="Helvetica,Arial,sans-serif">${iv}</text>` : '';
-const LEFT = 150, RIGHT = 1450, TOP = 212, STR_GAP = 58;
+let LEFT = 150, RIGHT = 1450;
+const TOP = D.neckTop || 212, STR_GAP = D.strGap || 58;   // strGap: cuerdas algo más juntas para dejar aire hasta la tablatura   // neckTop: se baja el mástil cuando hay tira cromática arriba
 const lo = D.fretMin, hi = D.fretMax, n = hi - lo + 1;
+// D.maxFretW (cromática a octavas, 11-05): con pocos trastes la casilla salía larguísima ("la proporción del mástil la
+// veo rara"); se limita su ancho y el mástil se centra.
+if (D.maxFretW && (RIGHT - LEFT) / n > D.maxFretW) { const w = n * D.maxFretW; LEFT = 800 - w / 2 + 30; RIGHT = LEFT + w; }
 const fretW = (RIGHT - LEFT) / n;
 const xOf = f => f === 0 ? LEFT - 30 : LEFT + (f - lo + 0.5) * fretW;   // lo..hi = casillas visibles
 const yOf = s => TOP + (5 - s) * STR_GAP;                                 // s: 0 = 6ª (abajo) … 5 = 1ª (arriba)
@@ -88,18 +101,22 @@ const R = 26;
 if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarillo, lo tocado en blanco, lo pendiente en gris
   // Paginado (vídeos del Spider, 2026-10-25): una vuelta de 48 notas no cabe legible en una línea, así que con
   // tab.from se dibuja solo la página [from, from + beats) y el resto de la vuelta se salta; sin from, como antes.
-  const P0 = D.tab.from, T = P0 === undefined ? D.tab : { ...D.tab, items: D.tab.items.map(it => ({ ...it, at: it.at - P0 })) }, vis = it => P0 === undefined || (it.at > -1e-6 && it.at < T.beats - 1e-6), X0 = 250, X1 = 1490, Y0 = 628, G = 20, RY = Y0 + 5 * G + 12, RB = RY + 26, FY = RB + 32, EPS = 1e-6;
+  const P0 = D.tab.from, T = P0 === undefined ? D.tab : { ...D.tab, items: D.tab.items.map(it => ({ ...it, at: it.at - P0 })) }, vis = it => P0 === undefined || (it.at > -1e-6 && it.at < T.beats - 1e-6), X0 = 250, X1 = 1490, Y0 = D.tabY || 628, G = 20, RY = Y0 + 5 * G + 12, RB = RY + 26, FY = RB + 32, EPS = 1e-6;
   const tx = at => X0 + at / T.beats * (X1 - X0), ly = st => Y0 + (5 - st) * G, OFF = Math.min(30, (X1 - X0) / T.beats * 0.3);
   const is = (d, v) => Math.abs(d - v) < 0.02, grey = 'rgba(255,255,255,.5)', colOf = i => i === T.cur ? '#ffd640' : T.cur >= 0 && i < T.cur ? '#fff' : grey;
   for (let i = 0; i < 6; i++) h += `<line x1="${X0 - OFF}" y1="${Y0 + i * G}" x2="${X1 - OFF}" y2="${Y0 + i * G}" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>`;
   for (let b = 0; b <= T.beats; b += 4) h += `<line x1="${tx(b) - OFF}" y1="${Y0}" x2="${tx(b) - OFF}" y2="${Y0 + 5 * G}" stroke="rgba(255,255,255,.45)" stroke-width="2"/>`;
   h += `<text x="${X0 - OFF - 16}" y="${Y0 + 2.5 * G + 8}" text-anchor="end" font-size="22" font-weight="700" fill="rgba(255,255,255,.5)">TAB</text><text x="${X0 - OFF - 16}" y="${FY}" text-anchor="end" font-size="16" font-weight="700" fill="rgba(255,255,255,.4)">${T.rowLabel || 'dedo'}</text>`;
+  // Cabezal: línea de tiempo que avanza siempre, también en los silencios (T.pos = pulso dentro de la página).
+  // 11-05: la raya "no queda muy elegante" → un punto pequeño bajo las figuras, que avanza de corchea en corchea.
+  if (T.pos !== undefined && T.pos >= -1e-6 && T.pos < T.beats) { const xp = tx(T.pos);
+    h += `<circle cx="${xp}" cy="${RB + 16}" r="5" fill="#ffd640"/>`; }
   const wave = (x, y, n, c, w) => `<path d="M ${x} ${y} ${Array(n).fill('q 6 -9 12 0 q 6 9 12 0').join(' ')}" fill="none" stroke="${c}" stroke-width="${w}"/>`;
   T.items.forEach((it, i) => {
     if (!vis(it)) return;
     const x = tx(it.at), col = colOf(i), m = (RY + RB) / 2;
     if (it.r) {   // silencios: blanca, negra (con o sin puntillo) o corchea
-      const rc = 'rgba(255,255,255,.6)';
+      const rc = i === T.cur && T.pos !== undefined ? '#ffd640' : 'rgba(255,255,255,.6)';   // con cabezal, el silencio en curso en amarillo
       if (it.d >= 2 - EPS) h += `<line x1="${x - 13}" y1="${m + 4}" x2="${x + 13}" y2="${m + 4}" stroke="${rc}" stroke-width="2"/><rect x="${x - 8}" y="${m - 4}" width="16" height="8" fill="${rc}"/>`;
       else if (it.d >= 1 - EPS) h += `<path d="M ${x - 4} ${RY} l 8 9 l -8 7 l 8 9 q -10 -4 -5 6" fill="none" stroke="${rc}" stroke-width="3" stroke-linejoin="round"/>` + (is(it.d, 1.5) ? `<circle cx="${x + 12}" cy="${m}" r="3" fill="${rc}"/>` : '');
       else h += `<circle cx="${x - 4}" cy="${m - 4}" r="3.5" fill="${rc}"/><path d="M ${x - 4} ${m - 2} q 6 2 9 -4 l -7 20" fill="none" stroke="${rc}" stroke-width="2.5"/>`;
@@ -140,11 +157,27 @@ if (D.tab) {   // tablatura de la frase con figuras: la nota en curso en amarill
 }
 (D.slides || []).forEach(s => { h += `<line x1="${xOf(s.a)}" y1="${yOf(s.string)}" x2="${xOf(s.b)}" y2="${yOf(s.string)}" stroke="rgba(226,179,79,.75)" stroke-width="12" stroke-linecap="round"/>`; });
 const ringOf = (nt, x, y) => nt.ring ? `<circle cx="${x}" cy="${y}" r="${R}" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="6 4"/>` : '';   // pista discreta: el borde discontinuo del fantasma, en blanco
+// Marcas de la cromática a octavas, debajo de las notas: línea de octava (blanca) y flecha de medio tono (dorada) desde
+// la nota grave anterior, con "½".
+if (D.marks) {
+  const M = D.marks;
+  if (M.oct) { const x1 = xOf(M.oct.a.f), y1 = yOf(M.oct.a.s), x2 = xOf(M.oct.b.f), y2 = yOf(M.oct.b.s), mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    h += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(255,255,255,.7)" stroke-width="6" stroke-linecap="round"/>`
+      + `<rect x="${mx + 14}" y="${my - 16}" width="46" height="30" rx="8" fill="#0d0d0d" stroke="rgba(255,255,255,.7)" stroke-width="2"/><text x="${mx + 37}" y="${my + 6}" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">8ª</text>`; }
+  if (M.crom) { const x1 = xOf(M.crom.a.f), y1 = yOf(M.crom.a.s), x2 = xOf(M.crom.b.f), y2 = yOf(M.crom.b.s);
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, sx = x1 + ux * (R + 6), sy = y1 + uy * (R + 6), ex = x2 - ux * (R + 16), ey = y2 - uy * (R + 16);
+    const cx = (sx + ex) / 2 - uy * 34, cy = (sy + ey) / 2 + ux * 34 - (Math.abs(dy) < 1 ? 30 : 0);
+    h += `<path d="M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}" fill="none" stroke="#ffd640" stroke-width="5" stroke-linecap="round"/>`;
+    const ang = Math.atan2(ey - cy, ex - cx), ah = 15;
+    h += `<polygon points="${ex + Math.cos(ang) * 6},${ey + Math.sin(ang) * 6} ${ex - Math.cos(ang - .5) * ah},${ey - Math.sin(ang - .5) * ah} ${ex - Math.cos(ang + .5) * ah},${ey - Math.sin(ang + .5) * ah}" fill="#ffd640"/>`;
+    h += `<text x="${cx}" y="${cy - 6}" text-anchor="middle" font-size="22" font-weight="700" fill="#ffd640">½</text>`; }
+}
 D.notes.forEach(nt => {
   if (nt.state === 'hidden') return;
   const x = xOf(nt.fret), y0 = yOf(nt.string), B = nt.bend, y = y0 - (B ? B.p * (B.full ? 44 : 16) : 0);
   if (nt.state === 'ghost' || nt.state === 'next' || nt.state === 'soon') {
-    h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="${nt.isRoot ? 'rgba(229,57,53,.3)' : 'rgba(255,255,255,.1)'}" stroke="${nt.isRoot ? 'rgba(255,120,110,.8)' : 'rgba(255,255,255,.5)'}" stroke-width="2" stroke-dasharray="6 4"/>`;
+    // nt.nat (cromática a octavas, 11-05): las notas de la escala de C, en el MISMO color con algo más de intensidad (el verde no le gustó).
+    h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="${nt.isRoot ? 'rgba(229,57,53,.3)' : nt.nat ? 'rgba(38,198,218,.28)' : 'rgba(255,255,255,.1)'}" stroke="${nt.isRoot ? 'rgba(255,120,110,.8)' : nt.nat ? 'rgba(120,220,235,.9)' : 'rgba(255,255,255,.5)'}" stroke-width="2" stroke-dasharray="6 4"/>`;
     h += `<text x="${x}" y="${y + 8}" text-anchor="middle" font-size="22" font-weight="700" fill="rgba(255,255,255,${nt.ring ? 1 : .6})">${nt.label}</text>`;
     if (nt.state !== 'ghost') h += `<circle cx="${x}" cy="${y}" r="${R + 6}" fill="none" stroke="#e2b34f" stroke-width="${nt.state === 'next' ? 4 : 2.5}" opacity="${nt.state === 'next' ? .95 : .5}"/>`;
     h += ringOf(nt, x, y);
@@ -164,10 +197,13 @@ D.notes.forEach(nt => {
       h += `<circle cx="${cx}" cy="${y0}" r="${R + (on ? 12 : 0)}" fill="rgba(255,138,48,${on ? .28 : 0})"/><circle cx="${cx}" cy="${y0}" r="${R}" fill="rgba(255,138,48,${(.45 + .5 * B.p).toFixed(2)})" stroke="#fff" stroke-width="${on ? 3 : 1.5}"/>`;
       if (on) h += `<text x="${cx}" y="${y0 + 8}" text-anchor="middle" font-size="24" font-weight="700" fill="#111">${B.to}</text>`; }
   }
-  const fill = nt.isRoot ? `rgba(229,57,53,${flash ? .95 : pend ? .12 : .45})` : `rgba(38,198,218,${flash ? .95 : pend ? .12 : .5})`;
-  if (flash) h += `<circle cx="${x}" cy="${y}" r="${R + 14}" fill="${nt.isRoot ? 'rgba(229,57,53,.25)' : 'rgba(38,198,218,.25)'}"/>`;
-  h += `<circle cx="${x}" cy="${y}" r="${R}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${R}" fill="${fill}" stroke="${flash ? '#fff' : 'rgba(255,255,255,.25)'}" stroke-width="${flash ? 3 : 1.2}"/>`;
-  h += `<text x="${x}" y="${y + 8}" text-anchor="middle" font-size="24" font-weight="700" font-family="Helvetica,Arial,sans-serif" fill="${pend ? 'rgba(255,255,255,.6)' : '#fff'}">${nt.label}</text>`;
+  const rgb = '38,198,218';
+  const fill = nt.isRoot ? `rgba(229,57,53,${flash ? .95 : pend ? .12 : .45})` : `rgba(${rgb},${flash ? .95 : pend ? (nt.nat ? .3 : .12) : nt.nat ? .65 : .5})`;
+  // D.crece (cromática a octavas, 11-05): la nota que suena crece, para que se vea bien cuál es.
+  const r = flash && D.crece ? R * 1.38 : R;
+  if (flash) h += `<circle cx="${x}" cy="${y}" r="${r + 14}" fill="${nt.isRoot ? 'rgba(229,57,53,.25)' : `rgba(${rgb},.25)`}"/>`;
+  h += `<circle cx="${x}" cy="${y}" r="${r}" fill="#0d0d0d"/><circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${flash ? '#fff' : 'rgba(255,255,255,.25)'}" stroke-width="${flash ? 3 : 1.2}"/>`;
+  h += `<text x="${x}" y="${y + (r > R ? 11 : 8)}" text-anchor="middle" font-size="${r > R ? 32 : 24}" font-weight="700" font-family="Helvetica,Arial,sans-serif" fill="${pend ? 'rgba(255,255,255,.6)' : '#fff'}">${nt.label}</text>`;
   if (nt.mx) h += `<path d="M ${x - 13} ${y - 13} L ${x + 13} ${y + 13} M ${x + 13} ${y - 13} L ${x - 13} ${y + 13}" stroke="#ffd640" stroke-width="5" stroke-linecap="round"/>`;   // golpe apagado
   if (nt.lig) { const xa = xOf(nt.lig.from), my = y + R + 6; h += `<path d="M ${xa} ${my} Q ${(xa + x) / 2} ${my + 26} ${x} ${my}" fill="none" stroke="#ffd640" stroke-width="4"/><text x="${(xa + x) / 2}" y="${my + 8}" text-anchor="middle" font-size="18" font-weight="700" fill="#ffd640">${nt.lig.t === 'P' ? 'pull-off' : 'hammer-on'}</text>`; }   // ligado
   if (nt.vib) h += `<path d="M ${x + R + 12} ${y} q 6 -9 12 0 q 6 9 12 0 q 6 -9 12 0 q 6 9 12 0 q 6 -9 12 0 q 6 9 12 0" fill="none" stroke="#ffd640" stroke-width="4"/>`;   // vibrato

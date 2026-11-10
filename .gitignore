@@ -19,3 +19,7 @@ scripts/.check-slots-*
 
 # Tokens de Meta (Instagram, página de Facebook, Threads) y la clave secreta de la app
 scripts/.meta-*
+
+# Estado de scripts de feed y traducciones (se regeneran; no van al repo)
+scripts/.feed-diario.json
+scripts/.localize-*

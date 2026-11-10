@@ -3924,7 +3924,7 @@ async function applySession(s){
       }
       spRestore(s);
       bgAuto=(s.bgAuto&&typeof s.bgAuto==='object')
-        ?{mode:['off','figure','scale'].includes(s.bgAuto.mode)?s.bgAuto.mode:'off',
+        ?{mode:['off','figure','scale','triadFull'].includes(s.bgAuto.mode)?s.bgAuto.mode:'off',   // triadFull (11-06): arpegios sueltos, fantasma de todo el arpegio salvo las celdas activas
           root:SP_ROOTS.includes(s.bgAuto.root)?s.bgAuto.root:'C',
           scale:SEQ_SCALE_FORMULAS[s.bgAuto.scale]?s.bgAuto.scale:'major'}
         :{mode:'off',root:'C',scale:'major'};
@@ -3954,7 +3954,7 @@ function loadSession(input){
 
 // ── AUTOSAVE ─────────────────────────────────────────────────────────────────
 const AUTOSAVE_KEY='gv_autosave';
-const APP_VERSION='4.6.11';
+const APP_VERSION='4.6.12';
 console.log('%cGuitar Visualizer v'+APP_VERSION,'font-weight:bold');
 try{const _vb=document.getElementById('appVersionBadge');if(_vb)_vb.textContent='v'+APP_VERSION;}catch(e){}
 let _autosaveLast='';

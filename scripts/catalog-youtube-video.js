@@ -21,6 +21,10 @@
  *   --category <id>                  ID de categoría de YouTube (por defecto 10 = Music)
  *   --language <código>              Idioma del vídeo y del audio (p.ej. es). Sin esto, videos.update
  *                                    borra el idioma que ya tuviera el vídeo (el snippet se reemplaza entero)
+ *   --title-en <texto>               Título en inglés (traducción). Va en la MISMA llamada videos.update
+ *                                    (parte 'localizations'), así que no gasta cuota extra
+ *   --description-en-file <path> / --description-en <texto>
+ *                                    Descripción en inglés; solo se usa junto con --title-en
  *   --privacy <valor>                private | unlisted | public (por defecto: public, o private
  *                                    si se pasa --publish-at, que lo exige la API)
  *   --publish-at <fecha>             Fecha/hora ISO 8601 futura para programar la publicación
@@ -107,6 +111,18 @@ async function main() {
   let playlistDescription = args['playlist-description'] || '';
   if (args['playlist-description-file']) playlistDescription = fs.readFileSync(path.resolve(args['playlist-description-file']), 'utf8');
 
+  // Traducción al inglés (estrategia del canal, 2026-11-03: los vídeos nuevos salen con título y
+  // descripción también en inglés; quien tenga YouTube en inglés los ve traducidos). YouTube exige
+  // snippet.defaultLanguage para aceptar 'localizations', así que si no viene --language se fija 'es'.
+  // Sin --title-en la llamada queda exactamente igual que antes.
+  let localizations;
+  if (args['title-en']) {
+    let descriptionEn = args['description-en'] || '';
+    if (args['description-en-file']) descriptionEn = fs.readFileSync(path.resolve(args['description-en-file']), 'utf8');
+    localizations = { en: { title: args['title-en'], description: descriptionEn } };
+    if (!args.language) args.language = 'es';
+  }
+
   const tags = args.tags ? String(args.tags).split(',').map((t) => t.trim()).filter(Boolean) : [];
   const categoryId = args.category || '10';
 
@@ -140,8 +156,9 @@ async function main() {
     // vídeo del canal la tiene) para no depender de marcarla a mano por vídeo (pedido de
     // Alberto tras notar que catalog-youtube-video.js, a diferencia de upload-youtube.js, no la
     // tocaba y tuvo que marcarla manualmente en Studio la primera vez).
-    part: ['snippet', 'status', 'paidProductPlacementDetails'],
+    part: ['snippet', 'status', 'paidProductPlacementDetails', ...(localizations ? ['localizations'] : [])],
     requestBody: {
+      ...(localizations ? { localizations } : {}),
       id: args['video-id'],
       snippet: {
         title: args.title, description, tags, categoryId,
@@ -156,7 +173,7 @@ async function main() {
       paidProductPlacementDetails: { hasPaidProductPlacement: false },
     },
   });
-  console.log('✓ Metadata actualizada.');
+  console.log('✓ Metadata actualizada.' + (localizations ? ` (+ inglés: "${localizations.en.title}")` : ''));
   if (publishAt) console.log(`  Programado para publicarse: ${publishAt}`);
 
   if (args.thumbnail) {

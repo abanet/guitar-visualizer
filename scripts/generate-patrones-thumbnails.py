@@ -38,7 +38,7 @@ _spec.loader.exec_module(_bpm)
 EJERCICIOS = {
     'EscalasPorTerceras': 'TERCERAS', 'EscalasPorTriadas': 'TRIADAS', 'EscalasPorSeptimas': 'ARPEGIOS DE 7ª',
     'EscalasPorGruposDe3': 'GRUPOS DE 3', 'EscalasPorGruposDe4': 'GRUPOS DE 4', 'EscalasPorTercerasAlternas': 'TERCERAS ALTERNAS',
-    'EscalasPorSextas': 'SEXTAS', 'EscalasPorTriadasZigzag': 'TRIADAS EN ZIGZAG',
+    'EscalasPorSextas': 'SEXTAS', 'EscalasPorTriadasZigzag': 'TRIADAS EN ZIGZAG', 'EscalasPorGruposDe3Semicorcheas': 'GRUPOS DE 3 RÁPIDOS',
 }
 VIDEO_RE = re.compile(r'^(?P<ej>EscalasPor[A-Za-z0-9]+)_(?P<key>[A-G][sb]?)_Forma(?P<forma>[CAGED])(?P<cerrada>_Cerrada)?_\d+-\d+bpm\.mp4$')
 # Medidas geométricas sobre la plantilla (1672x941): pincelada amarilla x 951-1651, y 68-231 (interior
@@ -50,16 +50,28 @@ BOX_TONO = (1250, 342, 1590, 452)
 DEFAULT_TEMPLATE = '~/guitar-visualizer-assets/miniaturas-patrones-prototipo/plantilla_PatronesMelodicos.png'
 
 # Patrones de pentatónica: carpeta del ejercicio → rótulo; escala → (carpeta raíz, rótulo de abajo, color en los vídeos).
-PENTA_EJERCICIOS = {'GruposDe3': 'GRUPOS DE 3', 'GruposDe4': 'GRUPOS DE 4', 'SaltandoUnaNota': 'SALTANDO UNA NOTA'}
+# 11-05: patrones nuevos del manual con la MISMA plantilla genérica (se diseñó para servir a muchas escalas y ejercicios):
+# grupos de 5, grupos de 3 en semicorcheas, repetición de nota, bordadura y la blue note de paso de las escalas de blues.
+PENTA_EJERCICIOS = {'GruposDe3': 'GRUPOS DE 3', 'GruposDe4': 'GRUPOS DE 4', 'SaltandoUnaNota': 'SALTANDO UNA NOTA',
+                    'GruposDe5': 'GRUPOS DE 5', 'GruposDe3Semicorcheas': 'GRUPOS DE 3 RÁPIDOS', 'RepeticionDeNota': 'REPETICIÓN DE NOTA',
+                    'Bordadura': 'BORDADURA', 'BlueNoteDePaso': 'BLUE NOTE DE PASO'}
 PENTA_ESCALAS = {
     'PentatonicaMenor': ('PentatonicaMenorPatrones', 'PENTATÓNICA MENOR', (255, 154, 31), 'MENOR'),
     'PentatonicaMayor': ('PentatonicaMayorPatrones', 'PENTATÓNICA MAYOR', (46, 200, 255), 'MAYOR'),
+    # Violeta de la blue note en los vídeos (#c77dff).
+    'EscalaBlues': ('EscalaBluesPatrones', 'BLUES MENOR', (199, 125, 255), 'MENOR'),
+    'EscalaBluesMayor': ('EscalaBluesMayorPatrones', 'BLUES MAYOR', (199, 125, 255), 'MAYOR'),
 }
-PENTA_RE = re.compile(r'^(?P<esc>Pentatonica(?:Menor|Mayor))_(?P<ej>[A-Za-z0-9]+)_(?P<key>[A-G][sb]?)_Forma(?P<forma>[CAGED])(?P<cerrada>_Cerrada)?_\d+-\d+bpm\.mp4$')
+PENTA_RE = re.compile(r'^(?P<esc>Pentatonica(?:Menor|Mayor)|EscalaBlues(?:Mayor)?)_(?P<ej>[A-Za-z0-9]+)_(?P<key>[A-G][sb]?)_Forma(?P<forma>[CAGED])(?P<cerrada>_Cerrada)?_\d+-\d+bpm\.mp4$')
 OUT_MAYOR = '~/guitar-visualizer-assets/miniaturas-patrones'
 PENTA_TEMPLATE = '~/guitar-visualizer-assets/miniaturas-patrones-prototipo/plantilla_PatronesMelodicos_sin_lema.png'
 # Entre las dos rayas amarillas (x 245-472 y 1198-1440, y 785): la escala centrada en la raya y el lema debajo.
 CX_ABAJO, CY_ESCALA, CY_LEMA, ANCHO_ESCALA = 835, 786, 845, 680
+# 11-05: las escalas de blues van con su propia plantilla de ChatGPT ("BLUES / PATRONES", ambiente violeta; Alberto vio
+# que con la genérica todo se parecía demasiado). Misma estructura; la pincelada y el hueco de abajo se mueven un poco.
+BLUES_TEMPLATE = '~/guitar-visualizer-assets/miniaturas-patrones-blues/plantilla_PatronesBlues_v1.png'
+BLUES_BOX_EJ = (1010, 98, 1590, 198)
+BLUES_CX_ABAJO = 855
 LEMA_FONT = ('/System/Library/Fonts/Avenir Next.ttc', 5)  # Medium: la más parecida a la del lema original
 
 
@@ -84,10 +96,12 @@ def pentatonica(args):
     out_dir = Path(args.out if args.out != OUT_MAYOR else '~/guitar-visualizer-assets/miniaturas-patrones-pentatonica').expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
     tpl = Image.open(Path(args.template if args.template != DEFAULT_TEMPLATE else PENTA_TEMPLATE).expanduser()).convert('RGB')
+    tpl_blues = Image.open(Path(BLUES_TEMPLATE).expanduser()).convert('RGB').resize(tpl.size)
 
     f_placa = _bpm.tamano_que_cabe('Forma C cerrada', BOX_PLACA, font_path, 80, 0)
     f_tono = _bpm.tamano_que_cabe('Db MAYOR', BOX_TONO, font_path, 160, 0)
     fuentes = {ej: _bpm.tamano_que_cabe(txt, BOX_EJ, font_path, 104, 0) for ej, txt in PENTA_EJERCICIOS.items()}
+    fuentes_blues = {ej: _bpm.tamano_que_cabe(txt, BLUES_BOX_EJ, font_path, 104, 0) for ej, txt in PENTA_EJERCICIOS.items()}
     # Un tamaño común para las dos escalas (el de la que menos quepa), letras separadas un 22 % del tamaño.
     tam = 62
     while max(espaciado(None, t, ImageFont.truetype(font_path, tam), 0, 0, tam * 0.22, None)
@@ -110,12 +124,21 @@ def pentatonica(args):
                     print(f'  aviso: nombre no reconocido, se omite: {f.name}', file=sys.stderr)
                     continue
                 tono = m['key'].replace('s', '#') if m['key'].endswith('s') else m['key']
-                img = tpl.copy()
-                _bpm.estampar(img, txt, BOX_EJ, fuentes[ej], (8, 8, 8), 0, (0, 0, 0))
+                blues = esc.startswith('EscalaBlues')
+                img = (tpl_blues if blues else tpl).copy()
+                cx = BLUES_CX_ABAJO if blues else CX_ABAJO
+                _bpm.estampar(img, txt, BLUES_BOX_EJ if blues else BOX_EJ, (fuentes_blues if blues else fuentes)[ej], (8, 8, 8), 0, (0, 0, 0))
                 _bpm.estampar(img, f"Forma {m['forma']}{' cerrada' if m['cerrada'] else ''}", BOX_PLACA, f_placa, (255, 255, 255), 0, (0, 0, 0))
                 _bpm.estampar(img, f'{tono} {modo}', BOX_TONO, f_tono, (255, 255, 255), 0, (0, 0, 0))
-                espaciado(img, rotulo, f_escala, CX_ABAJO, CY_ESCALA, tam * 0.22, color, ref='PENT')
-                espaciado(img, 'DE LENTO A RÁPIDO', f_lema, CX_ABAJO, CY_LEMA, 28 * 0.45, (235, 235, 235))
+                if blues:
+                    # 11-05 (aprobado por Alberto): en blues "BLUES MENOR" repetía lo que ya dicen el título y "A MENOR"; abajo va el
+                    # rango de tempo (el gancho de la serie), más grande.
+                    bpm = re.search(r'_(\d+)-(\d+)bpm', f.name)
+                    f_bpm = ImageFont.truetype(font_path, 84)
+                    espaciado(img, f'{bpm[1]}-{bpm[2]} BPM', f_bpm, cx, CY_ESCALA - 8, 84 * 0.12, color, ref='BPM')
+                else:
+                    espaciado(img, rotulo, f_escala, cx, CY_ESCALA, tam * 0.22, color, ref='PENT')
+                espaciado(img, 'DE LENTO A RÁPIDO', f_lema, cx, CY_LEMA, 28 * 0.45, (235, 235, 235))
                 img.save(out_dir / (f.stem + '.jpg'), quality=93)
                 n += 1
     print(f'Listo: {n} miniaturas de pentatónica en {out_dir} (escala a {tam}px)')

@@ -1,0 +1,120 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!--
+  Fotograma de "Lectura rítmica" (TodoRitmos, idea de Alberto 11-02; prototipo, sin commit).
+  Curso de LECTURA, no de percusión (Alberto): una sola línea, sin manos ni cajón. Mismo lenguaje visual que el
+  vocabulario de frases: la figura que suena en amarillo, lo tocado en blanco, lo que falta en gris; conteo "1 e y a"
+  bajo cada compás con el pulso en curso encendido y brillando; ESCUCHA / TU TURNO; metrónomo; escalera de tempos.
+  window.render(D) (async: espera a las fuentes de VexFlow) con D = { title, subtitle, caption, how, bpm, beat, beats,
+  tempos, lap, ts: [n, d], bars: [[{ d, r?, tie?, acc? }]], cur, pulse, intro? }.
+  VexFlow 5 vive fuera del repo (~/guitar-visualizer-assets/vendor/vexflow-5.0.0.js): la ruta llega en ?vf=.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1600px; height: 900px; background: #0d0d0d; overflow: hidden; font-family: Arial, Helvetica, sans-serif; }
+  #title { position: absolute; top: 40px; left: 0; right: 0; text-align: center; font: 700 50px Arial; color: #8ab4ff; text-shadow: 0 0 18px rgba(120,160,255,.45); }
+  #subtitle { position: absolute; top: 104px; left: 0; right: 0; text-align: center; font: 700 22px Arial; color: rgba(255,255,255,.6); letter-spacing: .04em; }
+  #caption { position: absolute; top: 46px; left: 60px; font: 700 30px Arial; color: #111; background: #e2b34f; border-radius: 10px; padding: 8px 18px; letter-spacing: 1px; }
+  #caption:empty { display: none; }
+  #nota { position: absolute; top: 108px; left: 60px; display: flex; align-items: baseline; gap: 10px; } #nota:empty { display: none; }
+  #nota small { font: 700 15px Arial; letter-spacing: .15em; color: rgba(255,255,255,.5); } #nota b { font: 700 26px Arial; color: #e2b34f; }
+  #metro { position: absolute; right: 44px; top: 30px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  #metro .bpm { font: 700 46px Arial; color: #e2b34f; line-height: 46px; } #metro .bpm small { font: 700 22px Arial; color: rgba(226,179,79,.75); margin-left: 8px; }
+  #metro .dots { display: flex; gap: 12px; }
+  #metro .dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,.45); background: rgba(255,255,255,.08); }
+  #metro .dot.on { background: #26c6da; border-color: #fff; box-shadow: 0 0 16px rgba(38,198,218,.8); }
+  #metro .dot.on.one { background: #e53935; box-shadow: 0 0 16px rgba(229,57,53,.8); }
+  #how { position: absolute; top: 160px; left: 0; right: 0; text-align: center; font: 700 22px Arial; color: rgba(255,255,255,.55); }
+  #how b { color: #e2b34f; }
+  #ladder { position: absolute; left: 0; right: 0; bottom: 44px; display: flex; justify-content: center; align-items: center; gap: 6px; }
+  #ladder .t { width: 58px; height: 34px; border-radius: 8px; border: 2px solid rgba(255,255,255,.22); font: 700 17px Arial; color: rgba(255,255,255,.45); display: flex; justify-content: center; align-items: center; }
+  #ladder .t.done { background: rgba(38,198,218,.28); border-color: rgba(38,198,218,.55); color: rgba(255,255,255,.8); }
+  #ladder .t.cur { background: #e2b34f; border-color: #fff; color: #111; box-shadow: 0 0 16px rgba(226,179,79,.7); }
+  #ladder .lbl { font: 700 15px Arial; color: rgba(255,255,255,.45); margin: 0 8px; }
+  #brand { position: absolute; right: 26px; bottom: 18px; font: 700 15px Arial; color: #fff; }
+  #intro { position: absolute; left: 50%; top: 250px; transform: translateX(-50%); max-width: 1150px; padding: 24px 44px 26px; border-radius: 18px;
+    background: rgba(13,13,13,.94); border: 2px solid rgba(226,179,79,.6); box-shadow: 0 10px 40px rgba(0,0,0,.6); text-align: center; z-index: 5; }
+  #intro:empty { display: none; }
+  #intro .lbl { font: 700 17px Arial; letter-spacing: .2em; color: #e2b34f; }
+  #intro .que { margin-top: 10px; font: 700 34px Arial; color: #fff; line-height: 1.25; }
+  #intro .end { margin-top: 12px; font: 700 22px Arial; color: rgba(255,255,255,.7); }
+  #score, #over { position: absolute; left: 0; top: 0; }
+</style></head>
+<body>
+<div id="title"></div><div id="subtitle"></div><div id="caption"></div><div id="nota"></div><div id="how"></div>
+<div id="score"></div><svg id="over" width="1600" height="900"></svg>
+<div id="metro"></div><div id="ladder"></div><div id="intro"></div><div id="brand">@banetmasa</div>
+<script>
+document.write(`<script src="${new URLSearchParams(location.search).get('vf')}"><\/script>`);
+</script>
+<script>
+let fontsReady = null;
+async function render(D) {
+  const VF = VexFlow;
+  if (!fontsReady) fontsReady = (async () => { await VF.loadFonts?.('Bravura', 'Academico'); VF.setFonts?.('Bravura', 'Academico'); })();
+  await fontsReady;
+  const BPB = D.ts[0];   // pulsos por compás (negra = pulso)
+  document.getElementById('title').textContent = D.title;
+  document.getElementById('subtitle').textContent = D.subtitle;
+  document.getElementById('caption').textContent = D.caption || '';
+  document.getElementById('nota').innerHTML = D.nota ? `<small>NOTA</small><b>${D.nota}</b>` : '';   // la nota que suena (Alberto 11-02), para tocarla encima
+  document.getElementById('how').innerHTML = D.how || '';
+  document.getElementById('intro').innerHTML = D.intro ? `<div class="lbl">${D.intro.lbl}</div><div class="que">${D.intro.que}</div>${D.intro.end ? `<div class="end">${D.intro.end}</div>` : ''}` : '';
+  document.getElementById('metro').innerHTML = `<span class="bpm">${D.bpm}<small>bpm</small></span><span class="dots">` + Array.from({ length: BPB }, (_, i) => `<span class="dot${i === D.beat ? ' on' + (i === 0 ? ' one' : '') : ''}"></span>`).join('') + '</span>';
+  document.getElementById('ladder').innerHTML = '<span class="lbl">bpm</span>' + D.tempos.map((t, i) => `<span class="t${i < D.lap ? ' done' : i === D.lap ? ' cur' : ''}">${t}</span>`).join('');
+  const host = document.getElementById('score'); host.innerHTML = '';
+  // Dos sistemas (filas): 2 compases por fila con 4 compases; 4 por fila con 8 (más pequeño).
+  const nb = D.bars.length, perRow = nb <= 4 ? 2 : 4, nRows = Math.ceil(nb / perRow);
+  const SC = perRow === 2 ? 2.5 : 1.9, X0 = 70, X1 = 1530, ROWS = nRows === 1 ? [300] : [165, 470], PRE = 62, LINE = 60 * SC, COUNT = LINE + (perRow === 2 ? 118 : 96);   // 2ª fila más abajo: con acentos (>) sobre las barras se pisaba con el conteo de la 1ª
+  const r = new VF.Renderer(host, VF.Renderer.Backends.SVG); r.resize(1600, 900);
+  const ctx = r.getContext(); ctx.scale(SC, SC);
+  const DUR = { w: 4, hd: 3, h: 2, qd: 1.5, q: 1, '8d': 0.75, '8': 0.5, '16': 0.25 };
+  const GREY = 'rgba(255,255,255,.42)', WHITE = '#f2f2f2', GOLD = '#ffd640';
+  const barW = ((X1 - X0) / SC - PRE) / perRow, oneLine = st => st.setConfigForLines([0, 1, 2, 3, 4].map(l => ({ visible: l === 2 })));
+  let idx = 0, at = 0; const allNotes = [], barX = [];
+  ROWS.forEach((Y, ri) => { ctx.setFillStyle('#e8e8e8'); ctx.setStrokeStyle('rgba(255,255,255,.7)'); const pre = new VF.Stave(X0 / SC, Y / SC, PRE); oneLine(pre); pre.addClef('percussion'); if (ri === 0) pre.addTimeSignature(D.ts.join('/')); pre.setEndBarType(VF.Barline.type.NONE); pre.setContext(ctx).draw(); });
+  D.bars.forEach((bar, b) => {
+    const Y = ROWS[Math.floor(b / perRow)], x = X0 / SC + PRE + (b % perRow) * barW;
+    ctx.setFillStyle('#e8e8e8'); ctx.setStrokeStyle('rgba(255,255,255,.7)');
+    const st = new VF.Stave(x, Y / SC, barW); oneLine(st); st.setBegBarType(VF.Barline.type.NONE);
+    if (b === nb - 1) st.setEndBarType(VF.Barline.type.END);
+    st.setContext(ctx).draw();
+    barX.push({ x0: x * SC, x1: (x + barW) * SC, y: Y });
+    const notes = bar.map(n => {
+      const dot = n.d.endsWith('d'), base = dot ? n.d.slice(0, -1) : n.d;
+      // dots: si no, la nota con puntillo cuenta como si no lo tuviera (y el agrupado y el conteo salen mal)
+      const sn = new VF.StaveNote({ keys: ['b/4'], duration: base + (n.r ? 'r' : ''), dots: dot ? 1 : 0, clef: 'percussion', autoStem: false, stemDirection: 1 });
+      if (dot) VF.Dot.buildAndAttach([sn], { all: true });
+      if (n.acc && !n.r) sn.addModifier(new VF.Articulation('a>').setPosition(VF.Modifier.Position.ABOVE), 0);
+      const i = idx++, col = i === D.cur ? GOLD : (D.cur >= 0 && i < D.cur ? WHITE : GREY);
+      sn.setStyle({ fillStyle: col, strokeStyle: col });
+      sn.__i = i; sn.__at = at; sn.__n = n; sn.__b = b; at += DUR[n.d];
+      return sn;
+    });
+    const voice = new VF.Voice({ numBeats: D.ts[0], beatValue: D.ts[1] }).setStrict(false).addTickables(notes);
+    // con los silencios dentro: si no, se pierde en qué pulso cae cada nota
+    const beams = VF.Beam.generateBeams(notes, { groups: [new VF.Fraction(1, 4)], beamRests: false, maintainStemDirections: true });
+    new VF.Formatter({ softmaxFactor: 4 }).joinVoices([voice]).format([voice], barW - 30);   // softmax bajo = espaciado proporcional a la duración
+    voice.draw(ctx, st);
+    beams.forEach(bm => { const ns = bm.getNotes(), c = ns[ns.length - 1].__i < D.cur ? WHITE : (ns.some(q => q.__i === D.cur) ? GOLD : GREY); bm.setStyle({ fillStyle: c, strokeStyle: c }); ctx.setFillStyle(c); ctx.setStrokeStyle(c); bm.setContext(ctx).draw(); });
+    allNotes.push(...notes);
+  });
+  allNotes.forEach((n, k) => { const m = allNotes[k + 1]; if (n.__n.tie && m) { const c = n.__i < D.cur ? WHITE : GREY; ctx.setFillStyle(c); ctx.setStrokeStyle(c); new VF.StaveTie({ firstNote: n, lastNote: m, firstIndexes: [0], lastIndexes: [0] }).setContext(ctx).draw(); } });
+  // Conteo bajo cada compás: número en cada pulso y "e / y / a" donde empieza una nota; el pulso en curso brilla.
+  const over = document.getElementById('over'); let h = '';
+  const xs = allNotes.map(n => ({ at: n.__at, x: n.getAbsoluteX() * SC + 6 * SC, b: n.__b }));
+  const xAt = a => { const b = Math.min(nb - 1, Math.floor(a / BPB + 1e-6)), inBar = xs.filter(p => p.b === b), e = inBar.find(p => Math.abs(p.at - a) < 1e-6); if (e) return e.x;
+    const pv = [...inBar].reverse().find(p => p.at < a), nx = inBar.find(p => p.at > a), endX = barX[b].x1 - 10, endAt = (b + 1) * BPB;
+    return pv.x + ((nx ? nx.x : endX) - pv.x) * (a - pv.at) / ((nx ? nx.at : endAt) - pv.at); };
+  const SYL = ['', 'e', 'y', 'a'], big = perRow === 2;
+  for (let bt = 0; bt < nb * BPB; bt++) {
+    const on = D.pulse === bt, yC = barX[Math.floor(bt / BPB)].y + COUNT;
+    h += `<text x="${xAt(bt)}" y="${yC}" text-anchor="middle" font-size="${on ? (big ? 32 : 26) : (big ? 27 : 22)}" font-weight="700" fill="${on ? '#fff' : 'rgba(255,255,255,.4)'}">${bt % BPB + 1}</text>`;
+    [1, 2, 3].forEach(sb => { const a = bt + sb / 4; if (xs.some(p => Math.abs(p.at - a) < 1e-6)) h += `<text x="${xAt(a)}" y="${yC}" text-anchor="middle" font-size="${big ? 21 : 17}" font-weight="700" fill="rgba(255,255,255,.32)">${SYL[sb]}</text>`; });
+  }
+  if (D.pulse !== undefined && D.pulse >= 0) { const bb = Math.floor(D.pulse / BPB), yL = barX[bb].y + COUNT + 22, a = xAt(D.pulse) - 16, z = (D.pulse % BPB === BPB - 1 ? barX[bb].x1 - 10 : xAt(D.pulse + 1)) - 16, one = D.pulse % BPB === 0;
+    h += `<line x1="${a}" y1="${yL}" x2="${z}" y2="${yL}" stroke="rgba(255,255,255,${one ? .35 : .18})" stroke-width="${one ? 14 : 10}" stroke-linecap="round"/><line x1="${a}" y1="${yL}" x2="${z}" y2="${yL}" stroke="rgba(255,255,255,${one ? 1 : .75})" stroke-width="${one ? 4 : 3}" stroke-linecap="round"/>`; }
+  over.innerHTML = h;
+}
+</script>
+</body></html>

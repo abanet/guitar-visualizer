@@ -73,7 +73,7 @@ const tilde = (p) => path.resolve(String(p).replace(/^~/, os.homedir()));
       // seguía colocando los arpegios del primero (10-26: las 12 tonalidades salían con A7-D7, los ciclos
       // ya convertidos a 'custom' sobreviven a loadXML). Recargar cuesta ~1 s y quita cualquier arrastre.
       await page.goto(appUrl);
-      const res = await page.evaluate(async ({ xmlText, name, form, ciclo, tonica }) => {
+      const res = await page.evaluate(async ({ xmlText, name, form, ciclo, tonica, mastil }) => {
         // loadXML lee con FileReader (asíncrono). Esperar a que `cycles` tenga contenido NO basta: desde la
         // segunda tonalidad ya lo tiene, el del XML anterior, y las sesiones salían con los acordes de otra
         // tonalidad (10-26: las de C traían A7-D7). Se vacía el rótulo "N compases" (#t3), que loadXML
@@ -88,6 +88,9 @@ const tilde = (p) => path.resolve(String(p).replace(/^~/, os.homedir()));
         document.getElementById('cycleLen').value = String(ciclo);
         showTab('generate');
         document.getElementById('ashStartPos').value = form;
+        // --mastil-completo (11-06, arpegios sueltos con el resto del arpegio en fantasma por todo el mástil): mástil
+        // fijo 0-13 sin zoom (opción "Mástil completo" de la pestaña); sin la opción, igual que antes.
+        { const fn = document.getElementById('ashFullNeck'); if (fn) fn.checked = !!mastil; }
         // El I7 se queda en SU forma todo el vídeo (bug visto por Alberto el 10-27, "las dos posiciones en
         // diferentes sitios"): #ashStartPos solo fija el PRIMER compás y luego la optimización global elige
         // la posición más barata de toda la canción — en Forma C (las 12 tonalidades) y en Ab Forma D el I7
@@ -132,7 +135,7 @@ const tilde = (p) => path.resolve(String(p).replace(/^~/, os.homedir()));
         const s = buildSession();
         delete s.library; // la Librería ya no hace falta: los fotogramas van en la sesión
         return { s, status: document.getElementById('ashSendStatus')?.textContent || '', zona: window.__zona };
-      }, { xmlText, name: f, form, ciclo: parseInt(a.ciclo || 4, 10), tonica: key.replace(/m$/, '').replace(/s$/, '#') });
+      }, { xmlText, name: f, form, ciclo: parseInt(a.ciclo || 4, 10), tonica: key.replace(/m$/, '').replace(/s$/, '#'), mastil: !!a['mastil-completo'] });
       // Comprobación: ningún acorde sin arpegio (el estado de la app lo cuenta) y el reparto de formas por zona.
       if (/sin forma|no encontrad|falta/i.test(res.status)) throw new Error(`${f} forma ${form}: ${res.status}`);
       console.log(`  zona ${form} (acordes ${res.zona.claves.join(' ')}): ${Object.entries(res.zona.override).map(([k, v]) => k + '→' + v).join(' ')}`);
