@@ -49,7 +49,7 @@ module.exports = {
   ligados: { name: 'Ligados en cascada', win: [5, 8], items: [
     n(1, 8, 0.5, { fg: 4 }), n(1, 5, 0.5, { lig: 'P', fg: 1 }), n(2, 8, 0.5, { fg: 4 }), n(2, 5, 0.5, { lig: 'P', fg: 1 }), n(3, 7, 0.5, { fg: 3 }), n(3, 5, 0.5, { lig: 'P', fg: 1 }),
     n(4, 7, 1, { fg: 3 }), n(4, 5, 0.5, { fg: 1 }), n(4, 7, 1.5, { lig: 'H', vib: true, fg: 3 })] },
-  slide: { name: 'Deslizamiento a la caja 2', win: [5, 10], items: [
+  slide: { name: 'Deslizamiento a la Forma D', win: [5, 10], items: [
     n(3, 5, 0.5, { fg: 1 }), n(3, 7, 0.5, { fg: 3 }), n(3, 9, 1, { slide: true, fg: 3 }), n(2, 8, 0.5, { fg: 1 }), n(2, 10, 0.5, { fg: 3 }), n(1, 8, 1, { fg: 1 }),
     n(2, 10, 2, { vib: true, fg: 3 })] },
   unisono: { name: 'Bending al unísono', win: [5, 8], items: [
@@ -86,4 +86,186 @@ module.exports = {
     n(2, 10, 0.5, { fg: 1 }), n(2, 13, 0.5, { fg: 3 }), n(2, 15, 0.5, { slide: true, fg: 3 }), n(1, 12, 0.5, { fg: 1 }), n(1, 15, 1, { bend: 2, fg: 3 }),
     n(1, 15, 1, { bend: 2, rel: true, fg: 3 }), n(1, 12, 0.5, { fg: 1 }), n(2, 15, 0.5, { fg: 4 }), n(2, 13, 0.5, { lig: 'P', fg: 2 }), n(3, 12, 0.5, { fg: 1 }),
     n(3, 14, 3, { lig: 'H', vib: true, fg: 3 })] },
+  // ── FRASES COMPLEJAS (11-01, Alberto: "buscar los límites del formato"). Escritas a partir de recursos de
+  // dominio común (bending oblicuo, dobles cuerdas, cascadas, enclosures, cromatismos), no transcritas de nadie.
+  bluesTecnica: { name: 'Blues avanzado: oblicuo, cascada y dobles cuerdas', win: [5, 10], items: [
+    n(3, 7, 1, { bend: 2, fg: 3, also: [{ s: 4, f: 5, fg: 1 }] }),
+    n(2, 8, 0.25, { fg: 4 }), n(2, 5, 0.25, { lig: 'P', fg: 1 }), n(3, 7, 0.25, { fg: 3 }), n(3, 5, 0.25, { lig: 'P', fg: 1 }),
+    n(4, 7, 0.25, { fg: 3 }), n(4, 5, 0.25, { lig: 'P', fg: 1 }), n(5, 7, 0.5, { fg: 3 }),
+    n(5, 5, 0.5, { fg: 1 }), n(5, 7, 0.5, { lig: 'H', vib: true, fg: 3 }),
+    n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 8, 0.5, { slide: true, fg: 3, also: [{ s: 5, f: 8, fg: 3 }] }),
+    n(1, 8, T, { fg: 3 }), n(1, 5, T, { lig: 'P', fg: 1 }), n(2, 8, T, { fg: 4 }),
+    n(3, 7, 1, { bend: 2, rel: true, fg: 3 }), n(3, 5, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 1.5, { vib: true, fg: 3 })] },
+  bluesRafaga: { name: 'Ráfaga en semicorcheas por tres formas', win: [5, 17], items: [
+    n(4, 5, 0.25, { fg: 1 }), n(4, 7, 0.25, { lig: 'H', fg: 3 }), n(3, 5, 0.25, { fg: 1 }), n(3, 7, 0.25, { lig: 'H', fg: 3 }),
+    n(3, 9, 0.25, { slide: true, fg: 3 }), n(2, 8, 0.25, { fg: 1 }), n(2, 10, 0.25, { lig: 'H', fg: 3 }), n(1, 8, 0.25, { fg: 1 }),
+    n(1, 10, 0.25, { lig: 'H', fg: 3 }), n(1, 12, 0.25, { slide: true, fg: 3 }), n(2, 13, 0.25, { fg: 2 }), n(2, 15, 0.25, { lig: 'H', fg: 4 }),
+    n(1, 12, 0.25, { fg: 1 }), n(1, 15, 0.25, { fg: 3 }), n(1, 17, 0.5, { lig: 'H', fg: 4 }),
+    n(2, 15, 1, { bend: 2, fg: 3 }), n(1, 12, 0.5, { fg: 1 }), n(2, 15, 0.5, { bend: 2, rel: true, fg: 3 }),
+    n(2, 13, 0.5, { lig: 'P', fg: 2 }), n(3, 14, 1.5, { vib: true, fg: 3 })] },
+  // Jazz modal sobre Am7 (La dórica): enclosure de la 5ª, arpegios, cromatismo bebop, tresillos, salida "fuera"
+  // por medio tono (Bb) y resolución en la 6ª mayor (F#), la nota que hace dórico al modo.
+  jazzModal: { name: 'Jazz modal sobre Am7: enclosures, cromatismos y salida', win: [3, 8], scale: [9, 11, 0, 2, 4, 6, 7], items: [
+    n(2, 6, T, { fg: 3 }), n(2, 4, T, { fg: 1 }), n(2, 5, T, { fg: 2 }),
+    n(1, 5, 0.5, { fg: 2 }), n(1, 8, 0.5, { fg: 4 }),
+    n(1, 7, 0.5, { fg: 4 }), n(2, 8, 0.5, { fg: 4 }),
+    n(2, 7, 0.5, { fg: 4 }), n(2, 5, 0.5, { fg: 2 }),
+    n(3, 7, 0.5, { fg: 4 }), n(3, 6, 0.5, { fg: 3 }),
+    n(3, 5, 0.5, { fg: 2 }), n(4, 7, 0.5, { fg: 4 }),
+    n(5, 7, T, { fg: 4 }), n(4, 5, T, { fg: 2 }), n(3, 4, T, { fg: 1 }),
+    n(2, 3, T, { fg: 1 }), n(2, 5, T, { lig: 'H', fg: 2 }), n(2, 6, T, { lig: 'H', fg: 3 }),
+    n(1, 6, 0.5, { fg: 3 }), n(1, 4, 0.5, { fg: 1 }),
+    n(1, 5, 1, { fg: 2 }),
+    n(2, 5, 0.5, { fg: 2 }), n(2, 7, 2, { vib: true, fg: 4 })] },
+  // ══ LISTA DE 60 (vocabulario-blues-rock-lista.md, 11-01). Claves = número de la lista. Forma E = trastes 5-8. ══
+  // Dobles cuerdas: also usa s = 6 - cuerda (1ª → s:5, 2ª → s:4, 3ª → s:3, 4ª → s:2, 5ª → s:1, 6ª → s:0).
+  v04: { name: 'Vibrato en la tónica', win: [5, 8], items: [
+    n(2, 8, 0.5, { fg: 4 }), n(2, 5, 0.5, { fg: 1 }), n(3, 7, 0.5, { fg: 3 }), n(3, 5, 0.5, { fg: 1 }), n(4, 7, 3, { vib: true, fg: 3 })] },
+  v05: { name: 'Bending y bajada', win: [5, 8], items: [
+    n(2, 8, 0.5, { fg: 4 }), n(2, 5, 0.5, { fg: 1 }), n(3, 7, 2, { bend: 2, rel: true, fg: 3 }), n(3, 5, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 1.5, { vib: true, fg: 3 })] },
+  v06: { name: 'El rastrillado', win: [5, 8], items: [
+    n(4, 7, X, { x: true, strum: 'd' }), n(3, 7, X, { x: true, strum: 'd' }), n(2, 8, 2 / 3, { bend: 2, fg: 3 }),
+    n(1, 5, 0.5, { fg: 1 }), n(2, 8, 0.5, { fg: 4 }), n(2, 5, 1, { fg: 1 }), n(3, 7, 0.5, { fg: 3 }), n(4, 7, 1.5, { vib: true, fg: 3 })] },
+  v09: { name: 'Hammer-on desde la cuerda al aire', win: [0, 5], items: [
+    n(5, 0, 0.5), n(5, 3, 0.5, { lig: 'H', fg: 3 }), n(4, 0, 0.5), n(4, 2, 0.5, { lig: 'H', fg: 2 }),
+    n(5, 0, 0.5), n(5, 3, 0.5, { lig: 'H', fg: 3 }), n(6, 3, 0.5, { fg: 2 }), n(5, 0, 1.5)] },
+  v10: { name: 'Notas largas, pocas notas', win: [5, 8], items: [
+    n(2, 8, 1.5, { bend: 2, fg: 3 }), r(0.5), n(2, 5, 1, { fg: 1 }), r(1), n(4, 7, 2.5, { vib: true, fg: 3 })] },
+  v11: { name: 'El pre-bend', win: [5, 8], items: [
+    n(3, 7, 1, { bend: 2, pre: true, fg: 3 }), n(3, 5, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 0.5, { fg: 3 }),
+    n(3, 7, 1, { bend: 2, pre: true, fg: 3 }), n(3, 5, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 1.5, { vib: true, fg: 3 })] },
+  v12: { name: 'Doble cuerda en la 1ª y la 2ª', win: [5, 8], items: [
+    n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 8, 0.5, { fg: 3, also: [{ s: 5, f: 8, fg: 4 }] }),
+    n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 8, 0.5, { fg: 3, also: [{ s: 5, f: 8, fg: 4 }] }),
+    n(3, 7, 0.5, { fg: 3 }), n(3, 5, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 2, { vib: true, fg: 3 })] },
+  v19: { name: 'Bending, pull-off y slide', win: [5, 10], items: [
+    n(3, 7, 1, { bend: 2, rel: true, fg: 3 }), n(3, 5, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 0.5, { fg: 3 }), n(4, 5, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 0.5, { lig: 'H', fg: 3 }),
+    n(4, 10, 1, { slide: true, fg: 3 }), n(3, 9, 0.5, { fg: 2 }), n(2, 10, 2, { vib: true, fg: 3 })] },
+  v21: { name: 'La frase en la octava alta', win: [17, 20], items: [
+    n(3, 19, 1, { bend: 2, fg: 3 }), n(2, 17, 0.5, { fg: 1 }), n(1, 17, 0.5, { fg: 1 }), n(2, 20, 0.5, { fg: 4 }), n(2, 17, 0.5, { lig: 'P', fg: 1 }),
+    n(3, 19, 1, { bend: 2, rel: true, fg: 3 }), n(3, 17, 0.5, { lig: 'P', fg: 1 }), n(4, 19, 1.5, { vib: true, fg: 3 })] },
+  v22: { name: 'Repetición con variación', win: [5, 8], items: [
+    n(2, 8, 0.5, { fg: 4 }), n(2, 5, 0.5, { fg: 1 }), n(3, 7, 1, { bend: 2, fg: 3 }), n(3, 5, 0.5, { fg: 1 }), n(4, 7, 1.5, { fg: 3 }),
+    n(2, 8, 0.5, { fg: 4 }), n(2, 5, 0.5, { fg: 1 }), n(3, 7, 1, { bend: 2, rel: true, fg: 3 }), n(3, 5, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 0.5, { fg: 3 }), n(4, 5, 0.5, { fg: 1 }), n(5, 7, 1.5, { vib: true, fg: 3 })] },
+  v23: { name: 'Síncopas: entrar a contratiempo', win: [5, 8], items: [
+    r(0.5), n(1, 5, 0.5, { fg: 1 }), n(1, 8, 1, { fg: 4 }), n(1, 5, 0.5, { fg: 1 }), n(2, 8, 1, { fg: 4 }), n(2, 5, 0.5, { fg: 1 }), n(3, 7, 2, { bend: 2, vib: true, fg: 3 })] },
+  v24: { name: 'Bending doble: medio tono y tono', win: [5, 8], items: [
+    n(3, 7, 1, { bend: 1, fg: 3 }), n(3, 7, 1, { bend: 2, fg: 3 }), n(2, 8, 0.5, { fg: 4 }), n(2, 5, 0.5, { lig: 'P', fg: 1 }), n(3, 5, 0.5, { fg: 1 }), n(4, 7, 1.5, { vib: true, fg: 3 })] },
+  v26: { name: 'Blue note de paso', win: [5, 8], items: [
+    n(2, 5, 0.5, { fg: 1 }), n(3, 8, 0.5, { fg: 4 }), n(3, 7, 0.5, { fg: 3 }), n(3, 5, 0.5, { fg: 1 }), n(4, 7, 1, { fg: 3 }), r(0.5),
+    n(2, 5, 0.5, { fg: 1 }), n(3, 8, 0.5, { fg: 4 }), n(3, 7, 0.5, { fg: 3 }), n(3, 5, 1, { bend: 0.5, fg: 1 }), n(4, 7, 1.5, { vib: true, fg: 3 })] },
+  v27: { name: 'Bending oblicuo', win: [5, 8], items: [
+    n(3, 7, 1.5, { bend: 2, fg: 3, also: [{ s: 4, f: 8, fg: 4 }] }), n(2, 5, 0.5, { fg: 1 }), n(3, 7, 1, { bend: 2, fg: 3, also: [{ s: 4, f: 8, fg: 4 }] }),
+    n(3, 5, 0.5, { fg: 1 }), n(4, 7, 1.5, { vib: true, fg: 3 })] },
+  v28: { name: 'Dobles cuerdas en la 2ª y la 3ª', win: [5, 10], items: [
+    n(3, 5, 0.5, { fg: 1, also: [{ s: 4, f: 5, fg: 1 }] }), n(3, 7, 0.5, { fg: 2, also: [{ s: 4, f: 8, fg: 3 }] }), n(3, 9, 0.5, { fg: 2, also: [{ s: 4, f: 10, fg: 3 }] }),
+    n(3, 7, 0.5, { fg: 2, also: [{ s: 4, f: 8, fg: 3 }] }), n(3, 5, 0.5, { fg: 1, also: [{ s: 4, f: 5, fg: 1 }] }), n(3, 7, 0.5, { fg: 2, also: [{ s: 4, f: 8, fg: 3 }] }),
+    n(3, 5, 0.5, { fg: 1, also: [{ s: 4, f: 5, fg: 1 }] }), n(4, 7, 2.5, { vib: true, fg: 3 })] },
+  v29: { name: 'Dobles cuerdas deslizadas', win: [3, 8], items: [
+    n(2, 3, 0.5, { fg: 1, also: [{ s: 5, f: 3, fg: 1 }] }), n(2, 5, 1, { slide: true, fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 8, 0.5, { fg: 3, also: [{ s: 5, f: 8, fg: 4 }] }),
+    n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 7, 0.5, { fg: 3 }), n(3, 5, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 2, { vib: true, fg: 3 })] },
+  v30: { name: 'Frase repetitiva en tresillos', win: [5, 8], items: [
+    n(2, 8, T, { fg: 4 }), n(2, 5, T, { lig: 'P', fg: 1 }), n(3, 7, T, { fg: 3 }), n(2, 8, T, { fg: 4 }), n(2, 5, T, { lig: 'P', fg: 1 }), n(3, 7, T, { fg: 3 }),
+    n(2, 8, T, { fg: 4 }), n(2, 5, T, { lig: 'P', fg: 1 }), n(3, 7, T, { fg: 3 }), n(2, 8, T, { fg: 4 }), n(2, 5, T, { lig: 'P', fg: 1 }), n(3, 7, T, { fg: 3 }),
+    n(3, 7, 1, { bend: 2, fg: 3 }), n(2, 5, 0.5, { fg: 1 }), n(1, 5, 0.5, { fg: 1 }), n(1, 8, 2, { bend: 2, vib: true, fg: 3 })] },
+  v31: { name: 'Bending de tono y medio', win: [7, 10], items: [
+    n(3, 9, 1.5, { bend: 3, fg: 3 }), n(2, 8, 0.5, { fg: 1 }), n(2, 10, 0.5, { fg: 3 }), n(2, 8, 0.5, { lig: 'P', fg: 1 }),
+    n(3, 9, 1, { bend: 3, rel: true, fg: 3 }), n(3, 7, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 1.5, { vib: true, fg: 1 })] },
+  v32: { name: 'Bending en la 1ª cuerda', win: [5, 8], items: [
+    n(1, 8, 1, { bend: 2, fg: 3 }), n(1, 5, 0.5, { fg: 1 }), n(2, 8, 0.5, { fg: 4 }), n(1, 8, 1, { bend: 2, rel: true, fg: 3 }), n(1, 5, 0.5, { lig: 'P', fg: 1 }),
+    n(2, 8, 0.5, { fg: 4 }), n(2, 5, 2, { vib: true, fg: 1 })] },
+  v33: { name: 'El ritmo de los silencios', win: [5, 8], items: [
+    n(1, 5, 0.5, { fg: 1 }), r(0.5), n(1, 5, 0.5, { fg: 1 }), r(0.5), n(1, 8, 0.5, { fg: 4 }), n(1, 5, 0.5, { fg: 1 }), r(0.5), n(2, 8, 0.5, { fg: 4 }),
+    n(2, 5, 1, { fg: 1 }), r(1), n(4, 7, 2, { vib: true, fg: 3 })] },
+  v34: { name: 'De menor a mayor: la 3ª que cambia', win: [5, 8], items: [
+    n(3, 5, 0.5, { fg: 1 }), n(3, 6, 0.5, { lig: 'H', fg: 2 }), n(4, 7, 0.5, { fg: 3 }), n(3, 5, 0.5, { fg: 1 }), n(3, 6, 0.5, { lig: 'H', fg: 2 }), n(2, 5, 0.5, { fg: 1 }), n(1, 5, 2, { vib: true, fg: 1 })] },
+  v35: { name: 'Respuesta en las cuerdas graves', win: [5, 8], items: [
+    n(6, 5, 0.5, { fg: 1 }), n(6, 8, 0.5, { fg: 4 }), n(5, 5, 0.5, { fg: 1 }), n(5, 6, 0.5, { fg: 2 }), n(5, 7, 0.5, { fg: 3 }), n(5, 5, 0.5, { fg: 1 }), n(6, 8, 0.5, { fg: 4 }), n(6, 5, 2, { fg: 1 })] },
+  v36: { name: 'Bending con vibrato', win: [5, 8], items: [
+    n(2, 8, 2, { bend: 2, vib: true, fg: 3 }), n(2, 5, 0.5, { fg: 1 }), n(3, 7, 0.5, { fg: 3 }), n(3, 5, 0.5, { fg: 1 }), n(4, 7, 2.5, { vib: true, fg: 3 })] },
+  v40: { name: 'Grupos de seis en semicorcheas', win: [5, 8], items: [
+    n(1, 8, 0.25, { fg: 4 }), n(1, 5, 0.25, { lig: 'P', fg: 1 }), n(2, 8, 0.25, { fg: 4 }), n(2, 5, 0.25, { lig: 'P', fg: 1 }), n(3, 7, 0.25, { fg: 3 }), n(3, 5, 0.25, { lig: 'P', fg: 1 }),
+    n(1, 8, 0.25, { fg: 4 }), n(1, 5, 0.25, { lig: 'P', fg: 1 }), n(2, 8, 0.25, { fg: 4 }), n(2, 5, 0.25, { lig: 'P', fg: 1 }), n(3, 7, 0.25, { fg: 3 }), n(3, 5, 0.25, { lig: 'P', fg: 1 }),
+    n(3, 7, 1, { bend: 2, fg: 3 }), n(2, 5, 0.5, { fg: 1 }), n(1, 5, 0.5, { fg: 1 }), n(1, 8, 2, { bend: 2, vib: true, fg: 3 })] },
+  v41: { name: 'Secuencia de cuatro notas subiendo', win: [5, 8], items: [
+    n(6, 5, 0.25, { fg: 1 }), n(6, 8, 0.25, { fg: 4 }), n(5, 5, 0.25, { fg: 1 }), n(5, 7, 0.25, { fg: 3 }),
+    n(6, 8, 0.25, { fg: 4 }), n(5, 5, 0.25, { fg: 1 }), n(5, 7, 0.25, { fg: 3 }), n(4, 5, 0.25, { fg: 1 }),
+    n(5, 5, 0.25, { fg: 1 }), n(5, 7, 0.25, { fg: 3 }), n(4, 5, 0.25, { fg: 1 }), n(4, 7, 0.25, { fg: 3 }),
+    n(5, 7, 0.25, { fg: 3 }), n(4, 5, 0.25, { fg: 1 }), n(4, 7, 0.25, { fg: 3 }), n(3, 5, 0.25, { fg: 1 }),
+    n(3, 7, 1, { bend: 2, fg: 3 }), n(2, 5, 0.5, { fg: 1 }), n(1, 5, 2.5, { vib: true, fg: 1 })] },
+  v42: { name: 'Bajada por cuatro formas', win: [5, 17], items: [
+    n(1, 17, 0.25, { fg: 4 }), n(1, 15, 0.25, { lig: 'P', fg: 2 }), n(2, 17, 0.25, { fg: 4 }), n(2, 15, 0.25, { lig: 'P', fg: 2 }),
+    n(2, 13, 0.25, { slide: true, fg: 1 }), n(3, 14, 0.25, { fg: 3 }), n(3, 12, 0.25, { lig: 'P', fg: 1 }), n(4, 14, 0.25, { fg: 3 }),
+    n(4, 12, 0.25, { lig: 'P', fg: 1 }), n(4, 10, 0.25, { slide: true, fg: 1 }), n(5, 12, 0.25, { fg: 3 }), n(5, 10, 0.25, { lig: 'P', fg: 1 }),
+    n(6, 12, 0.25, { fg: 3 }), n(6, 10, 0.25, { lig: 'P', fg: 1 }), n(6, 8, 0.25, { slide: true, fg: 1 }), n(6, 5, 2.25, { slide: true, vib: true, fg: 1 })] },
+  v43: { name: 'Trino de blues', win: [5, 8], items: [
+    n(3, 5, 0.25, { fg: 1 }), n(3, 7, 0.25, { lig: 'H', fg: 3 }), n(3, 5, 0.25, { lig: 'P', fg: 1 }), n(3, 7, 0.25, { lig: 'H', fg: 3 }),
+    n(3, 5, 0.25, { lig: 'P', fg: 1 }), n(3, 7, 0.25, { lig: 'H', fg: 3 }), n(3, 5, 0.25, { lig: 'P', fg: 1 }), n(3, 7, 0.25, { lig: 'H', fg: 3 }),
+    n(3, 7, 1, { bend: 2, fg: 3 }), n(3, 5, 0.5, { fg: 1 }), n(4, 7, 1.5, { vib: true, fg: 3 })] },
+  v44: { name: 'Frase de cuatro compases', win: [5, 8], items: [
+    n(3, 7, 1, { bend: 2, fg: 3 }), n(2, 5, 0.5, { fg: 1 }), n(2, 8, 0.5, { fg: 4 }), n(1, 5, 1, { fg: 1 }), r(1),
+    n(2, 8, 0.5, { fg: 4 }), n(2, 5, 0.5, { lig: 'P', fg: 1 }), n(3, 7, 1, { bend: 2, rel: true, fg: 3 }), n(3, 5, 0.5, { lig: 'P', fg: 1 }), n(4, 7, 1.5, { vib: true, fg: 3 }),
+    n(1, 8, T, { fg: 4 }), n(1, 5, T, { lig: 'P', fg: 1 }), n(2, 8, T, { fg: 4 }), n(2, 5, T, { lig: 'P', fg: 1 }), n(3, 7, T, { fg: 3 }), n(3, 5, T, { lig: 'P', fg: 1 }),
+    n(3, 7, 1, { bend: 2, rel: true, fg: 3 }), n(3, 5, 1, { bend: 0.5, fg: 1 }), n(4, 7, 3, { vib: true, fg: 3 })] },
+  v45: { name: 'Cambio de forma con bending', win: [5, 10], items: [
+    n(3, 7, 1, { bend: 2, fg: 3 }), n(2, 5, 0.5, { fg: 1 }), n(2, 8, 0.5, { fg: 3 }), n(2, 10, 1, { slide: true, fg: 3 }), n(1, 8, 0.5, { fg: 1 }),
+    n(1, 10, 1, { bend: 2, fg: 3 }), n(1, 8, 0.5, { fg: 1 }), n(2, 10, 1.5, { vib: true, fg: 3 })] },
+  v46: { name: 'Semicorcheas y bending final', win: [5, 8], items: [
+    n(4, 5, 0.25, { fg: 1 }), n(4, 7, 0.25, { lig: 'H', fg: 3 }), n(3, 5, 0.25, { fg: 1 }), n(3, 7, 0.25, { lig: 'H', fg: 3 }),
+    n(2, 5, 0.25, { fg: 1 }), n(2, 8, 0.25, { fg: 4 }), n(1, 5, 0.25, { fg: 1 }), n(1, 8, 0.25, { fg: 4 }),
+    n(2, 8, 2, { bend: 2, vib: true, fg: 3 })] },
+  v47: { name: 'Rock de los 70 en la octava alta', win: [17, 20], items: [
+    n(1, 17, 0.25, { fg: 1 }), n(2, 20, 0.25, { fg: 4 }), n(2, 17, 0.25, { lig: 'P', fg: 1 }), n(3, 19, 0.25, { fg: 3 }),
+    n(1, 17, 0.25, { fg: 1 }), n(2, 20, 0.25, { fg: 4 }), n(2, 17, 0.25, { lig: 'P', fg: 1 }), n(3, 19, 0.25, { fg: 3 }),
+    n(1, 17, 0.25, { fg: 1 }), n(2, 20, 0.25, { fg: 4 }), n(2, 17, 0.25, { lig: 'P', fg: 1 }), n(3, 19, 0.25, { fg: 3 }),
+    n(3, 19, 1, { bend: 2, vib: true, fg: 3 })] },
+  v48: { name: 'El gran final', win: [5, 8], items: [
+    n(1, 8, 0.25, { fg: 4 }), n(1, 5, 0.25, { lig: 'P', fg: 1 }), n(2, 8, 0.25, { fg: 4 }), n(2, 5, 0.25, { lig: 'P', fg: 1 }),
+    n(3, 7, 0.25, { fg: 3 }), n(3, 5, 0.25, { lig: 'P', fg: 1 }), n(4, 7, 0.25, { fg: 3 }), n(4, 5, 0.25, { lig: 'P', fg: 1 }),
+    n(5, 7, 0.25, { fg: 3 }), n(5, 6, 0.25, { lig: 'P', fg: 2 }), n(5, 5, 0.25, { lig: 'P', fg: 1 }), n(6, 8, 0.25, { fg: 4 }),
+    n(6, 5, 0.5, { lig: 'P', fg: 1 }), n(5, 7, 0.5, { fg: 3 }), n(6, 5, 2, { vib: true, fg: 1 })] },
+  // ── Sección T: turnarounds sobre el blues de 12 compases en La (swing lento). swing: true = se ESCRIBEN en corcheas
+  // y se TOCAN en swing (2/3 + 1/3), como en cualquier partitura de blues: antes iban en tresillos ligados y se leían peor (11-02).
+  // Cada vuelta = compases 9-12; la frase suena en el 11 (A7) y el 12 (E7). form.fromBar: compás de la base.
+  t01: { name: 'Turnaround cromático descendente', form: { fromBar: 9 }, noRest: true, swing: true, win: [5, 9], items: [
+    r(4), r(4),
+    n(3, 9, 0.5, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 9, 0.5, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 8, 0.5, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 8, 0.5, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 7, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 7, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 6, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 6, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(5, 7, 1, { fg: 3, also: [{ s: 2, f: 6, fg: 2 }, { s: 3, f: 7, fg: 4 }] }), r(1), r(2)] },
+  t02: { name: 'Turnaround cromático ascendente', form: { fromBar: 9 }, noRest: true, swing: true, win: [5, 9], items: [
+    r(4), r(4),
+    n(3, 6, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 6, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 7, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 7, 0.5, { fg: 2, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 8, 0.5, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 8, 0.5, { fg: 3, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 9, 0.5, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }), n(3, 9, 0.5, { fg: 4, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(5, 7, 1, { fg: 3, also: [{ s: 2, f: 6, fg: 2 }, { s: 3, f: 7, fg: 4 }] }), r(1), r(2)] },
+  t03: { name: 'Turnaround en sextas', form: { fromBar: 9 }, noRest: true, swing: true, win: [5, 9], items: [
+    r(4), r(4),
+    n(3, 9, 0.5, { fg: 3, also: [{ s: 5, f: 9, fg: 4 }] }), n(3, 9, 0.5, { fg: 3, also: [{ s: 5, f: 9, fg: 4 }] }),
+    n(3, 8, 0.5, { fg: 2, also: [{ s: 5, f: 8, fg: 3 }] }), n(3, 8, 0.5, { fg: 2, also: [{ s: 5, f: 8, fg: 3 }] }),
+    n(3, 7, 0.5, { fg: 1, also: [{ s: 5, f: 7, fg: 2 }] }), n(3, 7, 0.5, { fg: 1, also: [{ s: 5, f: 7, fg: 2 }] }),
+    n(3, 6, 0.5, { fg: 1, also: [{ s: 5, f: 6, fg: 1 }] }), n(3, 6, 0.5, { fg: 1, also: [{ s: 5, f: 6, fg: 1 }] }),
+    n(3, 7, 2, { fg: 1, also: [{ s: 5, f: 7, fg: 2 }] }), r(2)] },
+  t04: { name: 'Turnaround con la 1ª cuerda al aire', form: { fromBar: 9 }, noRest: true, swing: true, win: [0, 8], items: [
+    r(4), r(4),
+    n(2, 8, 0.5, { fg: 4, also: [{ s: 5, f: 0 }] }), n(2, 8, 0.5, { fg: 4, also: [{ s: 5, f: 0 }] }),
+    n(2, 7, 0.5, { fg: 3, also: [{ s: 5, f: 0 }] }), n(2, 7, 0.5, { fg: 3, also: [{ s: 5, f: 0 }] }),
+    n(2, 6, 0.5, { fg: 2, also: [{ s: 5, f: 0 }] }), n(2, 6, 0.5, { fg: 2, also: [{ s: 5, f: 0 }] }),
+    n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 0 }] }), n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 0 }] }),
+    n(6, 0, 1, { also: [{ s: 2, f: 0 }, { s: 3, f: 1, fg: 1 }] }), r(1), r(2)] },
+  t05: { name: 'Turnaround en tresillos', form: { fromBar: 9 }, noRest: true, swing: true, win: [3, 8], items: [
+    r(4), r(4),
+    n(1, 5, T, { fg: 1 }), n(2, 8, T, { fg: 4 }), n(2, 5, T, { fg: 1 }),
+    n(3, 8, T, { fg: 4 }), n(3, 7, T, { fg: 3 }), n(3, 6, T, { fg: 2 }),
+    n(3, 5, T, { fg: 1 }), n(4, 7, T, { fg: 3 }), n(4, 6, T, { fg: 2 }),
+    n(4, 5, T, { fg: 1 }), n(4, 4, T, { fg: 1 }), n(4, 3, T, { fg: 1 }),
+    n(5, 7, 1, { fg: 3, also: [{ s: 2, f: 6, fg: 2 }, { s: 3, f: 7, fg: 4 }] }), r(1), r(2)] },
+  t06: { name: 'Turnaround de rock', form: { fromBar: 9 }, noRest: true, swing: true, win: [5, 9], items: [
+    r(4), r(4),
+    n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }), n(2, 5, 0.5, { fg: 1, also: [{ s: 5, f: 5, fg: 1 }] }),
+    n(3, 8, 0.5, { fg: 4 }), n(3, 7, 0.5, { fg: 3 }), n(3, 6, 0.5, { fg: 2 }), n(3, 5, 0.5, { fg: 1 }),
+    n(5, 7, 1, { fg: 3, also: [{ s: 2, f: 6, fg: 2 }, { s: 3, f: 7, fg: 4 }] }), r(1), r(2)] },
 };
