@@ -29,13 +29,13 @@ const NAMES_STD = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', '
 const PENTA = [9, 0, 2, 4, 7];
 
 // Base: trozos de los renders a tempo fijo (2 compases de cuenta + música), uno por tempo.
-async function buildBacking(dir, tempos, lapBeats, tailBeats, out, entrada = 8, entreVueltas = 0) {
+async function buildBacking(dir, tempos, lapBeats, tailBeats, out, entrada = 8, entreVueltas = 0) {   // entreVueltas: pulsos, o función (i) → pulsos
   const files = fs.readdirSync(dir), sr = 44100, segs = [];
   const fileFor = bpm => { const f = files.find(x => new RegExp(`_Render_${bpm}\\.(aiff?|wav|m4a)$`, 'i').test(x)); if (!f) throw new Error(`Falta la base de ${bpm} bpm en ${dir}`); return path.join(dir, f); };
   let T = 0;
   const add = (bpm, fromBeat, beats, fade) => { const b = 60 / bpm, n = Math.round((T + beats * b) * sr) - Math.round(T * sr); segs.push({ file: fileFor(bpm), s0: Math.round(fromBeat * b * sr), n, fade }); T += beats * b; };
   add(tempos[0], 8 - entrada, entrada, 0.008);   // entrada = pulsos de cuenta (8 de la base, o solo el último compás)
-  tempos.forEach((bpm, i) => { const last = i === tempos.length - 1, pre = i ? entreVueltas : 0; add(bpm, 8, pre + lapBeats + (last ? tailBeats : 0), last ? tailBeats * 60 / bpm : 0.008); });
+  tempos.forEach((bpm, i) => { const last = i === tempos.length - 1, pre = i ? (typeof entreVueltas === 'function' ? entreVueltas(i) : entreVueltas) : 0; add(bpm, 8, pre + lapBeats + (last ? tailBeats : 0), last ? tailBeats * 60 / bpm : 0.008); });
   const fc = segs.map((g, k) => `[${k}:a]aresample=${sr},atrim=start_sample=${g.s0}:end_sample=${g.s0 + g.n},asetpts=PTS-STARTPTS,afade=t=out:st=${(g.n / sr - g.fade).toFixed(4)}:d=${g.fade.toFixed(4)}[a${k}]`).join(';')
     + ';' + segs.map((_, k) => `[a${k}]`).join('') + `concat=n=${segs.length}:v=0:a=1[a]`;
   await execFileP('ffmpeg', ['-loglevel', 'error', '-y', ...segs.flatMap(g => ['-i', g.file]), '-filter_complex', fc, '-map', '[a]', '-ar', String(sr), '-ac', '2', out]);
@@ -52,7 +52,7 @@ function parseArgs(argv) {
   if (!P) { console.error(`--frase: ${Object.keys(PHRASES).join(' | ')}`); process.exit(1); }
   // P.sostenidos: todo con sostenidos (cromática a octavas, 11-05: la partitura de Alberto va con C# D# F# G# A#).
   const NAMES = P.flats ? NAMES_FLAT : P.sostenidos ? ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] : NAMES_STD, ROOT_PC = P.rootPc === undefined ? 9 : P.rootPc;
-  const tempos = String(args.tempos || '80,90').split(',').map(Number).filter(x => x > 0);
+  let tempos = String(args.tempos || '80,90').split(',').map(Number).filter(x => x > 0);
   const backingDir = path.resolve(String(args.backing || '~/guitar-visualizer-assets/FrasesAm/biblioteca').replace(/^~/, os.homedir()));
   const outDir = path.resolve(String(args.out || '~/Downloads/Bendings-prueba/demos').replace(/^~/, os.homedir()));
   fs.mkdirSync(outDir, { recursive: true });
@@ -60,23 +60,58 @@ function parseArgs(argv) {
   const EPS = 1e-6, key = n => n.s + ':' + n.f, fq = midi => 82.4069 * Math.pow(2, (midi - 40) / 12);
 
   // Frase: instante de cada nota, nota anterior (para ligados y deslizamientos) y silencios hasta completar el compás.
-  const items = P.items.map(it => ({ ...it }));
-  let at = 0, lastNote;
-  items.forEach((it, i) => { it.at = at; at += it.d; if (!it.r) { it.prev = lastNote; lastNote = i; if ((it.lig || it.slide) && (it.prev === undefined || items[it.prev].s !== it.s)) throw new Error(`nota ${i}: ligado o deslizamiento sin nota anterior en la misma cuerda`); } });
-  const seqBeats = Math.round(at * 1e6) / 1e6, lapBeats = P.noRest ? seqBeats : Math.ceil((seqBeats + 2 - EPS) / 4) * 4;   // noRest: patrón en bucle, sin compás de respiro
+  // P.vueltas (11-11, técnica, Alberto: "bajar por todas las cuerdas y luego subir con una nueva velocidad"): varias
+  // versiones del ejercicio, una por vuelta y en rueda (bajada a 60, subida a 65, bajada a 70…). Tienen que durar lo
+  // mismo. Sin P.vueltas, P.items en todas las vueltas, como siempre.
+  const prep = (raw) => {
+    const items = raw.map(it => ({ ...it }));
+    let at = 0, lastNote;
+    items.forEach((it, i) => { it.at = at; at += it.d; if (!it.r) { it.prev = lastNote; lastNote = i; if ((it.lig || it.slide) && (it.prev === undefined || items[it.prev].s !== it.s)) throw new Error(`nota ${i}: ligado o deslizamiento sin nota anterior en la misma cuerda`); } });
+    return { items, seqBeats: Math.round(at * 1e6) / 1e6 };
+  };
+  let VARS = (P.vueltas || [P.items]).map(prep);
+  // --recorrido BPM (11-11, Alberto, vídeos a tempo fijo): "bajo de la sexta a la primera, desplazo un traste y subo,
+  // desplazo y bajo… y después se vuelve con desplazamiento hacia la izquierda". Empieza en el traste 1 (el dedo 1 en
+  // el 1), cada vuelta un traste más arriba y cambiando de sentido (P.vueltas[0] bajada, [1] subida), y vuelve al 1.
+  // Tantas vueltas como quepan en --max-min minutos (5), siempre impares para acabar en el 1; sin pausa entre vueltas.
+  const RECORRIDO = args.recorrido ? Number(args.recorrido) : 0;
+  if (RECORRIDO) {
+    const sb = VARS[0].seqBeats, maxS = 60 * Number(args['max-min'] || 5);
+    let pasadas = 1; while ((8 + (pasadas + 2) * sb + 4) * 60 / RECORRIDO <= maxS) pasadas += 2;
+    const notas = it => [it, ...(it.also || [])];
+    const f0 = Math.min(...VARS.flatMap(v => v.items).filter(it => !it.r).flatMap(notas).map(o => o.f).filter(f => f > 0));
+    const sube = (pasadas - 1) / 2, base = [0, 1].map(k => (P.vueltas || [P.items, P.items])[k]);
+    VARS = [...Array(pasadas)].map((_, p) => { const o = (p <= sube ? p : 2 * sube - p) + 1 - f0;
+      const mueve = it => (it.f > 0 ? { ...it, f: it.f + o } : it);
+      return prep(base[p % 2].map(it => (it.r ? it : { ...mueve(it), ...(it.also ? { also: it.also.map(mueve) } : {}) }))); });
+    tempos = Array(pasadas).fill(RECORRIDO);
+    console.log(`Recorrido a ${RECORRIDO} bpm: ${pasadas} vueltas (traste 1 → ${1 + sube} → 1)`);
+  }
+  if (VARS.some(v => Math.abs(v.seqBeats - VARS[0].seqBeats) > EPS)) throw new Error('P.vueltas: todas las versiones tienen que durar lo mismo');
+  const MID = Math.ceil(tempos.length / 2);   // P.cambioMitad: primer tempo de la segunda mitad
+  let { items } = VARS[0];
+  const seqBeats = VARS[0].seqBeats, lapBeats = P.noRest || RECORRIDO ? seqBeats : Math.ceil((seqBeats + 2 - EPS) / 4) * 4;   // noRest: patrón en bucle, sin compás de respiro
   const bendTxt = s => (s === 2 ? '1' : s === 1 ? '½' : s === 0.5 ? '¼' : String(s / 2));
-  const TAB = items.map(it => it.r ? { r: true, at: it.at, d: it.d } : { at: it.at, d: it.d, notes: [{ s: it.s, f: it.f }, ...(it.also || []).map(o => ({ s: o.s, f: o.f }))], fg: it.fg, prev: it.prev,
-    x: it.x, pick: it.strum, acc: it.acc, pm: it.pm, bend: it.bend ? (it.rel ? 'updown' : 'up') : undefined, txt: it.bend ? bendTxt(it.bend) : '', vib: it.vib, lig: it.lig, slide: it.slide });
-  for (let a = seqBeats; a < lapBeats - EPS;) { const whole = Math.abs(a - Math.round(a)) < EPS, len = whole && Math.round(a) % 2 === 0 && lapBeats - a >= 2 - EPS ? 2 : whole && lapBeats - a >= 1 - EPS ? 1 : Math.min(0.5, Math.ceil(a - EPS) - a || 0.5); TAB.push({ r: true, at: a, d: len }); a += len; }
+  VARS.forEach(v => {
+    v.TAB = v.items.map(it => it.r ? { r: true, at: it.at, d: it.d } : { at: it.at, d: it.d, notes: [{ s: it.s, f: it.f }, ...(it.also || []).map(o => ({ s: o.s, f: o.f }))], fg: it.fg, prev: it.prev,
+      x: it.x, pick: it.strum, acc: it.acc, pm: it.pm, bend: it.bend ? (it.rel ? 'updown' : 'up') : undefined, txt: it.bend ? bendTxt(it.bend) : '', vib: it.vib, lig: it.lig, slide: it.slide });
+    for (let a = seqBeats; a < lapBeats - EPS;) { const whole = Math.abs(a - Math.round(a)) < EPS, len = whole && Math.round(a) % 2 === 0 && lapBeats - a >= 2 - EPS ? 2 : whole && lapBeats - a >= 1 - EPS ? 1 : Math.min(0.5, Math.ceil(a - EPS) - a || 0.5); v.TAB.push({ r: true, at: a, d: len }); a += len; }
+  });
+  let TAB = VARS[0].TAB, vActual = 0;
+  const usaVuelta = (k) => { vActual = k; ({ items, TAB } = VARS[k]); };
 
   // Notas del mástil: la pentatónica dentro de la ventana de trastes (fondo) más las de la frase.
   const notes = new Map();
   const addNote = (s, f) => { const midi = OPEN_MIDI[s] + f, k = s + ':' + f; if (!notes.has(k)) notes.set(k, { s, f, midi, label: NAMES[midi % 12], isRoot: midi % 12 === ROOT_PC }); };
   if (P.win) for (let s = 0; s < 6; s++) for (let f = P.win[0]; f <= P.win[1]; f++) if (PENTA.includes((OPEN_MIDI[s] + f) % 12)) addNote(s, f);
   const fingerOf = {};
-  items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => { addNote(o.s, o.f); if (fingerOf[key(o)] === undefined) fingerOf[key(o)] = o.fg; }));
+  // Dedos por versión (11-11, Alberto, recorrido a 80: "cuando la posición se desplaza el número de los dedos no se
+  // actualiza bien: pone número en todos los trastes, incluso en los que no participan, y la primera nota pone dedo 2").
+  // Cada vuelta enseña los dedos de SU posición; las notas que no toca en esa vuelta, sin número.
+  VARS.forEach(v => { v.finger = {}; v.items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => { addNote(o.s, o.f); if (fingerOf[key(o)] === undefined) fingerOf[key(o)] = o.fg; if (v.finger[key(o)] === undefined) v.finger[key(o)] = o.fg; })); });
   const N = [...notes.values()];
-  const frets = [...N.map(n => n.f), ...items.filter(it => it.bend >= 1).map(it => it.f + it.bend)];
+  const DEDOS_TRAMO = {}; VARS.forEach(v => v.items.filter(it => !it.r && it.tramo !== undefined).forEach(it => { const m = DEDOS_TRAMO[it.tramo] = DEDOS_TRAMO[it.tramo] || {}; if (m[key(it)] === undefined) m[key(it)] = it.fg; }));
+  const frets = [...N.map(n => n.f), ...VARS.flatMap(v => v.items).filter(it => it.bend >= 1).map(it => it.f + it.bend)];
   const fretMin = P.fretMin || Math.max(1, Math.min(...frets) - 1), fretMax = P.fretMax || Math.max(...frets) + 1;
 
   // Bending: sube rápido (0,2 s como mucho, a cualquier tempo) y, si vuelve, baja al final de la nota.
@@ -89,7 +124,7 @@ function parseArgs(argv) {
   const pendState = () => { const st = new Map(N.map(n => [key(n), 'ghost'])); if (P.proximas) return st; items.filter(it => !it.r).forEach(it => [it, ...(it.also || [])].forEach(o => st.set(key(o), 'pend'))); return st; };
   const first = items.find(it => !it.r);
   // Silencios pulso a pulso (el metrónomo visual sigue marcando); lead = avisa de la primera nota de la vuelta.
-  const rest = (beats, b, from, bpm, lap, next, cur) => { if (beats < EPS) return; const n = Math.max(1, Math.round(beats / 0.5)); for (let k = 0; k < n; k++) steps.push({ beat: cur >= 0 ? from + k * beats / n : undefined, state: pendState(), dur: b * beats / n, caption: '', metro: { bpm, beat: Math.floor(from + k * beats / n + EPS) % 4, next }, lap, cur, bend: first.bend ? { [key(first)]: bendMark(first, 0) } : {} }); };
+  const rest = (beats, b, from, bpm, lap, next, cur) => { if (beats < EPS) return; const n = Math.max(1, Math.round(beats / 0.5)); for (let k = 0; k < n; k++) steps.push({ beat: cur >= 0 ? from + k * beats / n : undefined, state: pendState(), dur: b * beats / n, caption: P.cambioMitad && lap >= MID ? P.capCambio || '' : '', metro: { bpm, beat: Math.floor(from + k * beats / n + EPS) % 4, next }, lap, cur, bend: first.bend ? { [key(first)]: bendMark(first, 0) } : {} }); };
   // P.proximas = K (Alberto 11-05, cromática a octavas): solo se destacan las K notas que vienen; las ya tocadas vuelven
   // a fantasma. Si no, en un ejercicio que recorre todo el mástil acaban todas marcadas y "es un poco lioso".
   const keysOf = it => [it, ...(it.also || [])].map(key);
@@ -106,14 +141,16 @@ function parseArgs(argv) {
     return st; };
   const pushLap = (b, bpm, lap, mute) => {
     const st = pendState();
+    // Recorrido: en el último compás de la vuelta se ven ya (anillo tenue) las notas de la posición siguiente.
+    const sig = RECORRIDO && VARS[lap + 1] ? new Set(VARS[lap + 1].items.filter(it => !it.r).map(key).filter(k2 => st.get(k2) !== 'pend')) : null;
     items.forEach((it, i) => {
       if (P.proximas) { const p0 = proxState(i); st.clear(); p0.forEach((v, k2) => st.set(k2, v)); }
-      const metroAt = x => ({ bpm, beat: Math.floor(it.at + x + EPS) % 4 }), caption = it.cap || (P.seguido ? '' : mute ? 'TU TURNO' : 'ESCUCHA');   // it.cap (11-09): aviso propio de la nota ("DÍA 7" en las 24 digitaciones del Spider)
+      const metroAt = x => ({ bpm, beat: Math.floor(it.at + x + EPS) % 4 }), caption = it.cap || (P.seguido ? (P.cambioMitad && lap >= MID ? P.capCambio || '' : '') : mute ? 'TU TURNO' : 'ESCUCHA');   // it.cap (11-09): aviso propio de la nota ("DÍA 7" en las 24 digitaciones del Spider)
       if (it.r) { const n = Math.max(1, Math.round(it.d / 0.5)); for (let k = 0; k < n; k++) steps.push({ beat: it.at + k * it.d / n, state: new Map(st), dur: b * it.d / n, caption, metro: metroAt(k * it.d / n), lap, cur: i, bend: {} }); return; }
       const keys = [it, ...(it.also || [])].map(key), n = Math.max(1, Math.round(it.bend ? it.d * 24 : it.d / 0.5)), slice = it.d / n, bd = it.bend ? bendOf(it, b) : null;
       const f = fq(OPEN_MIDI[it.s] + it.f), fT = f * Math.pow(2, (it.bend || 0) / 12);
       for (let k = 0; k < n; k++) {
-        const snap = new Map(st); keys.forEach(k2 => snap.set(k2, it.x ? 'active' : 'flash'));
+        const snap = new Map(st); if (sig && it.at >= seqBeats - 4 - EPS) sig.forEach(k2 => snap.set(k2, 'soon')); keys.forEach(k2 => snap.set(k2, it.x ? 'active' : 'flash'));
         // Rasgueo: las cuerdas entran escalonadas (abajo = de graves a agudas) y el acorde se corta en el golpe siguiente.
         const strumSounds = () => { const ns = [it, ...(it.also || [])].sort((p, q) => (it.strum === 'u' ? q.s - p.s : p.s - q.s));
           return it.x ? [{ mute: true }] : ns.map((o, oi) => ({ freq: fq(OPEN_MIDI[o.s] + o.f), off: oi * 0.008, cut: it.pm ? 0.09 : it.d * b * 0.9 })); };
@@ -138,16 +175,32 @@ function parseArgs(argv) {
   else rest(8, b0, 0, tempos[0], 0, undefined, -1);                                    // la base trae 2 compases de cuenta
   // P.rotulo (11-09, Spider): una indicación que se lee durante la cuenta de entrada ("corre un traste y repite…").
   // Sin él, la entrada queda sin rótulo como siempre.
-  if (P.rotulo) steps.forEach(s => { s.rotulo = P.rotulo; });
+  // 11-11 (Alberto: "el mensaje del principio solo tiene que durar el primer compás; en el segundo, desaparecer para
+  // dejar ver las notas"): con P.rotuloUnCompas, solo en el primer compás de la cuenta.
+  if (P.rotulo) { let t0 = 0; steps.forEach(s => { if (!P.rotuloUnCompas || t0 < 4 * b0 - EPS) s.rotulo = P.rotulo; t0 += s.dur; }); }
+  steps.forEach(s => { s.v = 0; });
+  let iFinal = -1;
   tempos.forEach((bpm, li) => {
+    usaVuelta(P.cambioMitad ? (li < MID ? 0 : 1) : li % VARS.length);
+    const desde = steps.length;
     const b = 60 / bpm, gap = lapBeats - seqBeats;
     // P.seguido: una sola vuelta por tempo y sonando (ejercicio técnico, sin "escucha / tu turno").
     // P.compasEntreVueltas (11-05): antes de cada subida, un compás sin notas ya al tempo nuevo, con la cuenta atrás.
     if (li && P.compasEntreVueltas) for (let k = 0; k < 4; k++) steps.push({ state: pendState(), dur: b, caption: '', metro: { bpm, beat: k, cuenta: 4 - k }, lap: li, cur: -1, bend: {} });
-    pushLap(b, bpm, li, false); rest(gap, b, seqBeats, bpm, li, P.seguido ? tempos[li + 1] : undefined, items.length);
+    // P.cambioMitad (11-11, Alberto: "a mitad del ejercicio se podría invertir el ciclo para hacerlo en dirección
+    // contraria… pero habría que avisarlo de forma clara"): la segunda mitad de los tempos usa P.vueltas[1] (el mismo
+    // recorrido en sentido contrario). Antes, un compás sin notas con cuenta atrás y el rótulo P.avisoCambio; durante
+    // toda la segunda mitad, la etiqueta P.capCambio arriba a la izquierda.
+    else if (P.cambioMitad && li === MID) for (let k = 0; k < 4; k++) steps.push({ state: pendState(), dur: b, caption: P.capCambio || '', rotulo: P.avisoCambio, metro: { bpm, beat: k, cuenta: 4 - k }, lap: li, cur: -1, bend: {} });
+    pushLap(b, bpm, li, false); if (li === tempos.length - 1) iFinal = steps.length; rest(gap, b, seqBeats, bpm, li, P.seguido ? tempos[li + 1] : undefined, items.length);
     if (!P.seguido) { pushLap(b, bpm, li, true); rest(gap, b, seqBeats, bpm, li, tempos[li + 1], items.length); }
+    for (let k = desde; k < steps.length; k++) steps[k].v = vActual;
   });
-  steps.push({ state: pendState(), dur: 4 * 60 / tempos[tempos.length - 1], caption: '', cur: -1, bend: {} });   // un compás más, en fundido
+  const ROT_FIN = RECORRIDO ? P.rotuloFinalFijo : P.rotuloFinal, COLA = ROT_FIN ? 8 : 4;   // con rótulo de cierre, dos compases para que dé tiempo a leerlo
+  steps.push({ state: pendState(), dur: COLA * 60 / tempos[tempos.length - 1], caption: '', cur: -1, bend: {}, v: vActual });   // un compás más, en fundido
+  // P.rotuloFinal (11-11, Alberto: "una vez que se conoce el ejercicio, buscar el tempo más adecuado en TodoRitmos y
+  // mantener la rutina"): rótulo en el respiro de la última vuelta y el compás de cierre, cuando ya no se toca.
+  if (ROT_FIN && iFinal >= 0) steps.slice(iFinal).forEach(s => { s.rotulo = ROT_FIN; });
   console.log(`${P.name}: ${seqBeats} pulsos de frase + ${lapBeats - seqBeats} de respiro = ${lapBeats / 4} compases por vuelta`);
 
   // Fotogramas: una sola página; los estados repetidos se renderizan una vez.
@@ -164,6 +217,7 @@ function parseArgs(argv) {
     return { ...tab, beats: P.pagina, from, pos: tab.pos === undefined ? undefined : tab.pos - from }; };
   const cache = new Map(); let nPng = 0;
   for (const s of steps) {
+    usaVuelta(s.v || 0);   // la tablatura y la nota en curso son las de la versión de esa vuelta
     // sinSubtitulo (11-05): sin subtítulo, para dar aire arriba.
     // Tira cromática: el enarmónico de cada sostenido debajo (solo en la tira, no en el mástil; Alberto 11-05).
     // La tira empieza en la primera nota del ejercicio (E en la abierta, A en la cerrada).
@@ -171,13 +225,19 @@ function parseArgs(argv) {
     const tira = P.tiraCromatica ? { top: 132, chico: true, items: CROM.map(l => ({ label: l, sub: { 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb' }[l] || '', nat: !l.includes('#') })), on: s.pc === undefined ? [] : [CROM_PC.indexOf(s.pc)] } : undefined;
     // Los silencios añadidos (el respiro del final de vuelta) no llevan pos: se mantiene la de la última nota anterior
     // (11-10: sin esto, items[cur].pos era undefined y el render del recorrido petaba).
+    // P.porTramo (11-11, pentatónica por formas y enlaces): cada nota lleva it.tramo (la forma que se toca); los dedos
+    // son los de la forma en curso y las notas de las otras formas quedan de fantasma y sin número (una misma nota
+    // puede ser dedo 4 en la forma E y dedo 2 en la D).
+    let tramoAct;
+    if (P.porTramo) { for (let i = Math.min(s.cur >= 0 ? s.cur : 0, items.length - 1); i >= 0 && tramoAct === undefined; i--) tramoAct = items[i] && items[i].tramo; if (tramoAct === undefined) tramoAct = (items.find(it => it.tramo !== undefined) || {}).tramo; }
+    const dedoTramo = tramoAct === undefined ? null : DEDOS_TRAMO[tramoAct] || {};
     let posAct;
     if (P.porPosicion) { for (let i = Math.min(s.cur >= 0 ? s.cur : 0, items.length - 1); i >= 0 && posAct === undefined; i--) posAct = items[i] && items[i].pos; if (posAct === undefined) posAct = (items.find(it => it.pos !== undefined) || {}).pos; }
-    const data = { strip: tira, neckTop: P.tiraCromatica ? 258 : undefined, tabY: P.tiraCromatica ? 648 : undefined, crece: !!P.crece, maxFretW: P.maxFretW, marks: s.marks, title: P.title || 'Vocabulario pentatónico · La menor', subtitle: P.sinSubtitulo ? '' : (args.num ? `Frase ${args.num} · ` : '') + P.name, caption: s.caption, rotulo: s.rotulo, metro: s.metro,
-      ladder: s.lap === undefined ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: tabOf(s.cur, s.beat),
+    const data = { strip: tira, neckTop: P.tiraCromatica ? 258 : undefined, tabY: P.tiraCromatica ? 648 : undefined, crece: !!P.crece, maxFretW: P.maxFretW, marks: s.marks, title: P.title || 'Vocabulario pentatónico · La menor', subtitle: P.sinSubtitulo ? '' : (args.num ? `${P.etiquetaNum || 'Frase'} ${args.num} · ` : '') + P.name, caption: s.caption, rotulo: s.rotulo, metro: s.metro,
+      ladder: s.lap === undefined || RECORRIDO ? undefined : { tempos, cur: s.lap }, fretMin, fretMax, badges: true, tab: tabOf(s.cur, s.beat),
       // P.porPosicion (11-09, recorrido del Spider): solo se ven las notas de la posición que se toca (it.pos … it.pos+3)
       // y el dedo sale de esa posición; sin ello, todas las notas con su primer dedo, como siempre.
-      notes: (posAct === undefined ? N : N.filter(n => n.f >= posAct && n.f <= posAct + 3)).map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, nat: !!P.naturales && [0, 2, 4, 5, 7, 9, 11].includes(n.midi % 12), iv: posAct === undefined ? fingerOf[key(n)] : n.f - posAct + 1, state: s.state.get(key(n)), bend: s.bend[key(n)], mx: !!(s.mx && s.mx.includes(key(n))), vib: s.vibKey === key(n),
+      notes: (posAct === undefined ? N : N.filter(n => n.f >= posAct && n.f <= posAct + 3)).map(n => ({ string: n.s, fret: n.f, label: n.label, isRoot: n.isRoot, nat: !!P.naturales && [0, 2, 4, 5, 7, 9, 11].includes(n.midi % 12), iv: dedoTramo ? dedoTramo[key(n)] : posAct === undefined ? (VARS.length > 1 ? VARS[vActual].finger[key(n)] : fingerOf[key(n)]) : n.f - posAct + 1, state: dedoTramo && dedoTramo[key(n)] === undefined && ['pend', 'active'].includes(s.state.get(key(n))) ? 'ghost' : s.state.get(key(n)), bend: s.bend[key(n)], mx: !!(s.mx && s.mx.includes(key(n))), vib: s.vibKey === key(n),
         lig: s.lig && s.lig.key === key(n) ? s.lig : undefined, slide: s.slide && s.slide.key === key(n) ? s.slide : undefined })) };
     const sig = JSON.stringify(data);
     if (!cache.has(sig)) {
@@ -217,8 +277,8 @@ function parseArgs(argv) {
 
   const list = path.join(tmp, 'list.txt');
   fs.writeFileSync(list, steps.map(s => `file '${s.png}'\nduration ${s.dur.toFixed(4)}`).join('\n') + `\nfile '${steps[steps.length - 1].png}'\n`);
-  const bw = path.join(tmp, 'base.wav'); await buildBacking(backingDir, tempos, P.seguido ? lapBeats : lapBeats * 2, 4, bw, ENTRADA, P.compasEntreVueltas ? 4 : 0);   // seguido: una vuelta por tempo
-  const out = path.join(outDir, args.nombre ? `${args.nombre}_${tempos[0]}-${tempos[tempos.length - 1]}bpm.mp4` : `${args.num ? 'Frase' + String(args.num).padStart(2, '0') + '_' : 'Frase_'}${args.frase}_Am_${tempos[0]}-${tempos[tempos.length - 1]}bpm.mp4`);
+  const bw = path.join(tmp, 'base.wav'); await buildBacking(backingDir, tempos, P.seguido ? lapBeats : lapBeats * 2, COLA, bw, ENTRADA, (i) => (P.compasEntreVueltas || (P.cambioMitad && i === MID) ? 4 : 0));   // seguido: una vuelta por tempo
+  const out = path.join(outDir, args.nombre && RECORRIDO ? `${args.nombre}_${RECORRIDO}bpm.mp4` : args.nombre ? `${args.nombre}_${tempos[0]}-${tempos[tempos.length - 1]}bpm.mp4` : `${args.num ? 'Frase' + String(args.num).padStart(2, '0') + '_' : 'Frase_'}${args.frase}_Am_${tempos[0]}-${tempos[tempos.length - 1]}bpm.mp4`);
   await execFileP('nice', ['-n', '19', 'ffmpeg', '-loglevel', 'error', '-y', '-threads', '2', '-f', 'concat', '-safe', '0', '-i', list, '-i', wav, '-i', bw,
     '-filter_complex', `[1:a]volume=${parseFloat(args['notes-vol'] || P.notesVol || 0.65)}[n];[2:a]volume=${parseFloat(args['backing-vol'] || P.backingVol || 1.3)}[b];[n][b]amix=inputs=2:normalize=0,alimiter=limit=0.95[a]`, '-map', '0:v', '-map', '[a]',
     '-vf', 'fps=25,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', out], { maxBuffer: 1 << 24 });

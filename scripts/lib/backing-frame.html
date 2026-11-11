@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<!--
+  Fotograma del formato "base para improvisar" (11-11, Alberto: "un formato nuevo para presentar los vídeos de los
+  backings… que se sepa en cada momento dónde están los acordes, la escala del tema con sus grados y la estructura
+  del tema en su conjunto"). Lo pinta scripts/backing-visualizer.js llamando a render(estado) y haciendo captura.
+  Zonas, de arriba abajo: cabecera (título, tonalidad, bpm, pulso), MAPA del tema (bloques proporcionales a los
+  compases, mismo color cada vez que vuelve una sección), rejilla de la SECCIÓN actual (con cabezal), acorde actual
+  grande (anterior y siguiente con cuenta atrás), ESCALA con grados y notas del acorde, notas guía hacia el
+  siguiente acorde, y fila de TRIADAS diatónicas coloreadas por función (más los acordes de fuera de la escala).
+-->
+<style>
+  :root { --bg: #0e1116; --panel: #161b22; --linea: #2a313c; --txt: #e8edf3; --suave: #8b96a5; --oro: #e2b34f; --rojo: #e05252;
+    --ton: #4f9de2; --sub: #4fc28a; --dom: #e2794f; --fuera: #b07ce8; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { width: 1600px; height: 900px; background: var(--bg); color: var(--txt); font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; position: relative; }
+  .abs { position: absolute; }
+  #titulo { left: 48px; top: 26px; font-size: 34px; font-weight: 700; letter-spacing: .5px; }
+  #subtitulo { left: 50px; top: 70px; font-size: 18px; color: var(--suave); }
+  #meta { right: 210px; top: 30px; font-size: 26px; font-weight: 700; color: var(--oro); text-align: right; }
+  #meta small { display: block; font-size: 15px; color: var(--suave); font-weight: 400; margin-top: 4px; }
+  #pulso { right: 48px; top: 40px; display: flex; gap: 12px; }
+  #pulso i { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--linea); display: block; }
+  #pulso i.on { background: var(--oro); border-color: var(--oro); }
+  #pulso i.on.uno { background: var(--rojo); border-color: var(--rojo); }
+  /* Mapa */
+  #mapa { left: 48px; top: 112px; width: 1504px; height: 64px; display: flex; gap: 4px; }
+  .blq { position: relative; border-radius: 8px; overflow: hidden; background: var(--panel); border: 2px solid transparent; display: flex; flex-direction: column; justify-content: center; align-items: center; min-width: 0; }
+  .blq b { font-size: 15px; white-space: nowrap; z-index: 1; } .blq span { font-size: 12px; color: var(--suave); z-index: 1; }
+  .blq .lleno { position: absolute; left: 0; top: 0; bottom: 0; background: currentColor; opacity: .28; }
+  .blq.act { border-color: var(--oro); } .blq.pasado { opacity: .55; }
+  #cabezalMapa { top: 106px; width: 3px; height: 76px; background: var(--oro); border-radius: 2px; }
+  /* Sección actual */
+  #secNombre { left: 48px; top: 200px; font-size: 26px; font-weight: 700; }
+  #secNombre small { font-size: 16px; color: var(--suave); font-weight: 400; margin-left: 10px; }
+  #secSig { right: 48px; top: 204px; font-size: 20px; color: var(--suave); }
+  #secSig.cerca { color: var(--oro); font-weight: 700; }
+  #rejilla { left: 48px; top: 244px; width: 900px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .cmp { position: relative; height: 74px; background: var(--panel); border-radius: 8px; display: flex; align-items: center; padding: 0 10px; gap: 10px; overflow: hidden; }
+  .cmp .n { position: absolute; left: 8px; top: 4px; font-size: 11px; color: var(--suave); }
+  .cmp .ac { flex: 1; text-align: center; font-size: 25px; font-weight: 700; }
+  .cmp .ac.rep { color: var(--suave); font-weight: 400; font-size: 20px; }
+  .cmp.act { outline: 2px solid var(--oro); }
+  .cmp.pasado { opacity: .5; }
+  .cmp .cab { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--oro); }
+  #pagina { left: 48px; top: 410px; font-size: 14px; color: var(--suave); }
+  /* Acorde actual */
+  #actual { left: 1010px; top: 244px; width: 300px; height: 170px; border-radius: 14px; background: var(--panel); border: 3px solid var(--oro); text-align: center; padding-top: 18px; }
+  #actual .nom { font-size: 74px; font-weight: 800; line-height: 1; }
+  #actual .gr { font-size: 30px; margin-top: 10px; font-weight: 700; }
+  #anterior { left: 960px; top: 300px; width: 40px; text-align: center; font-size: 22px; color: var(--suave); opacity: .7; }
+  #siguiente { left: 1330px; top: 252px; width: 222px; height: 154px; border-radius: 12px; border: 2px dashed var(--linea); text-align: center; padding-top: 14px; }
+  #siguiente .t { font-size: 14px; color: var(--suave); } #siguiente .nom { font-size: 46px; font-weight: 800; margin-top: 4px; }
+  #siguiente .gr { font-size: 18px; } #siguiente .cuenta { font-size: 16px; color: var(--oro); margin-top: 6px; font-weight: 700; }
+  /* Escala */
+  #escalaTit { left: 48px; top: 452px; font-size: 18px; color: var(--suave); }
+  #escalaTit b { color: var(--txt); } #escalaTit em { font-style: normal; color: var(--fuera); font-weight: 700; }
+  #escala { left: 48px; top: 486px; width: 1504px; display: flex; gap: 14px; }
+  .nota { flex: 1; height: 112px; border-radius: 12px; background: var(--panel); border: 2px solid var(--linea); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+  .nota .l { font-size: 38px; font-weight: 800; } .nota .g { font-size: 18px; color: var(--suave); margin-top: 4px; }
+  .nota.ton { border-color: var(--rojo); }
+  .nota.on { color: #0e1116; } .nota.on .g { color: #0e1116; opacity: .8; }
+  .nota.nueva { border: 3px solid var(--fuera); }
+  .nota .marca { position: absolute; top: 6px; right: 8px; font-size: 12px; font-weight: 700; }
+  .nota .viene { position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%); width: 24px; height: 24px; border-radius: 50%; border: 3px solid var(--oro); background: var(--bg); }
+  #guia { left: 48px; top: 618px; width: 1504px; font-size: 19px; color: var(--suave); height: 28px; }
+  #guia b { color: var(--oro); }
+  /* Triadas */
+  #triTit { left: 48px; top: 664px; font-size: 18px; color: var(--suave); }
+  #triadas { left: 48px; top: 696px; width: 1504px; display: flex; gap: 12px; }
+  .tri { flex: 1; height: 96px; border-radius: 12px; background: var(--panel); border: 2px solid var(--linea); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+  .tri .r { font-size: 26px; font-weight: 800; } .tri .c { font-size: 18px; color: var(--suave); margin-top: 4px; }
+  .tri .f { position: absolute; top: 0; left: 0; right: 0; height: 6px; border-radius: 12px 12px 0 0; }
+  .tri.on { border-width: 3px; }
+  .tri.fuera { border-style: dashed; border-color: var(--fuera); }
+  #leyenda { left: 48px; top: 812px; font-size: 15px; color: var(--suave); display: flex; gap: 26px; }
+  #leyenda i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; }
+  #marca { right: 48px; bottom: 26px; font-size: 16px; color: var(--suave); font-weight: 700; }
+  #entrada { left: 0; top: 0; width: 1600px; height: 900px; background: rgba(14,17,22,.86); display: none; align-items: center; justify-content: center; flex-direction: column; }
+  #entrada.si { display: flex; } #entrada b { font-size: 120px; color: var(--oro); } #entrada span { font-size: 28px; color: var(--suave); margin-top: 10px; }
+  /* 11-11 v2 (Alberto: "la escala y los acordes ocupan mucho y despistan de lo importante; se puede prescindir de
+     las notas, ya se ve en los grados"): fuera la fila de notas; grados en una tira compacta abajo y más sitio para el
+     mapa, la rejilla de la sección y el acorde. El préstamo modal pasa a ser una etiqueta bajo el acorde. */
+  #escalaTit, #escala { display: none !important; }
+  #mapa { height: 96px; } #mapa .blq b { font-size: 18px; } #mapa .blq span { font-size: 14px; }
+  #cabezalMapa { height: 108px; }
+  #secNombre { top: 236px; font-size: 30px; } #secSig { top: 242px; font-size: 22px; }
+  #rejilla { top: 284px; width: 1010px; gap: 8px; }
+  .cmp { height: 104px; } .cmp .n { font-size: 13px; } .cmp .ac { font-size: 34px; }
+  #pagina { top: 508px; font-size: 16px; }
+  #anterior { left: 1062px; top: 360px; font-size: 24px; }
+  #actual { left: 1104px; top: 284px; width: 260px; height: 216px; padding-top: 30px; }
+  #actual .nom { font-size: 86px; } #actual .gr { font-size: 34px; }
+  #siguiente { left: 1380px; top: 296px; width: 172px; height: 192px; padding-top: 22px; }
+  #prestamo { left: 1104px; top: 512px; width: 448px; font-size: 18px; font-weight: 700; color: var(--fuera); }
+  #guia { left: 1104px; top: 548px; width: 448px; font-size: 18px; line-height: 1.35; height: auto; }
+  #triTit { top: 640px; } #triadas { top: 672px; gap: 10px; }
+  .tri { height: 76px; } .tri .r { font-size: 28px; } .tri .c { font-size: 15px; margin-top: 2px; }
+  #leyenda { top: 768px; }
+  /* 11-11 v3 (Alberto: "el acorde actual y el siguiente son dos cuadrados enormes y además ya se ven en el segmento;
+     la función se puede poner en los propios acordes, justo debajo; y las notas guía debajo del segmento"): fuera los
+     cuadros; la rejilla ocupa todo el ancho, cada acorde lleva su grado debajo, el que suena se ilumina y el
+     siguiente se marca con borde discontinuo antes del cambio. */
+  #actual, #siguiente, #anterior { display: none !important; }
+  #rejilla { width: 1504px; } .cmp { height: 116px; padding: 0 14px; }
+  .cmp .ac { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 10px; padding: 6px 0; border: 3px solid transparent; }
+  .cmp .ac .nm { font-size: 38px; font-weight: 800; line-height: 1.05; } .cmp .ac .gd { font-size: 20px; font-weight: 700; margin-top: 2px; opacity: .9; }
+  .cmp .ac.on { background: rgba(255,255,255,.08); border-color: currentColor; }
+  .cmp .ac.sig { border-style: dashed; border-color: var(--oro); }
+  #pagina { top: 536px; }
+  #prestamo { left: 48px; top: 570px; width: 1504px; font-size: 20px; }
+  #guia { left: 48px; top: 604px; width: 1504px; font-size: 20px; }
+  #triTit { top: 660px; } #triadas { top: 692px; } #leyenda { top: 790px; }
+  /* 11-11 v4 (Alberto: "demasiados recuadros, satura; el borde amarillo que rodea todo no hace falta"): sin borde
+     del compás; el acorde que suena, con fondo suave y sin borde; el siguiente, solo un subrayado dorado. */
+  .cmp.act { outline: none; }
+  .cmp .ac { border: none; }
+  .cmp .ac.on { background: rgba(255,255,255,.10); border: none; }
+  .cmp .ac.sig { border: none; background: none; }
+  .cmp .ac.sig .nm { text-decoration: underline; text-decoration-color: var(--oro); text-decoration-thickness: 4px; text-underline-offset: 8px; }
+  /* 11-11 v5 (Alberto: "un gráfico representativo de la relación de acordes… si no se satura la pantalla"): mapa de
+     funciones en lugar de la tira de grados y la leyenda. Tres zonas (tónica, subdominante, dominante) con SOLO los
+     acordes del tema; el que suena se enciende, una flecha corta viene del anterior y el siguiente lleva el subrayado
+     dorado de la rejilla. Los de fuera de la escala, con borde discontinuo violeta dentro de su función. */
+  #triTit, #triadas, #leyenda { display: none !important; }
+  #funciones { left: 48px; top: 664px; width: 1504px; height: 150px; display: flex; gap: 40px; }
+  .zona { flex: 1; border-radius: 14px; background: var(--panel); padding: 12px 18px; position: relative; }
+  .zona .zt { font-size: 15px; font-weight: 700; letter-spacing: 1.5px; } .zona .zt small { font-weight: 400; color: var(--suave); letter-spacing: 0; margin-left: 6px; font-size: 14px; }
+  .zona .nodos { display: flex; gap: 14px; margin-top: 12px; justify-content: center; }
+  .nodo { min-width: 104px; height: 78px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px solid transparent; opacity: .55; }
+  .nodo .r { font-size: 26px; font-weight: 800; } .nodo .c { font-size: 15px; color: var(--suave); margin-top: 2px; }
+  .nodo.fuera { border: 2px dashed var(--fuera); }
+  .nodo.prev { opacity: .85; }
+  .nodo.on { opacity: 1; color: #0e1116; } .nodo.on .c { color: #0e1116; }
+  .nodo.sig { opacity: 1; } .nodo.sig .r { text-decoration: underline; text-decoration-color: var(--oro); text-decoration-thickness: 4px; text-underline-offset: 6px; }
+  #flecha { left: 0; top: 0; width: 1600px; height: 900px; pointer-events: none; }
+  /* 11-11 v6 (Alberto: "se ha perdido la escala con los grados y funciones, que estaba bien; la flecha no convence;
+     basta con iluminar lo que suena y quizás la palabra tensión, reposo"): vuelve la tira de grados con su función,
+     sin el mapa de zonas ni la flecha; el grado que suena se ilumina y dice su papel (reposo / se aleja / tensión). */
+  #funciones, #flecha { display: none !important; }
+  #triTit, #triadas, #leyenda { display: flex !important; }
+  #triTit { display: block !important; top: 664px; } #triadas { top: 696px; } #leyenda { top: 806px; }
+  .tri { height: 92px; } .tri .w { font-size: 14px; font-weight: 700; margin-top: 3px; letter-spacing: .5px; }
+  /* 11-11 v7 (Alberto: "el gráfico con las zonas no querría perderlo, ¿lo puedo tener todo?"): tira de grados en el
+     orden de la escala (compacta) y debajo las tres zonas de función con los acordes del tema, sin flecha y sin
+     leyenda (las zonas ya dicen qué es cada color). */
+  #funciones { display: flex !important; top: 744px; height: 116px; gap: 24px; }
+  #flecha, #leyenda { display: none !important; }
+  #triTit { top: 636px; } #triadas { top: 664px; }
+  .tri { height: 66px; } .tri .r { font-size: 24px; } .tri .c { font-size: 13px; } .tri .w { display: none; }
+  .zona { padding: 8px 16px; } .zona .nodos { margin-top: 6px; } .nodo { height: 68px; min-width: 96px; } .nodo .r { font-size: 24px; }
+  #marca { bottom: 12px; font-size: 14px; }
+  /* v7b: reparto vertical sin solapes. */
+  #pagina { left: auto; right: 48px; top: 532px; }
+  #prestamo { top: 540px; } #guia { top: 572px; }
+  #triTit { top: 622px; } #triadas { top: 650px; } #funciones { top: 732px; height: 122px; }
+  /* 11-11 v8 (Alberto, tras ver el tema entero: "quitaría las notas guía, no sirven de mucho, ni el subrayado de
+     acordes; indicar el modo que entra sí puede estar bien, para la zona de solos"): fuera notas guía y subrayado del
+     siguiente; la línea de escala queda (préstamos y, en los solos, la escala para improvisar). */
+  #guia { display: none !important; }
+  .cmp .ac.sig .nm, .nodo.sig .r { text-decoration: none !important; }
+  #prestamo { top: 552px; }
+</style></head>
+<body>
+<div id="titulo" class="abs"></div><div id="subtitulo" class="abs"></div>
+<div id="meta" class="abs"></div><div id="pulso" class="abs"><i></i><i></i><i></i><i></i></div>
+<div id="mapa" class="abs"></div><div id="cabezalMapa" class="abs"></div>
+<div id="secNombre" class="abs"></div><div id="secSig" class="abs"></div>
+<div id="rejilla" class="abs"></div><div id="pagina" class="abs"></div>
+<div id="anterior" class="abs"></div>
+<div id="actual" class="abs"><div class="nom"></div><div class="gr"></div></div>
+<div id="siguiente" class="abs"><div class="t">siguiente</div><div class="nom"></div><div class="gr"></div><div class="cuenta"></div></div>
+<div id="escalaTit" class="abs"></div><div id="escala" class="abs"></div>
+<div id="guia" class="abs"></div><div id="prestamo" class="abs"></div>
+<div id="triTit" class="abs">Grados de Do menor · color por función</div><div id="triadas" class="abs"></div>
+<div id="leyenda" class="abs"><span><i style="background:var(--ton)"></i>Tónica · reposo</span><span><i style="background:var(--sub)"></i>Subdominante · se aleja</span><span><i style="background:var(--dom)"></i>Dominante · tensión</span><span><i style="background:var(--fuera)"></i>Fuera de la escala</span></div>
+<div id="funciones" class="abs"></div><svg id="flecha" class="abs"></svg>
+<div id="marca" class="abs">@banetmasa</div>
+<div id="entrada" class="abs"><b></b><span>Entra en…</span></div>
+<script>
+const $ = id => document.getElementById(id);
+const FUN = { T: 'var(--ton)', S: 'var(--sub)', D: 'var(--dom)', X: 'var(--fuera)' };
+function render(D) {
+  $('titulo').textContent = D.titulo; $('subtitulo').textContent = D.subtitulo;
+  $('meta').innerHTML = `${D.tonalidadNombre} · ${D.bpm} bpm<small>compás ${D.compas} de ${D.total}</small>`;
+  [...$('pulso').children].forEach((el, i) => { el.className = i === D.pulso ? (i === 0 ? 'on uno' : 'on') : ''; });
+  // Mapa: ancho proporcional a los compases de cada sección.
+  $('mapa').innerHTML = D.mapa.map(b => `<div class="blq ${b.estado}" style="flex:${b.compases};color:${b.color}">
+      <div class="lleno" style="width:${(b.lleno * 100).toFixed(2)}%"></div><b style="color:var(--txt)">${b.nombre}</b><span>${b.compases}</span></div>`).join('');
+  $('cabezalMapa').style.left = (48 + D.cabezalMapa * 1504 - 1) + 'px';
+  $('secNombre').innerHTML = `${D.seccion.nombre}${D.seccion.letra && D.seccion.letra !== 'S' ? ' ' + D.seccion.letra : ''}<small>compases ${D.seccion.desde}–${D.seccion.hasta}</small>`;
+  $('secSig').textContent = D.secSig.texto; $('secSig').className = 'abs' + (D.secSig.cerca ? ' cerca' : '');
+  $('rejilla').innerHTML = D.rejilla.map(c => `<div class="cmp ${c.estado}"><span class="n">${c.n}</span>${c.acordes.map(a => `<span class="ac ${a.on ? 'on' : ''} ${a.sig ? 'sig' : ''}" style="color:${a.color}"><span class="nm">${a.nombre}</span><span class="gd">${a.grado}</span></span>`).join('')}${c.cab !== undefined ? `<i class="cab" style="left:${(c.cab * 100).toFixed(1)}%"></i>` : ''}</div>`).join('');
+  $('pagina').textContent = D.pagina || '';
+  $('anterior').textContent = D.anterior || '';
+  $('actual').querySelector('.nom').textContent = D.actual.nombre; $('actual').querySelector('.gr').textContent = D.actual.grado;
+  $('actual').querySelector('.gr').style.color = D.actual.color; $('actual').style.borderColor = D.actual.color;
+  const s = $('siguiente'); s.style.visibility = D.siguiente ? 'visible' : 'hidden';
+  if (D.siguiente) { s.querySelector('.nom').textContent = D.siguiente.nombre; s.querySelector('.gr').textContent = D.siguiente.grado; s.querySelector('.gr').style.color = D.siguiente.color; s.querySelector('.cuenta').textContent = D.siguiente.cuenta; s.style.borderColor = D.siguiente.cerca ? 'var(--oro)' : 'var(--linea)'; }
+  $('escalaTit').innerHTML = D.escalaTit;
+  $('escala').innerHTML = D.escala.map(n => `<div class="nota ${n.ton ? 'ton' : ''} ${n.on ? 'on' : ''} ${n.nueva ? 'nueva' : ''}" style="${n.on ? 'background:' + n.color + ';border-color:' + (n.nueva ? 'var(--fuera)' : n.ton ? 'var(--rojo)' : n.color) : ''}${n.nueva ? ';border-width:4px' : ''}">
+      ${n.marca ? `<span class="marca" style="color:${n.on ? '#0e1116' : 'var(--suave)'}">${n.marca}</span>` : ''}<span class="l">${n.l}</span><span class="g">${n.g}</span>${n.viene ? '<i class="viene"></i>' : ''}</div>`).join('');
+  $('guia').innerHTML = D.guia || '';
+  $('prestamo').textContent = D.prestamo || '';
+  $('triadas').innerHTML = D.triadas.map(t => `<div class="tri ${t.on ? 'on' : ''} ${t.fuera ? 'fuera' : ''}" style="${t.on ? 'border-color:' + FUN[t.f] + ';background:color-mix(in srgb, ' + FUN[t.f] + ' 22%, var(--panel))' : ''}">
+      <i class="f" style="background:${FUN[t.f]}"></i><span class="r">${t.r}</span><span class="c">${t.c}</span>${t.on ? `<span class="w" style="color:${FUN[t.f]}">${{ T: 'reposo', S: 'se aleja', D: 'tensión', X: '' }[t.f]}</span>` : ''}</div>`).join('');
+  $('entrada').className = 'abs' + (D.entrada ? ' si' : ''); $('entrada').querySelector('b').textContent = D.entrada || '';
+  // Mapa de funciones y flecha del acorde anterior al actual.
+  const ZN = { T: ['TÓNICA', 'reposo'], S: ['SUBDOMINANTE', 'se aleja'], D: ['DOMINANTE', 'tensión'] };
+  $('funciones').innerHTML = D.funciones.map(z => `<div class="zona"><div class="zt" style="color:${FUN[z.f]}">${ZN[z.f][0]}<small>${ZN[z.f][1]}</small></div><div class="nodos">${z.nodos.map(n =>
+    `<div id="nd-${n.id}" class="nodo ${n.fuera ? 'fuera' : ''} ${n.estado}" style="${n.estado === 'on' ? 'background:' + FUN[z.f] : ''};color:${n.estado === 'on' ? '#0e1116' : FUN[z.f]}"><span class="r">${n.r}</span><span class="c">${n.c}</span></div>`).join('')}</div></div>`).join('');
+  const sv = $('flecha'); sv.innerHTML = '';
+  const a = D.flecha && document.getElementById('nd-' + D.flecha[0]), b = D.flecha && document.getElementById('nd-' + D.flecha[1]);
+  if (a && b && a !== b) {
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    const x1 = ra.left + ra.width / 2, x2 = rb.left + rb.width / 2, y = ra.top - 4, alto = Math.min(46, 14 + Math.abs(x2 - x1) / 12);
+    const d = `M${x1} ${y} C ${x1} ${y - alto}, ${x2} ${y - alto}, ${x2} ${y - 2}`;
+    sv.innerHTML = `<defs><marker id="pt" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#e2b34f"/></marker></defs><path d="${d}" fill="none" stroke="#e2b34f" stroke-width="3" marker-end="url(#pt)" opacity=".9"/>`;
+  }
+}
+</script></body></html>
